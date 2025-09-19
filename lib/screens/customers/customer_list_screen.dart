@@ -34,6 +34,70 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       appBar: AppBar(
         title: Text('Danh Sách Khách Hàng'),
         backgroundColor: Colors.green,
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'name_asc':
+                  _viewModel.handleSort('name', true);
+                  break;
+                case 'name_desc':
+                  _viewModel.handleSort('name', false);
+                  break;
+                case 'debt_high':
+                  _viewModel.handleSort('debt_limit', false);
+                  break;
+                case 'created_new':
+                  _viewModel.handleSort('created_at', false);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'name_asc',
+                child: Row(
+                  children: [
+                    Icon(Icons.sort_by_alpha, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Tên A-Z'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'name_desc',
+                child: Row(
+                  children: [
+                    Icon(Icons.sort_by_alpha, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Tên Z-A'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'debt_high',
+                child: Row(
+                  children: [
+                    Icon(Icons.money, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Hạn mức cao → thấp'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'created_new',
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today, color: Colors.purple),
+                    SizedBox(width: 8),
+                    Text('Mới nhất → cũ nhất'),
+                  ],
+                ),
+              ),
+            ],
+            icon: Icon(Icons.sort),
+            tooltip: 'Sắp xếp',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -42,7 +106,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Tìm theo tên hoặc số điện thoại...',
+                hintText: 'Tìm theo tên, số điện thoại hoặc địa chỉ...',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),

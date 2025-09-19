@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/customer_provider.dart';
 import '../../models/customer.dart';
 import 'edit_customer_screen.dart';
@@ -65,15 +66,98 @@ class CustomerDetailScreen extends StatelessWidget {
     );
   }
 
-  void _callCustomer() {
-    // TODO: Implement phone call functionality
-    // Có thể dùng url_launcher để gọi điện
-    print('Gọi điện cho ${customer.phone}');
+  Future<void> _callCustomer(BuildContext context) async {
+    if (customer.phone == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Khách hàng chưa có số điện thoại'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final phoneUrl = Uri.parse('tel:${customer.phone}');
+
+    try {
+      if (await canLaunchUrl(phoneUrl)) {
+        await launchUrl(phoneUrl);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể gọi điện được'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  void _sendMessage() {
-    // TODO: Implement SMS functionality
-    print('Gửi tin nhắn cho ${customer.phone}');
+  Future<void> _sendMessage(BuildContext context) async {
+    if (customer.phone == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Khách hàng chưa có số điện thoại')),
+      );
+      return;
+    }
+
+    // Thử cách này trước
+    final message = Uri.encodeComponent(
+      'Xin chào ${customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
+    );
+
+    final smsUrl = Uri.parse('sms:${customer.phone}?body=$message');
+
+    try {
+      if (await canLaunchUrl(smsUrl)) {
+        await launchUrl(smsUrl);
+      } else {
+        // Fallback: chỉ mở SMS app
+        final basicSmsUrl = Uri.parse('sms:${customer.phone}');
+        await launchUrl(basicSmsUrl);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _sendDebtReminder(BuildContext context) async {
+    if (customer.phone == null) return;
+
+    final message = Uri.encodeComponent(
+      'Xin chào ${customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
+    );
+
+    final smsUrl = Uri.parse('sms:${customer.phone}?body=$message');
+
+    try {
+      if (await canLaunchUrl(smsUrl)) {
+        await launchUrl(smsUrl);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể gửi tin nhắn được'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -194,28 +278,46 @@ class CustomerDetailScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
                   padding: EdgeInsets.all(16),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _callCustomer,
-                          icon: Icon(Icons.phone, color: Colors.white),
-                          label: Text('Gọi Điện', style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => _callCustomer(context),
+                              icon: Icon(Icons.phone, color: Colors.white),
+                              label: Text('Gọi Điện', style: TextStyle(color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
                           ),
-                        ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => _sendMessage(context),
+                              icon: Icon(Icons.message, color: Colors.white),
+                              label: Text('Tin Nhắn', style: TextStyle(color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
+                      SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: _sendMessage,
-                          icon: Icon(Icons.message, color: Colors.white),
-                          label: Text('Tin Nhắn', style: TextStyle(color: Colors.white)),
+                          onPressed: () => _sendDebtReminder(context),
+                          icon: Icon(Icons.notifications, color: Colors.white),
+                          label: Text('Gửi Nhắc Nợ', style: TextStyle(color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
+                            backgroundColor: Colors.red.shade600,
                             padding: EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),

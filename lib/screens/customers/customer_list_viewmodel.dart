@@ -24,6 +24,10 @@ class CustomerListViewModel {
     customerProvider.selectCustomer(customer);
   }
 
+  Future<void> handleSort(String sortBy, bool ascending) async {
+    await customerProvider.loadCustomersSorted(sortBy, ascending);
+  }
+
   String? validateCustomerName(String? name) {
     if (name == null || name.trim().isEmpty) {
       return 'Tên khách hàng không được để trống';

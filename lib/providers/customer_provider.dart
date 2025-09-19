@@ -144,4 +144,16 @@ class CustomerProvider extends ChangeNotifier {
   Future<void> refresh() async {
     await loadCustomers();
   }
+
+  Future<void> loadCustomersSorted(String sortBy, bool ascending) async {
+    _setStatus(CustomerStatus.loading);
+
+    try {
+      _customers = await _customerService.getCustomersSorted(sortBy, ascending);
+      _setStatus(CustomerStatus.success);
+      _clearError();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
 }

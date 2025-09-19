@@ -24,7 +24,7 @@ class CustomerService {
       final response = await _supabase
           .from('customers')
           .select('*')
-          .or('name.ilike.%$query%,phone.ilike.%$query%')
+          .or('name.ilike.%$query%,phone.ilike.%$query%,address.ilike.%$query%')
           .order('name', ascending: true);
 
       return (response as List)
@@ -72,6 +72,36 @@ class CustomerService {
           .eq('id', customerId);
     } catch (e) {
       throw Exception('Lỗi xóa khách hàng: $e');
+    }
+  }
+
+  Future<List<Customer>> getCustomersSorted(String sortBy, bool ascending) async {
+    try {
+      String orderField;
+      switch (sortBy) {
+        case 'name':
+          orderField = 'name';
+          break;
+        case 'debt_limit':
+          orderField = 'debt_limit';
+          break;
+        case 'created_at':
+          orderField = 'created_at';
+          break;
+        default:
+          orderField = 'name';
+      }
+
+      final response = await _supabase
+          .from('customers')
+          .select('*')
+          .order(orderField, ascending: ascending);
+
+      return (response as List)
+          .map((json) => Customer.fromJson(json))
+          .toList();
+    } catch (e) {
+      throw Exception('Lỗi sắp xếp danh sách: $e');
     }
   }
 }
