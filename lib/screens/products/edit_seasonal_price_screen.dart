@@ -3,14 +3,16 @@ import 'package:provider/provider.dart';
 import '../../models/seasonal_price.dart';
 import '../../providers/product_provider.dart';
 
-class AddSeasonalPriceScreen extends StatefulWidget {
-  const AddSeasonalPriceScreen({Key? key}) : super(key: key);
+class EditSeasonalPriceScreen extends StatefulWidget {
+  final SeasonalPrice price;
+
+  const EditSeasonalPriceScreen({Key? key, required this.price}) : super(key: key);
 
   @override
-  State<AddSeasonalPriceScreen> createState() => _AddSeasonalPriceScreenState();
+  State<EditSeasonalPriceScreen> createState() => _EditSeasonalPriceScreenState();
 }
 
-class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
+class _EditSeasonalPriceScreenState extends State<EditSeasonalPriceScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
@@ -22,6 +24,17 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
   // Date fields
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now().add(const Duration(days: 90));
+
+  @override
+  void initState() {
+    super.initState();
+    // Điền dữ liệu từ price vào các controller
+    _sellingPriceController.text = widget.price.sellingPrice.toString();
+    _seasonNameController.text = widget.price.seasonName;
+    _notesController.text = widget.price.notes ?? '';
+    _startDate = widget.price.startDate;
+    _endDate = widget.price.endDate;
+  }
 
   @override
   void dispose() {
@@ -40,7 +53,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
         if (selectedProduct == null) {
           return Scaffold(
             appBar: AppBar(
-              title: const Text('Thêm Mức Giá'),
+              title: const Text('Sửa Mức Giá'),
               backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
             ),
@@ -56,7 +69,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
         return Scaffold(
           appBar: AppBar(
             title: const Text(
-              'Thêm Mức Giá',
+              'Sửa Mức Giá',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             backgroundColor: Theme.of(context).primaryColor,
@@ -305,7 +318,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
               ),
             )
           : const Text(
-              'Lưu Mức Giá',
+              'Cập Nhật Mức Giá',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -430,24 +443,19 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
         throw Exception('Không tìm thấy sản phẩm được chọn');
       }
 
-      // Tạo object SeasonalPrice hoàn chỉnh
-      final newPrice = SeasonalPrice(
-        id: '', // Sẽ được tạo bởi database
-        productId: selectedProduct.id,
+      // Tạo object SeasonalPrice với dữ liệu đã cập nhật
+      final updatedPrice = widget.price.copyWith(
         sellingPrice: double.parse(_sellingPriceController.text.trim()),
         seasonName: _seasonNameController.text.trim(),
         startDate: _startDate,
         endDate: _endDate,
-        isActive: true,
-        markupPercentage: null, // Có thể tính toán sau nếu cần
         notes: _notesController.text.trim().isNotEmpty
             ? _notesController.text.trim()
             : null,
-        createdAt: DateTime.now(),
       );
 
-      // Gọi Provider để lưu
-      final success = await provider.addSeasonalPrice(newPrice);
+      // Gọi Provider để cập nhật
+      final success = await provider.updateSeasonalPrice(updatedPrice);
 
       if (success) {
         // Thành công
@@ -455,7 +463,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Thêm giá mới thành công'),
+              content: Text('Cập nhật giá thành công'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 2),
             ),
@@ -469,7 +477,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
               content: Text(
                 provider.errorMessage.isNotEmpty
                     ? provider.errorMessage
-                    : 'Có lỗi xảy ra khi thêm mức giá',
+                    : 'Có lỗi xảy ra khi cập nhật mức giá',
               ),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 3),

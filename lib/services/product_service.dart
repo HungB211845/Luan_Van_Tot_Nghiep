@@ -220,6 +220,33 @@ class ProductService {
     }
   }
 
+  /// Cập nhật thông tin một lô hàng
+  Future<ProductBatch> updateProductBatch(ProductBatch batch) async {
+    try {
+      final response = await _supabase
+          .from('product_batches')
+          .update(batch.toJson())
+          .eq('id', batch.id)
+          .select()
+          .single();
+      return ProductBatch.fromJson(response);
+    } catch (e) {
+      throw Exception('Lỗi cập nhật lô hàng: $e');
+    }
+  }
+
+  /// Xóa một lô hàng (soft delete)
+  Future<void> deleteProductBatch(String batchId) async {
+    try {
+      await _supabase
+          .from('product_batches')
+          .update({'is_available': false}) // Dùng soft delete
+          .eq('id', batchId);
+    } catch (e) {
+      throw Exception('Lỗi xóa lô hàng: $e');
+    }
+  }
+
   /// Update batch quantity (khi bán hàng)
   Future<void> updateBatchQuantity(String batchId, int newQuantity) async {
     try {
@@ -325,6 +352,35 @@ class ProductService {
       return SeasonalPrice.fromJson(response);
     } catch (e) {
       throw Exception('Lỗi thêm giá mới: $e');
+    }
+  }
+
+  /// Cập nhật seasonal price
+  Future<SeasonalPrice> updateSeasonalPrice(SeasonalPrice price) async {
+    try {
+      final response = await _supabase
+          .from('seasonal_prices')
+          .update(price.toJson())
+          .eq('id', price.id)
+          .select()
+          .single();
+
+      return SeasonalPrice.fromJson(response);
+    } catch (e) {
+      throw Exception('Lỗi cập nhật giá: $e');
+    }
+  }
+
+  /// Xóa seasonal price (soft delete)
+  Future<void> deleteSeasonalPrice(String priceId) async {
+    try {
+      // Dùng soft delete bằng cách update isActive = false
+      await _supabase
+          .from('seasonal_prices')
+          .update({'is_active': false})
+          .eq('id', priceId);
+    } catch (e) {
+      throw Exception('Lỗi xóa giá: $e');
     }
   }
 

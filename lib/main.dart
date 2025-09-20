@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'providers/customer_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/transaction_provider.dart';
@@ -36,6 +37,20 @@ class MyApp extends StatelessWidget {
           primarySwatch: Colors.green,
           visualDensity: VisualDensity.adaptivePlatformDensity,
         ),
+
+        // === BẮT ĐẦU PHẦN THÊM MỚI ===
+        locale: const Locale('vi', 'VN'), // Đặt ngôn ngữ mặc định là tiếng Việt
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('vi', 'VN'), // Hỗ trợ tiếng Việt
+          Locale('en', 'US'), // Hỗ trợ tiếng Anh (dự phòng)
+        ],
+        // === KẾT THÚC PHẦN THÊM MỚI ===
+
         home: HomePage(),
         debugShowCheckedModeBanner: false,
       ),

@@ -246,6 +246,37 @@ class ProductProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateProductBatch(ProductBatch batch) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      final updatedBatch = await _productService.updateProductBatch(batch);
+      final index = _productBatches.indexWhere((b) => b.id == batch.id);
+      if (index != -1) {
+        _productBatches[index] = updatedBatch;
+      }
+      await _updateProductStock(batch.productId); // Cập nhật lại tồn kho
+      _setStatus(ProductStatus.success);
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteProductBatch(String batchId, String productId) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      await _productService.deleteProductBatch(batchId);
+      _productBatches.removeWhere((b) => b.id == batchId);
+      await _updateProductStock(productId); // Cập nhật lại tồn kho
+      _setStatus(ProductStatus.success);
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
+    }
+  }
+
   Future<void> loadAlerts() async {
     try {
       _expiringBatches = await _productService.getExpiringBatches();
@@ -281,6 +312,46 @@ class ProductProvider extends ChangeNotifier {
       _currentPrices[price.productId] = newPrice.sellingPrice;
 
       notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> updateSeasonalPrice(SeasonalPrice price) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      final updatedPrice = await _productService.updateSeasonalPrice(price);
+      final index = _seasonalPrices.indexWhere((p) => p.id == price.id);
+      if (index != -1) {
+        _seasonalPrices[index] = updatedPrice;
+      }
+
+      // Update current price map if this is the active price
+      if (updatedPrice.isActive && updatedPrice.isCurrentlyActive) {
+        _currentPrices[price.productId] = updatedPrice.sellingPrice;
+      }
+
+      _setStatus(ProductStatus.success);
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteSeasonalPrice(String priceId, String productId) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      await _productService.deleteSeasonalPrice(priceId);
+      _seasonalPrices.removeWhere((p) => p.id == priceId);
+
+      // Reload current price for this product
+      final currentPrice = await _productService.getCurrentPrice(productId);
+      _currentPrices[productId] = currentPrice;
+
+      _setStatus(ProductStatus.success);
       return true;
     } catch (e) {
       _setError(e.toString());

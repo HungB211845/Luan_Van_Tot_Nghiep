@@ -10,6 +10,8 @@ import '../../widgets/custom_button.dart';
 import 'edit_product_screen.dart';
 import 'add_batch_screen.dart';
 import 'add_seasonal_price_screen.dart';
+import 'edit_batch_screen.dart';
+import 'edit_seasonal_price_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   const ProductDetailScreen({Key? key}) : super(key: key);
@@ -335,7 +337,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         itemCount: batches.length,
         itemBuilder: (context, index) {
           final batch = batches[index];
-          return _buildBatchCard(batch);
+          return _buildBatchCard(batch, provider);
         },
       ),
     );
@@ -414,7 +416,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         itemCount: prices.length,
         itemBuilder: (context, index) {
           final price = prices[index];
-          return _buildPriceCard(price);
+          return _buildPriceCard(price, provider);
         },
       ),
     );
@@ -632,11 +634,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     );
   }
 
-  Widget _buildBatchCard(ProductBatch batch) {
-    final now = DateTime.now();
+  Widget _buildBatchCard(ProductBatch batch, ProductProvider provider) {
     final isExpired = batch.isExpired;
     final isExpiringSoon = batch.isExpiringSoon;
-    final daysUntilExpiry = batch.daysUntilExpiry;
 
     Color statusColor = Colors.green;
     String statusText = 'Tốt';
@@ -667,21 +667,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 const SizedBox(width: 8),
                 Text(
                   'Lô: ${batch.batchNumber}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: statusColor.withOpacity(0.3)),
                   ),
                   child: Text(
                     statusText,
@@ -697,62 +690,55 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _buildBatchInfo('Số lượng', '${batch.quantity}'),
-                ),
-                Expanded(
-                  child: _buildBatchInfo(
-                    'Giá nhập',
-                    _formatCurrency(batch.costPrice),
-                  ),
-                ),
+                Expanded(child: _buildBatchInfo('Số lượng', '${batch.quantity}')),
+                Expanded(child: _buildBatchInfo('Giá nhập', _formatCurrency(batch.costPrice))),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: _buildBatchInfo(
-                    'Ngày nhập',
-                    _formatDate(batch.receivedDate),
-                  ),
-                ),
+                Expanded(child: _buildBatchInfo('Ngày nhập', _formatDate(batch.receivedDate))),
                 if (batch.expiryDate != null)
-                  Expanded(
-                    child: _buildBatchInfo(
-                      'Hạn sử dụng',
-                      _formatDate(batch.expiryDate!),
-                    ),
-                  ),
+                  Expanded(child: _buildBatchInfo('Hạn sử dụng', _formatDate(batch.expiryDate!))),
               ],
             ),
-            if (batch.supplierBatchId != null) ...[
-              const SizedBox(height: 8),
-              _buildBatchInfo('Mã lô NCC', batch.supplierBatchId!),
-            ],
-            if (batch.notes != null) ...[
-              const SizedBox(height: 8),
-              _buildBatchInfo('Ghi chú', batch.notes!),
-            ],
-            if (daysUntilExpiry > 0 && isExpiringSoon) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Còn $daysUntilExpiry ngày nữa hết hạn',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.orange[700],
-                  fontWeight: FontWeight.w500,
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit, color: Colors.blue[700]),
+                  // Vô hiệu hóa nút khi đang loading để tránh bấm nhiều lần
+                  onPressed: provider.isLoading
+                      ? null
+                      : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => EditBatchScreen(batch: batch),
+                            ),
+                          );
+                        },
+                  tooltip: 'Chỉnh sửa lô hàng',
                 ),
-              ),
-            ],
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red[700]),
+                  onPressed: provider.isLoading
+                      ? null
+                      : () {
+                          _showDeleteBatchConfirmation(context, provider, batch);
+                        },
+                  tooltip: 'Xóa lô hàng',
+                ),
+              ],
+            )
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPriceCard(SeasonalPrice price) {
-    final isActive = price.isActive;
+  Widget _buildPriceCard(SeasonalPrice price, ProductProvider provider) {
     final isCurrentlyActive = price.isCurrentlyActive;
 
     return Card(
@@ -767,19 +753,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             Row(
               children: [
                 Icon(
-                  isActive && isCurrentlyActive
-                      ? Icons.check_circle
-                      : Icons.circle_outlined,
-                  color: isActive && isCurrentlyActive
-                      ? Colors.green
-                      : Colors.grey,
+                  isCurrentlyActive ? Icons.check_circle : Icons.circle_outlined,
+                  color: isCurrentlyActive ? Colors.green : Colors.grey,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  _formatCurrency(
-                    price.sellingPrice,
-                  ), // Sửa từ price sang sellingPrice
+                  _formatCurrency(price.sellingPrice),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -787,24 +767,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   ),
                 ),
                 const Spacer(),
-                if (isActive && isCurrentlyActive)
+                if (isCurrentlyActive)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.green.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.withOpacity(0.3)),
                     ),
                     child: const Text(
                       'Đang áp dụng',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w500),
                     ),
                   ),
               ],
@@ -817,31 +789,39 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _buildBatchInfo(
-                    'Từ ngày',
-                    _formatDate(price.startDate),
-                  ),
-                ),
-                Expanded(
-                  child: _buildBatchInfo(
-                    'Đến ngày',
-                    _formatDate(price.endDate), // endDate không còn optional
-                  ),
-                ),
+                Expanded(child: _buildBatchInfo('Từ ngày', _formatDate(price.startDate))),
+                Expanded(child: _buildBatchInfo('Đến ngày', _formatDate(price.endDate))),
               ],
             ),
-            if (price.markupPercentage != null) ...[
-              const SizedBox(height: 8),
-              _buildBatchInfo(
-                'Tỷ lệ lợi nhuận',
-                '${price.markupPercentage!.toStringAsFixed(1)}%',
-              ),
-            ],
-            if (price.notes != null) ...[
-              const SizedBox(height: 8),
-              _buildBatchInfo('Ghi chú', price.notes!),
-            ],
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit, color: Colors.blue[700]),
+                  onPressed: provider.isLoading
+                      ? null
+                      : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => EditSeasonalPriceScreen(price: price),
+                            ),
+                          );
+                        },
+                  tooltip: 'Chỉnh sửa giá',
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red[700]),
+                  onPressed: provider.isLoading
+                      ? null
+                      : () {
+                          _showDeletePriceConfirmation(context, provider, price);
+                        },
+                  tooltip: 'Xóa giá',
+                ),
+              ],
+            )
           ],
         ),
       ),
@@ -922,5 +902,81 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+
+  void _showDeleteBatchConfirmation(
+    BuildContext context,
+    ProductProvider provider,
+    ProductBatch batch,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xác nhận xóa lô hàng'),
+        content: Text('Bạn có chắc muốn xóa lô hàng "${batch.batchNumber}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final success = await provider.deleteProductBatch(batch.id, batch.productId);
+              if (!mounted) return;
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Xóa lô hàng thành công'), backgroundColor: Colors.green),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Lỗi: ${provider.errorMessage}'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeletePriceConfirmation(
+    BuildContext context,
+    ProductProvider provider,
+    SeasonalPrice price,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xác nhận xóa mức giá'),
+        content: Text('Bạn có chắc muốn xóa mức giá "${price.seasonName}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final success = await provider.deleteSeasonalPrice(price.id, price.productId);
+              if (!mounted) return;
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Xóa giá thành công'), backgroundColor: Colors.green),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Lỗi: ${provider.errorMessage}'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
   }
 }

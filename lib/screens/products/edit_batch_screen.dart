@@ -1,32 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/seasonal_price.dart';
+import '../../models/product_batch.dart';
 import '../../providers/product_provider.dart';
 
-class AddSeasonalPriceScreen extends StatefulWidget {
-  const AddSeasonalPriceScreen({Key? key}) : super(key: key);
+class EditBatchScreen extends StatefulWidget {
+  final ProductBatch batch;
+
+  const EditBatchScreen({Key? key, required this.batch}) : super(key: key);
 
   @override
-  State<AddSeasonalPriceScreen> createState() => _AddSeasonalPriceScreenState();
+  State<EditBatchScreen> createState() => _EditBatchScreenState();
 }
 
-class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
+class _EditBatchScreenState extends State<EditBatchScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
   // Controllers cho form fields
-  final _sellingPriceController = TextEditingController();
-  final _seasonNameController = TextEditingController();
+  final _batchNumberController = TextEditingController();
+  final _quantityController = TextEditingController();
+  final _costPriceController = TextEditingController();
+  final _supplierBatchIdController = TextEditingController();
   final _notesController = TextEditingController();
 
   // Date fields
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now().add(const Duration(days: 90));
+  DateTime _receivedDate = DateTime.now();
+  DateTime? _expiryDate;
+
+  @override
+  void initState() {
+    super.initState();
+    // Điền dữ liệu từ batch vào các controller
+    _batchNumberController.text = widget.batch.batchNumber;
+    _quantityController.text = widget.batch.quantity.toString();
+    _costPriceController.text = widget.batch.costPrice.toString();
+    _supplierBatchIdController.text = widget.batch.supplierBatchId ?? '';
+    _notesController.text = widget.batch.notes ?? '';
+    _receivedDate = widget.batch.receivedDate;
+    _expiryDate = widget.batch.expiryDate;
+  }
 
   @override
   void dispose() {
-    _sellingPriceController.dispose();
-    _seasonNameController.dispose();
+    _batchNumberController.dispose();
+    _quantityController.dispose();
+    _costPriceController.dispose();
+    _supplierBatchIdController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -40,7 +59,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
         if (selectedProduct == null) {
           return Scaffold(
             appBar: AppBar(
-              title: const Text('Thêm Mức Giá'),
+              title: const Text('Sửa Lô Hàng'),
               backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
             ),
@@ -56,7 +75,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
         return Scaffold(
           appBar: AppBar(
             title: const Text(
-              'Thêm Mức Giá',
+              'Sửa Lô Hàng',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             backgroundColor: Theme.of(context).primaryColor,
@@ -76,7 +95,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
                   const SizedBox(height: 24),
 
                   // Form nhập liệu
-                  _buildPriceForm(),
+                  _buildBatchForm(),
 
                   const SizedBox(height: 32),
 
@@ -103,7 +122,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
             Row(
               children: [
                 Icon(
-                  Icons.trending_up,
+                  Icons.inventory,
                   color: Theme.of(context).primaryColor,
                   size: 24,
                 ),
@@ -141,12 +160,12 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
     );
   }
 
-  Widget _buildPriceForm() {
+  Widget _buildBatchForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Thông tin mức giá',
+          'Thông tin lô hàng',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -155,22 +174,20 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Giá bán
+        // Mã lô
         TextFormField(
-          controller: _sellingPriceController,
+          controller: _batchNumberController,
           decoration: _buildInputDecoration(
-            label: 'Giá bán *',
-            hint: 'Ví dụ: 75000',
-            icon: Icons.attach_money,
+            label: 'Mã lô *',
+            hint: 'Ví dụ: LOT001, B2024001',
+            icon: Icons.qr_code,
           ),
-          keyboardType: TextInputType.number,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập giá bán';
+              return 'Vui lòng nhập mã lô';
             }
-            final price = double.tryParse(value);
-            if (price == null || price <= 0) {
-              return 'Giá bán phải là số dương';
+            if (value.trim().length < 2) {
+              return 'Mã lô phải có ít nhất 2 ký tự';
             }
             return null;
           },
@@ -178,41 +195,75 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
 
         const SizedBox(height: 16),
 
-        // Tên mùa vụ
-        TextFormField(
-          controller: _seasonNameController,
-          decoration: _buildInputDecoration(
-            label: 'Tên mùa vụ *',
-            hint: 'Ví dụ: Vụ Hè Thu 2025, Giá Tết',
-            icon: Icons.wb_sunny,
-          ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập tên mùa vụ';
-            }
-            if (value.trim().length < 3) {
-              return 'Tên mùa vụ phải có ít nhất 3 ký tự';
-            }
-            return null;
-          },
-        ),
-
-        const SizedBox(height: 16),
-
-        // Ngày bắt đầu và Ngày kết thúc
+        // Số lượng và Giá vốn
         Row(
           children: [
-            // Ngày bắt đầu
+            // Số lượng
+            Expanded(
+              child: TextFormField(
+                controller: _quantityController,
+                decoration: _buildInputDecoration(
+                  label: 'Số lượng *',
+                  hint: '100',
+                  icon: Icons.inventory_2,
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Vui lòng nhập số lượng';
+                  }
+                  final quantity = int.tryParse(value);
+                  if (quantity == null || quantity <= 0) {
+                    return 'Số lượng phải là số dương';
+                  }
+                  return null;
+                },
+              ),
+            ),
+
+            const SizedBox(width: 16),
+
+            // Giá vốn
+            Expanded(
+              child: TextFormField(
+                controller: _costPriceController,
+                decoration: _buildInputDecoration(
+                  label: 'Giá vốn *',
+                  hint: '50000',
+                  icon: Icons.attach_money,
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Vui lòng nhập giá vốn';
+                  }
+                  final price = double.tryParse(value);
+                  if (price == null || price <= 0) {
+                    return 'Giá vốn phải là số dương';
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Ngày nhập và Hạn sử dụng
+        Row(
+          children: [
+            // Ngày nhập
             Expanded(
               child: InkWell(
-                onTap: () => _selectStartDate(context),
+                onTap: () => _selectReceivedDate(context),
                 child: InputDecorator(
                   decoration: _buildInputDecoration(
-                    label: 'Ngày bắt đầu *',
+                    label: 'Ngày nhập *',
                     icon: Icons.calendar_today,
                   ),
                   child: Text(
-                    _formatDate(_startDate),
+                    _formatDate(_receivedDate),
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
@@ -221,18 +272,23 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
 
             const SizedBox(width: 16),
 
-            // Ngày kết thúc
+            // Hạn sử dụng
             Expanded(
               child: InkWell(
-                onTap: () => _selectEndDate(context),
+                onTap: () => _selectExpiryDate(context),
                 child: InputDecorator(
                   decoration: _buildInputDecoration(
-                    label: 'Ngày kết thúc *',
-                    icon: Icons.event,
+                    label: 'Hạn sử dụng',
+                    icon: Icons.event_busy,
                   ),
                   child: Text(
-                    _formatDate(_endDate),
-                    style: const TextStyle(fontSize: 16),
+                    _expiryDate != null
+                        ? _formatDate(_expiryDate!)
+                        : 'Chọn ngày',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: _expiryDate != null ? Colors.black : Colors.grey[600],
+                    ),
                   ),
                 ),
               ),
@@ -242,29 +298,13 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
 
         const SizedBox(height: 16),
 
-        // Hiển thị số ngày áp dụng
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue[200]!),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Thời gian áp dụng: ${_calculateDuration()} ngày',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.blue[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
+        // Mã lô nhà cung cấp
+        TextFormField(
+          controller: _supplierBatchIdController,
+          decoration: _buildInputDecoration(
+            label: 'Mã lô nhà cung cấp',
+            hint: 'Mã lô từ nhà cung cấp (tùy chọn)',
+            icon: Icons.business,
           ),
         ),
 
@@ -275,7 +315,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
           controller: _notesController,
           decoration: _buildInputDecoration(
             label: 'Ghi chú',
-            hint: 'Ghi chú thêm về mức giá này (tùy chọn)',
+            hint: 'Ghi chú thêm về lô hàng này (tùy chọn)',
             icon: Icons.note,
           ),
           maxLines: 3,
@@ -286,7 +326,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
 
   Widget _buildSaveButton() {
     return ElevatedButton(
-      onPressed: _isLoading ? null : _savePrice,
+      onPressed: _isLoading ? null : _saveBatch,
       style: ElevatedButton.styleFrom(
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
@@ -305,7 +345,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
               ),
             )
           : const Text(
-              'Lưu Mức Giá',
+              'Cập Nhật Lô Hàng',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -344,38 +384,32 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
     );
   }
 
-  Future<void> _selectStartDate(BuildContext context) async {
+  Future<void> _selectReceivedDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _startDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime(2030),
+      initialDate: _receivedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
       locale: const Locale('vi', 'VN'),
     );
-    if (picked != null && picked != _startDate) {
+    if (picked != null && picked != _receivedDate) {
       setState(() {
-        _startDate = picked;
-        // Đảm bảo ngày kết thúc không sớm hơn ngày bắt đầu
-        if (_endDate.isBefore(_startDate)) {
-          _endDate = _startDate.add(const Duration(days: 1));
-        }
+        _receivedDate = picked;
       });
     }
   }
 
-  Future<void> _selectEndDate(BuildContext context) async {
+  Future<void> _selectExpiryDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _endDate.isBefore(_startDate)
-          ? _startDate.add(const Duration(days: 1))
-          : _endDate,
-      firstDate: _startDate,
+      initialDate: _expiryDate ?? _receivedDate.add(const Duration(days: 365)),
+      firstDate: _receivedDate,
       lastDate: DateTime(2030),
       locale: const Locale('vi', 'VN'),
     );
     if (picked != null) {
       setState(() {
-        _endDate = picked;
+        _expiryDate = picked;
       });
     }
   }
@@ -384,36 +418,9 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-  int _calculateDuration() {
-    return _endDate.difference(_startDate).inDays + 1;
-  }
-
-  String? _validateDates() {
-    if (_endDate.isBefore(_startDate)) {
-      return 'Ngày kết thúc không thể sớm hơn ngày bắt đầu';
-    }
-    if (_startDate.isAtSameMomentAs(_endDate)) {
-      return 'Ngày kết thúc phải sau ngày bắt đầu';
-    }
-    return null;
-  }
-
-  Future<void> _savePrice() async {
+  Future<void> _saveBatch() async {
     // Validate form
     if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    // Validate dates
-    final dateError = _validateDates();
-    if (dateError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(dateError),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
       return;
     }
 
@@ -430,24 +437,23 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
         throw Exception('Không tìm thấy sản phẩm được chọn');
       }
 
-      // Tạo object SeasonalPrice hoàn chỉnh
-      final newPrice = SeasonalPrice(
-        id: '', // Sẽ được tạo bởi database
-        productId: selectedProduct.id,
-        sellingPrice: double.parse(_sellingPriceController.text.trim()),
-        seasonName: _seasonNameController.text.trim(),
-        startDate: _startDate,
-        endDate: _endDate,
-        isActive: true,
-        markupPercentage: null, // Có thể tính toán sau nếu cần
+      // Tạo object ProductBatch với dữ liệu đã cập nhật
+      final updatedBatch = widget.batch.copyWith(
+        batchNumber: _batchNumberController.text.trim(),
+        quantity: int.parse(_quantityController.text.trim()),
+        costPrice: double.parse(_costPriceController.text.trim()),
+        receivedDate: _receivedDate,
+        expiryDate: _expiryDate,
+        supplierBatchId: _supplierBatchIdController.text.trim().isNotEmpty
+            ? _supplierBatchIdController.text.trim()
+            : null,
         notes: _notesController.text.trim().isNotEmpty
             ? _notesController.text.trim()
             : null,
-        createdAt: DateTime.now(),
       );
 
-      // Gọi Provider để lưu
-      final success = await provider.addSeasonalPrice(newPrice);
+      // Gọi Provider để cập nhật
+      final success = await provider.updateProductBatch(updatedBatch);
 
       if (success) {
         // Thành công
@@ -455,7 +461,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Thêm giá mới thành công'),
+              content: Text('Cập nhật lô hàng thành công'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 2),
             ),
@@ -469,7 +475,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
               content: Text(
                 provider.errorMessage.isNotEmpty
                     ? provider.errorMessage
-                    : 'Có lỗi xảy ra khi thêm mức giá',
+                    : 'Có lỗi xảy ra khi cập nhật lô hàng',
               ),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 3),
