@@ -1,89 +1,95 @@
+enum PaymentMethod { CASH, BANK_TRANSFER, DEBT }
+
+extension PaymentMethodExtension on PaymentMethod {
+  String get displayName {
+    switch (this) {
+      case PaymentMethod.CASH:
+        return 'Tiền Mặt';
+      case PaymentMethod.BANK_TRANSFER:
+        return 'Chuyển Khoản';
+      case PaymentMethod.DEBT:
+        return 'Ghi Nợ';
+    }
+  }
+}
+
 class Transaction {
-  final int? id;
-  final int customerId;
+  final String id;
+  final String? customerId;
   final double totalAmount;
   final DateTime transactionDate;
-  final String status;
-  final List<TransactionItem> items;
+  final bool isDebt;
+  final PaymentMethod paymentMethod;
+  final String? notes;
+  final String? invoiceNumber;
+  final String? createdBy;
   final DateTime createdAt;
-  final DateTime updatedAt;
 
   Transaction({
-    this.id,
-    required this.customerId,
+    required this.id,
+    this.customerId,
     required this.totalAmount,
     required this.transactionDate,
-    required this.status,
-    required this.items,
+    this.isDebt = false,
+    this.paymentMethod = PaymentMethod.CASH,
+    this.notes,
+    this.invoiceNumber,
+    this.createdBy,
     required this.createdAt,
-    required this.updatedAt,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
     return Transaction(
       id: json['id'],
       customerId: json['customer_id'],
-      totalAmount: (json['total_amount'] as num).toDouble(),
+      totalAmount: (json['total_amount']).toDouble(),
       transactionDate: DateTime.parse(json['transaction_date']),
-      status: json['status'],
-      items: (json['items'] as List)
-          .map((item) => TransactionItem.fromJson(item))
-          .toList(),
+      isDebt: json['is_debt'] ?? false,
+      paymentMethod: PaymentMethod.values.firstWhere(
+        (e) => e.toString().split('.').last == json['payment_method'],
+        orElse: () => PaymentMethod.CASH,
+      ),
+      notes: json['notes'],
+      invoiceNumber: json['invoice_number'],
+      createdBy: json['created_by'],
       createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'customer_id': customerId,
       'total_amount': totalAmount,
       'transaction_date': transactionDate.toIso8601String(),
-      'status': status,
-      'items': items.map((item) => item.toJson()).toList(),
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'is_debt': isDebt,
+      'payment_method': paymentMethod.toString().split('.').last,
+      'notes': notes,
+      'invoice_number': invoiceNumber,
+      'created_by': createdBy,
     };
   }
-}
 
-class TransactionItem {
-  final int? id;
-  final int transactionId;
-  final int productId;
-  final int quantity;
-  final double unitPrice;
-  final double totalPrice;
-
-  TransactionItem({
-    this.id,
-    required this.transactionId,
-    required this.productId,
-    required this.quantity,
-    required this.unitPrice,
-    required this.totalPrice,
-  });
-
-  factory TransactionItem.fromJson(Map<String, dynamic> json) {
-    return TransactionItem(
-      id: json['id'],
-      transactionId: json['transaction_id'],
-      productId: json['product_id'],
-      quantity: json['quantity'],
-      unitPrice: (json['unit_price'] as num).toDouble(),
-      totalPrice: (json['total_price'] as num).toDouble(),
+  Transaction copyWith({
+    String? customerId,
+    double? totalAmount,
+    DateTime? transactionDate,
+    bool? isDebt,
+    PaymentMethod? paymentMethod,
+    String? notes,
+    String? invoiceNumber,
+    String? createdBy,
+  }) {
+    return Transaction(
+      id: id,
+      customerId: customerId ?? this.customerId,
+      totalAmount: totalAmount ?? this.totalAmount,
+      transactionDate: transactionDate ?? this.transactionDate,
+      isDebt: isDebt ?? this.isDebt,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      notes: notes ?? this.notes,
+      invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'transaction_id': transactionId,
-      'product_id': productId,
-      'quantity': quantity,
-      'unit_price': unitPrice,
-      'total_price': totalPrice,
-    };
   }
 }

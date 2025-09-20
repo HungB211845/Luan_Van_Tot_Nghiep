@@ -5,6 +5,7 @@ import 'providers/customer_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'screens/customers/customer_list_screen.dart';
+import 'screens/products/product_list_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -130,9 +131,11 @@ class _HomePageState extends State<HomePage> {
               SizedBox(height: 10),
               ElevatedButton(
                 onPressed: () {
-                  // TODO: Navigate to product list
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Chức năng đang phát triển...')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProductListScreen(),
+                    ),
                   );
                 },
                 child: Text('Quản Lý Sản Phẩm'),
