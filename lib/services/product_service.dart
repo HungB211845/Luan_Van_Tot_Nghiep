@@ -521,7 +521,8 @@ class ProductService {
   String _generateInvoiceNumber() {
     final now = DateTime.now();
     final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    // THÊM GIÂY VÀ MILI GIÂY VÀO ĐÂY
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}${now.millisecond.toString().padLeft(3, '0')}';
     return 'INV$dateStr$timeStr';
   }
 
@@ -566,6 +567,20 @@ class ProductService {
       throw Exception('Lỗi lấy chi tiết giao dịch: $e');
     }
   }
+
+  /// Lấy thông tin một giao dịch theo ID
+Future<Transaction?> getTransactionById(String transactionId) async {
+  try {
+    final response = await _supabase
+        .from('transactions')
+        .select()
+        .eq('id', transactionId)
+        .maybeSingle(); // Sửa từ single() thành maybeSingle()
+    return response == null ? null : Transaction.fromJson(response);
+  } catch (e) {
+    throw Exception('Lỗi lấy thông tin giao dịch: $e');
+  }
+}
 
   // =====================================================
   // DASHBOARD & ANALYTICS

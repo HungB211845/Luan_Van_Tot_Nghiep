@@ -9,6 +9,21 @@ enum ProductCategory {
   SEED,
 }
 
+// === BẮT ĐẦU PHẦN THÊM MỚI ===
+extension ProductCategoryExtension on ProductCategory {
+  String get displayName {
+    switch (this) {
+      case ProductCategory.FERTILIZER:
+        return 'Phân Bón';
+      case ProductCategory.PESTICIDE:
+        return 'Thuốc BVTV';
+      case ProductCategory.SEED:
+        return 'Lúa Giống';
+    }
+  }
+}
+// === KẾT THÚC PHẦN THÊM MỚI ===
+
 class Product {
   final String id;
   final String sku;
@@ -20,6 +35,12 @@ class Product {
   final bool isBanned;
   final String? imageUrl;
   final String? description;
+
+  // === THÊM 2 DÒNG NÀY VÀO ===
+  final int? availableStock;
+  final double? currentPrice;
+  // ============================
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -39,6 +60,12 @@ class Product {
     this.isBanned = false,
     this.imageUrl,
     this.description,
+
+    // === THÊM 2 DÒNG NÀY VÀO ===
+    this.availableStock,
+    this.currentPrice,
+    // ============================
+
     required this.createdAt,
     required this.updatedAt,
     this.npkRatio,
@@ -62,6 +89,13 @@ class Product {
       isBanned: json['is_banned'] ?? false,
       imageUrl: json['image_url'],
       description: json['description'],
+
+      // === THÊM 2 DÒNG NÀY VÀO ===
+      // Dùng as num? để an toàn, rồi chuyển đổi sang kiểu đúng
+      availableStock: (json['available_stock'] as num?)?.toInt(),
+      currentPrice: (json['current_price'] as num?)?.toDouble(),
+      // ============================
+
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
       npkRatio: json['npk_ratio'],

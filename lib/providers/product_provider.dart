@@ -51,6 +51,11 @@ class ProductProvider extends ChangeNotifier {
   // Dashboard stats
   Map<String, dynamic> _dashboardStats = {};
 
+  // === THÊM 2 DÒNG NÀY VÀO ===
+  Transaction? _activeTransaction;
+  List<TransactionItem> _activeTransactionItems = [];
+  // ============================
+
   // =====================================================
   // GETTERS
   // =====================================================
@@ -84,6 +89,11 @@ class ProductProvider extends ChangeNotifier {
   // Dashboard
   Map<String, dynamic> get dashboardStats => _dashboardStats;
 
+  // === THÊM 2 DÒNG NÀY VÀO ===
+  Transaction? get activeTransaction => _activeTransaction;
+  List<TransactionItem> get activeTransactionItems => _activeTransactionItems;
+  // ============================
+
   // Utility getters
   int getProductStock(String productId) => _stockMap[productId] ?? 0;
   double getCurrentPrice(String productId) => _currentPrices[productId] ?? 0.0;
@@ -94,13 +104,21 @@ class ProductProvider extends ChangeNotifier {
 
   Future<void> loadProducts({ProductCategory? category}) async {
     _setStatus(ProductStatus.loading);
-
     try {
+      // 1. Lấy danh sách sản phẩm (đã có sẵn stock và price từ view)
       _products = await _productService.getProducts(category: category);
       _selectedCategory = category;
 
-      // Load current prices and stock for all products
-      await _loadProductMetadata();
+      // 2. Nạp dữ liệu vào _stockMap và _currentPrices từ danh sách vừa lấy
+      //    Không cần gọi thêm API nào nữa!
+      for (final product in _products) {
+        _stockMap[product.id] = product.availableStock ?? 0;
+        _currentPrices[product.id] = product.currentPrice ?? 0.0;
+      }
+
+      // 3. Xóa bộ lọc cũ (nếu có)
+      _filteredProducts = [];
+      _searchQuery = '';
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -136,8 +154,8 @@ class ProductProvider extends ChangeNotifier {
       final newProduct = await _productService.createProduct(product);
       _products.add(newProduct);
 
-      // Load metadata for new product
-      await _loadProductMetadata();
+      // Reload all products to get updated data
+      await loadProducts();
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -205,12 +223,12 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void filterByCategory(ProductCategory? category) {
+  Future<void> filterByCategory(ProductCategory? category) async {
     _selectedCategory = category;
     if (category == null) {
-      loadProducts();
+      await loadProducts();
     } else {
-      loadProducts(category: category);
+      await loadProducts(category: category);
     }
   }
 
@@ -487,14 +505,10 @@ class ProductProvider extends ChangeNotifier {
       // Clear cart after successful transaction
       clearCart();
 
-      // Reload stock and dashboard stats
-      await _loadProductMetadata();
-      await loadDashboardStats();
-
       _setStatus(ProductStatus.success);
       _clearError();
 
-      return transactionId;
+      return transactionId; // Trả về thành công ngay lập tức
     } catch (e) {
       _setError(e.toString());
       return null;
@@ -537,6 +551,24 @@ class ProductProvider extends ChangeNotifier {
   }
 
   // =====================================================
+  // TRANSACTION DETAILS
+  // =====================================================
+
+  Future<void> loadTransactionDetails(String transactionId) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      _activeTransaction = await _productService.getTransactionById(transactionId);
+    if (_activeTransaction == null) {
+      throw Exception('Không tìm thấy giao dịch. Vui lòng thử lại.');
+    }
+    _activeTransactionItems = await _productService.getTransactionItems(transactionId);
+    _setStatus(ProductStatus.success);
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  // =====================================================
   // COMPANY OPERATIONS
   // =====================================================
 
@@ -570,21 +602,6 @@ class ProductProvider extends ChangeNotifier {
   // PRIVATE HELPER METHODS
   // =====================================================
 
-  Future<void> _loadProductMetadata() async {
-    // Load stock and prices for all products
-    for (final product in _products) {
-      try {
-        final stock = await _productService.getAvailableStock(product.id);
-        final price = await _productService.getCurrentPrice(product.id);
-
-        _stockMap[product.id] = stock;
-        _currentPrices[product.id] = price;
-      } catch (e) {
-        // Continue loading others if one fails
-        continue;
-      }
-    }
-  }
 
   Future<void> _updateProductStock(String productId) async {
     try {
@@ -746,37 +763,3 @@ class ProductListViewModel {
   }
 }
 
-// =====================================================
-// POS VIEW MODEL (FOR POS SCREEN)
-// =====================================================
-
-class POSViewModel {
-  final ProductProvider productProvider;
-
-  POSViewModel(this.productProvider);
-
-  Future<void> initialize() async {
-    await productProvider.loadProducts();
-  }
-
-  Future<void> handleBarcodeScan(String barcode) async {
-    final product = await productProvider.scanBarcode(barcode);
-    if (product != null) {
-      productProvider.addToCart(product, 1);
-    }
-  }
-
-  Future<String?> handleCheckout({
-    String? customerId,
-    PaymentMethod paymentMethod = PaymentMethod.CASH,
-    bool isDebt = false,
-    String? notes,
-  }) async {
-    return await productProvider.checkout(
-      customerId: customerId,
-      paymentMethod: paymentMethod,
-      isDebt: isDebt,
-      notes: notes,
-    );
-  }
-}

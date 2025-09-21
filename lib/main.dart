@@ -7,6 +7,7 @@ import 'providers/product_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'screens/customers/customer_list_screen.dart';
 import 'screens/products/product_list_screen.dart';
+import 'screens/pos/pos_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -128,6 +129,26 @@ class _HomePageState extends State<HomePage> {
             ),
             SizedBox(height: 30),
             if (_isConnected) ...[
+              // === NÚT BÁN HÀNG POS ===
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const POSScreen()),
+                  );
+                },
+                icon: const Icon(Icons.point_of_sale, size: 28),
+                label: const Text('Bán Hàng (POS)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor, // Màu xanh lá chủ đạo
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 20), // Thêm khoảng cách
+              // === KẾT THÚC PHẦN THÊM ===
+
               ElevatedButton(
                 onPressed: () {
                   Navigator.push(
@@ -139,7 +160,7 @@ class _HomePageState extends State<HomePage> {
                 },
                 child: Text('Quản Lý Khách Hàng'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.blue, // Đổi màu để phân biệt
                   padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                 ),
               ),
@@ -155,7 +176,7 @@ class _HomePageState extends State<HomePage> {
                 },
                 child: Text('Quản Lý Sản Phẩm'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: Colors.orange, // Đổi màu để phân biệt
                   padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                 ),
               ),
