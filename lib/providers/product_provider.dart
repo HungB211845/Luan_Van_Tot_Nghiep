@@ -5,6 +5,7 @@ import '../models/seasonal_price.dart';
 import '../models/banned_substance.dart';
 import '../models/transaction.dart';
 import '../models/transaction_item.dart';
+import '../models/transaction_item_details.dart';
 import '../models/company.dart';
 import '../services/product_service.dart';
 
@@ -53,7 +54,7 @@ class ProductProvider extends ChangeNotifier {
 
   // === THÊM 2 DÒNG NÀY VÀO ===
   Transaction? _activeTransaction;
-  List<TransactionItem> _activeTransactionItems = [];
+  List<TransactionItemDetails> _activeTransactionItems = [];
   // ============================
 
   // =====================================================
@@ -91,7 +92,7 @@ class ProductProvider extends ChangeNotifier {
 
   // === THÊM 2 DÒNG NÀY VÀO ===
   Transaction? get activeTransaction => _activeTransaction;
-  List<TransactionItem> get activeTransactionItems => _activeTransactionItems;
+  List<TransactionItemDetails> get activeTransactionItems => _activeTransactionItems;
   // ============================
 
   // Utility getters
@@ -557,12 +558,48 @@ class ProductProvider extends ChangeNotifier {
   Future<void> loadTransactionDetails(String transactionId) async {
     _setStatus(ProductStatus.loading);
     try {
+      // Bước A: Lấy dữ liệu thô từ Service như cũ
       _activeTransaction = await _productService.getTransactionById(transactionId);
-    if (_activeTransaction == null) {
-      throw Exception('Không tìm thấy giao dịch. Vui lòng thử lại.');
-    }
-    _activeTransactionItems = await _productService.getTransactionItems(transactionId);
-    _setStatus(ProductStatus.success);
+      if (_activeTransaction == null) {
+        throw Exception('Không tìm thấy giao dịch. Vui lòng thử lại.');
+      }
+      final rawItems = await _productService.getTransactionItems(transactionId);
+
+      // Bước B: "Làm giàu" dữ liệu (Enrichment)
+      final List<TransactionItemDetails> enrichedItems = [];
+      for (final item in rawItems) {
+        // Tìm sản phẩm tương ứng trong danh sách sản phẩm tổng mà Provider đang có
+        final product = _products.firstWhere(
+          (p) => p.id == item.productId,
+          // orElse để tránh bị crash nếu không tìm thấy sản phẩm
+          orElse: () => Product(
+            id: item.productId,
+            name: 'Sản phẩm không xác định',
+            sku: 'N/A',
+            category: ProductCategory.FERTILIZER, // Default
+            attributes: {},
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+
+        // Tạo object "ảo" đã gộp đủ thông tin
+        enrichedItems.add(
+          TransactionItemDetails(
+            productId: item.productId,
+            productName: product.name,
+            productSku: product.sku,
+            quantity: item.quantity,
+            priceAtSale: item.priceAtSale,
+            subTotal: item.subTotal,
+          ),
+        );
+      }
+
+      // Bước C: Cập nhật state với dữ liệu đã được làm giàu
+      _activeTransactionItems = enrichedItems;
+      _setStatus(ProductStatus.success);
+      
     } catch (e) {
       _setError(e.toString());
     }

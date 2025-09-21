@@ -4,6 +4,7 @@ import '../../providers/product_provider.dart';
 import '../../widgets/loading_widget.dart';
 import '../pos/pos_screen.dart';
 import '../../models/transaction.dart';
+import '../../models/transaction_item_details.dart';
 
 class TransactionSuccessScreen extends StatefulWidget {
   final String transactionId;
@@ -117,10 +118,10 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
                   child: ListView.builder(
                     itemCount: items.length,
                     itemBuilder: (context, index) {
-                      final item = items[index];
+                      final item = items[index]; // 'item' bây giờ là một TransactionItemDetails
                       return ListTile(
-                        title: Text('Sản phẩm ID: ${item.productId}'),
-                        subtitle: Text('Số lượng: ${item.quantity}'),
+                        title: Text(item.productName), // <-- Dùng productName
+                        subtitle: Text('SKU: ${item.productSku} - Số lượng: ${item.quantity}'),
                         trailing: Text(_formatCurrency(item.subTotal)),
                       );
                     },

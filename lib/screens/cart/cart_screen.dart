@@ -543,9 +543,6 @@ class _CartScreenState extends State<CartScreen> {
                           builder: (context) => TransactionSuccessScreen(transactionId: transactionId),
                         ),
                       );
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('Thanh toán thành công!'), backgroundColor: Colors.green),
-                      );
                     } else {
                       messenger.showSnackBar(
                         SnackBar(content: Text('Lỗi: ${provider.errorMessage}'), backgroundColor: Colors.red),
