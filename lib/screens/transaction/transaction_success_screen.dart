@@ -136,12 +136,10 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
                     textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
+                    // Ra lệnh làm mới dữ liệu ở background
                     context.read<ProductProvider>().refresh();
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (context) => POSScreen()),
-                      (route) => false,
-                    );
+                    // Quay về màn hình đầu tiên trong stack (HomePage)
+                    Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   child: const Text('Tạo Giao Dịch Mới'),
                 ),

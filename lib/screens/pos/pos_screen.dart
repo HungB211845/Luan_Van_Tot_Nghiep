@@ -32,8 +32,6 @@ class _POSScreenState extends State<POSScreen> {
         customerProvider: customerProvider,
       );
       
-      // Dùng addPostFrameCallback để đảm bảo việc tải dữ liệu
-      // chỉ bắt đầu SAU KHI frame đầu tiên đã được build xong.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _viewModel?.initialize();
       });
@@ -46,12 +44,6 @@ class _POSScreenState extends State<POSScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _onBarcodeScanned(String sku) {
-    if (sku.trim().isEmpty || _viewModel == null) return;
-    _viewModel!.handleBarcodeScan(sku.trim());
-    _searchController.clear();
   }
 
   @override
@@ -67,7 +59,7 @@ class _POSScreenState extends State<POSScreen> {
         foregroundColor: Colors.white,
       ),
       body: _viewModel == null
-          ? const Center(child: LoadingWidget()) // Hiển thị loading trong khi viewModel đang được khởi tạo
+          ? const Center(child: LoadingWidget())
           : Column(
               children: [
                 Padding(
@@ -117,18 +109,25 @@ class _POSScreenState extends State<POSScreen> {
             final product = productProvider.products[index];
             final quantityInCart = _viewModel!.getProductQuantityInCart(product.id);
             return Card(
-              child: Column(
-                children: [
-                  Icon(_getCategoryIcon(product.category), size: 32, color: _getCategoryColor(product.category)),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: Text(product.name, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ),
-                  Text('${_viewModel!.productProvider.getCurrentPrice(product.id).toStringAsFixed(0)}đ', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                  Text('Tồn: ${_viewModel!.productProvider.getProductStock(product.id)}', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
-                  const SizedBox(height: 8),
-                  _buildQuantityStepper(product, quantityInCart),
-                ],
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  children: [
+                    Icon(_getCategoryIcon(product.category), size: 32, color: _getCategoryColor(product.category)),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: Text(product.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('${_viewModel!.productProvider.getCurrentPrice(product.id).toStringAsFixed(0)}đ', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
+                    const SizedBox(height: 4),
+                    Text('Tồn: ${_viewModel!.productProvider.getProductStock(product.id)}', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+                    const SizedBox(height: 8),
+                    _buildQuantityStepper(product, quantityInCart),
+                  ],
+                ),
               ),
             );
           },
@@ -156,7 +155,7 @@ class _POSScreenState extends State<POSScreen> {
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
                         constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                        child: Text('${productProvider.cartItemsCount}', style: const TextStyle(color: Colors.white, fontSize: 10), textAlign: TextAlign.center),
+                        child: Text('${productProvider.cartItemsCount}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                       ),
                     ),
                 ],
@@ -239,7 +238,6 @@ class _POSScreenState extends State<POSScreen> {
   }
 
   Widget _buildQuantityStepper(Product product, int quantityInCart) {
-    // Nếu chưa có trong giỏ hàng, hiển thị nút "Thêm"
     if (quantityInCart == 0) {
       return SizedBox(
         height: 32,
@@ -259,7 +257,6 @@ class _POSScreenState extends State<POSScreen> {
       );
     }
 
-    // Nếu đã có trong giỏ hàng, hiển thị cụm nút +/- 
     return Container(
       height: 32,
       decoration: BoxDecoration(
@@ -270,7 +267,6 @@ class _POSScreenState extends State<POSScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Nút Trừ
           IconButton(
             onPressed: () {
               _viewModel?.updateCartItemQuantity(product, quantityInCart - 1);
@@ -279,8 +275,6 @@ class _POSScreenState extends State<POSScreen> {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 30),
           ),
-
-          // Số lượng
           Container(
             width: 40,
             alignment: Alignment.center,
@@ -295,8 +289,6 @@ class _POSScreenState extends State<POSScreen> {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
-
-          // Nút Cộng
           IconButton(
             onPressed: () {
               final currentStock = _viewModel?.productProvider.getProductStock(product.id) ?? 0;
@@ -321,8 +313,14 @@ class _POSScreenState extends State<POSScreen> {
   }
 
   IconData _getCategoryIcon(ProductCategory category) {
-    // ... Giữ nguyên implementation
-    return Icons.eco;
+    switch (category) {
+      case ProductCategory.FERTILIZER:
+        return Icons.eco;
+      case ProductCategory.PESTICIDE:
+        return Icons.bug_report;
+      case ProductCategory.SEED:
+        return Icons.grass;
+    }
   }
 
   Color _getCategoryColor(ProductCategory category) {
