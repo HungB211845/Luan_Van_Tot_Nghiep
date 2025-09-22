@@ -5,10 +5,12 @@ import '../models/product.dart';
 import '../models/transaction.dart';
 import '../providers/product_provider.dart';
 import '../providers/customer_provider.dart';
+import '../providers/transaction_provider.dart';
 
 class POSViewModel {
   final ProductProvider productProvider;
   final CustomerProvider customerProvider;
+  final TransactionProvider transactionProvider;
 
   // State cục bộ cho màn hình POS
   Customer? selectedCustomer;
@@ -16,6 +18,7 @@ class POSViewModel {
   POSViewModel({
     required this.productProvider,
     required this.customerProvider,
+    required this.transactionProvider,
   });
 
   // Hàm khởi tạo, tải các dữ liệu cần thiết

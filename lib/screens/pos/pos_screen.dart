@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/customer_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../view_models/pos_view_model.dart';
 import '../../widgets/loading_widget.dart';
 import '../cart/cart_screen.dart';
@@ -30,6 +31,7 @@ class _POSScreenState extends State<POSScreen> {
       _viewModel = POSViewModel(
         productProvider: productProvider,
         customerProvider: customerProvider,
+        transactionProvider: context.read<TransactionProvider>(),
       );
       
       WidgetsBinding.instance.addPostFrameCallback((_) {

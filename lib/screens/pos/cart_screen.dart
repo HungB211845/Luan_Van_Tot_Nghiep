@@ -22,6 +22,7 @@ class _CartScreenState extends State<CartScreen> {
     _viewModel = POSViewModel(
       productProvider: context.read<ProductProvider>(),
       customerProvider: context.read<CustomerProvider>(),
+      transactionProvider: context.read<TransactionProvider>(),
     );
   }
 

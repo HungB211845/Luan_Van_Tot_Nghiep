@@ -1,3 +1,4 @@
+import '../services/transaction_service.dart';
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import '../models/product_batch.dart';
@@ -9,10 +10,12 @@ import '../models/transaction_item_details.dart';
 import '../models/company.dart';
 import '../services/product_service.dart';
 
+
 enum ProductStatus { idle, loading, success, error }
 
 class ProductProvider extends ChangeNotifier {
   final ProductService _productService = ProductService();
+  final TransactionService _transactionService = TransactionService();
 
   // =====================================================
   // STATE VARIABLES
@@ -495,11 +498,10 @@ class ProductProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
       )).toList();
 
-      final transactionId = await _productService.createTransaction(
+      final transactionId = await _transactionService.createTransaction(
         customerId: customerId,
         items: transactionItems,
         paymentMethod: paymentMethod,
-        isDebt: isDebt,
         notes: notes,
       );
 
@@ -559,11 +561,11 @@ class ProductProvider extends ChangeNotifier {
     _setStatus(ProductStatus.loading);
     try {
       // Bước A: Lấy dữ liệu thô từ Service như cũ
-      _activeTransaction = await _productService.getTransactionById(transactionId);
+      _activeTransaction = await _transactionService.getTransactionById(transactionId);
       if (_activeTransaction == null) {
         throw Exception('Không tìm thấy giao dịch. Vui lòng thử lại.');
       }
-      final rawItems = await _productService.getTransactionItems(transactionId);
+      final rawItems = await _transactionService.getTransactionItems(transactionId);
 
       // Bước B: "Làm giàu" dữ liệu (Enrichment)
       final List<TransactionItemDetails> enrichedItems = [];
@@ -628,7 +630,18 @@ class ProductProvider extends ChangeNotifier {
 
   Future<void> loadDashboardStats() async {
     try {
-      _dashboardStats = await _productService.getDashboardStats();
+      // Get product stats
+      final productStats = await _productService.getProductDashboardStats();
+      
+      // Get transaction stats
+      final transactionStats = await _transactionService.getTodaySalesStats();
+      
+      // Combine both
+      _dashboardStats = {
+        ...productStats,
+        ...transactionStats,
+      };
+      
       notifyListeners();
     } catch (e) {
       _setError(e.toString());

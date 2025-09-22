@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/customer_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../view_models/pos_view_model.dart';
 import '../transaction/transaction_success_screen.dart';
 
@@ -23,6 +24,7 @@ class _CartScreenState extends State<CartScreen> {
     _viewModel = POSViewModel(
       productProvider: context.read<ProductProvider>(),
       customerProvider: context.read<CustomerProvider>(),
+      transactionProvider: context.read<TransactionProvider>(),
     );
   }
 
