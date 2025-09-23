@@ -116,7 +116,11 @@ class _CartScreenState extends State<CartScreen> {
           return Column(
             children: [
               const Spacer(),
-              Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey[400]),
+              Icon(
+                Icons.shopping_cart_outlined,
+                size: 80,
+                color: Colors.grey[400],
+              ),
               const SizedBox(height: 16),
               Text(
                 'Giỏ hàng trống',
@@ -129,10 +133,7 @@ class _CartScreenState extends State<CartScreen> {
               const SizedBox(height: 8),
               Text(
                 'Thêm sản phẩm để bắt đầu',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[500],
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               ),
               const Spacer(),
             ],
@@ -147,7 +148,9 @@ class _CartScreenState extends State<CartScreen> {
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -200,7 +203,10 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                             const SizedBox(height: 4),
                             IconButton(
-                              icon: Icon(Icons.delete_outline, color: Colors.red[400]),
+                              icon: Icon(
+                                Icons.delete_outline,
+                                color: Colors.red[400],
+                              ),
                               onPressed: () => _showRemoveItemDialog(cartItem),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
@@ -232,7 +238,10 @@ class _CartScreenState extends State<CartScreen> {
                             children: [
                               InkWell(
                                 onTap: () {
-                                  productProvider.updateCartItem(cartItem.productId, cartItem.quantity - 1);
+                                  productProvider.updateCartItem(
+                                    cartItem.productId,
+                                    cartItem.quantity - 1,
+                                  );
                                 },
                                 child: Container(
                                   width: 36,
@@ -250,7 +259,9 @@ class _CartScreenState extends State<CartScreen> {
                               Container(
                                 width: 60,
                                 height: 36,
-                                decoration: const BoxDecoration(color: Colors.white),
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                ),
                                 child: Center(
                                   child: Text(
                                     '${cartItem.quantity}',
@@ -263,7 +274,10 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               InkWell(
                                 onTap: () {
-                                  productProvider.updateCartItem(cartItem.productId, cartItem.quantity + 1);
+                                  productProvider.updateCartItem(
+                                    cartItem.productId,
+                                    cartItem.quantity + 1,
+                                  );
                                 },
                                 child: Container(
                                   width: 36,
@@ -343,7 +357,10 @@ class _CartScreenState extends State<CartScreen> {
                   label: const Text('Thanh Toán Ngay'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    textStyle: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                     backgroundColor: Theme.of(context).primaryColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -366,7 +383,9 @@ class _CartScreenState extends State<CartScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Xóa sản phẩm'),
-          content: Text('Bạn có chắc muốn xóa "${cartItem.productName}" khỏi giỏ hàng?'),
+          content: Text(
+            'Bạn có chắc muốn xóa "${cartItem.productName}" khỏi giỏ hàng?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -374,7 +393,9 @@ class _CartScreenState extends State<CartScreen> {
             ),
             TextButton(
               onPressed: () {
-                context.read<ProductProvider>().removeFromCart(cartItem.productId);
+                context.read<ProductProvider>().removeFromCart(
+                  cartItem.productId,
+                );
                 Navigator.pop(dialogContext);
               },
               style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -393,7 +414,9 @@ class _CartScreenState extends State<CartScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Xóa toàn bộ giỏ hàng'),
-          content: const Text('Bạn có chắc muốn xóa tất cả sản phẩm trong giỏ hàng?'),
+          content: const Text(
+            'Bạn có chắc muốn xóa tất cả sản phẩm trong giỏ hàng?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -427,9 +450,7 @@ class _CartScreenState extends State<CartScreen> {
             child: Consumer<CustomerProvider>(
               builder: (context, customerProvider, child) {
                 if (customerProvider.customers.isEmpty) {
-                  return const Center(
-                    child: Text('Không có khách hàng nào'),
-                  );
+                  return const Center(child: Text('Không có khách hàng nào'));
                 }
 
                 return ListView.builder(
@@ -437,9 +458,7 @@ class _CartScreenState extends State<CartScreen> {
                   itemBuilder: (context, index) {
                     final customer = customerProvider.customers[index];
                     return ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.person),
-                      ),
+                      leading: const CircleAvatar(child: Icon(Icons.person)),
                       title: Text(customer.name),
                       subtitle: Text(customer.phone ?? ''),
                       onTap: () {
@@ -480,14 +499,22 @@ class _CartScreenState extends State<CartScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Khách hàng: ${_viewModel.selectedCustomer?.name ?? "Khách lẻ"}'),
+                  Text(
+                    'Khách hàng: ${_viewModel.selectedCustomer?.name ?? "Khách lẻ"}',
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Tổng tiền: ${context.read<ProductProvider>().cartTotal.toStringAsFixed(0)}đ',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
                   ),
                   const Divider(height: 24),
-                  const Text('Chọn phương thức thanh toán:', style: TextStyle(fontWeight: FontWeight.w500)),
+                  const Text(
+                    'Chọn phương thức thanh toán:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
                   RadioListTile<PaymentMethod>(
                     title: const Text('Tiền mặt'),
                     value: PaymentMethod.CASH,
@@ -502,11 +529,13 @@ class _CartScreenState extends State<CartScreen> {
                     title: const Text('Ghi nợ'),
                     value: PaymentMethod.DEBT,
                     groupValue: selectedPaymentMethod,
-                    onChanged: _viewModel.selectedCustomer != null ? (value) {
-                      setDialogState(() {
-                        selectedPaymentMethod = value!;
-                      });
-                    } : null,
+                    onChanged: _viewModel.selectedCustomer != null
+                        ? (value) {
+                            setDialogState(() {
+                              selectedPaymentMethod = value!;
+                            });
+                          }
+                        : null,
                   ),
                 ],
               ),
@@ -518,22 +547,32 @@ class _CartScreenState extends State<CartScreen> {
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(dialogContext);
-                    _viewModel.handleCheckout(
-                      paymentMethod: selectedPaymentMethod,
-                      isDebt: selectedPaymentMethod == PaymentMethod.DEBT,
-                    ).then((transactionId) {
-                      if (!mounted) return;
-                      if (transactionId != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Thanh toán thành công!'), backgroundColor: Colors.green),
-                        );
-                        Navigator.pop(context); // Trở về POSScreen
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Lỗi: ${context.read<ProductProvider>().errorMessage}'), backgroundColor: Colors.red),
-                        );
-                      }
-                    });
+                    _viewModel
+                        .handleCheckout(
+                          paymentMethod: selectedPaymentMethod,
+                          isDebt: selectedPaymentMethod == PaymentMethod.DEBT,
+                        )
+                        .then((transactionId) {
+                          if (!mounted) return;
+                          if (transactionId != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Thanh toán thành công!'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                            Navigator.pop(context); // Trở về POSScreen
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Lỗi: ${context.read<ProductProvider>().errorMessage}',
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        });
                   },
                   child: const Text('Xác nhận'),
                 ),

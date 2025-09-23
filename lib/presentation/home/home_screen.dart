@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 import '../../core/routing/route_names.dart';
 import '../../shared/widgets/connectivity_banner.dart';
+import '../../shared/layout/responsive_layout_wrapper.dart';
+import '../../shared/layout/models/layout_config.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Agricultural POS'),
-        backgroundColor: Colors.green,
-        elevation: 0,
-      ),
-      body: Container(
+    return AppLayouts.home.wrapChildResponsive(
+      Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
               'Cửa Hàng Nông Nghiệp',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 28, 
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
             ),
             const SizedBox(height: 20),
             
@@ -29,31 +29,48 @@ class HomeScreen extends StatelessWidget {
             const ConnectivityBanner(),
             const SizedBox(height: 30),
             
-            // Navigation buttons
-            _buildNavigationButton(
-              context,
-              icon: Icons.point_of_sale,
-              label: 'Bán Hàng (POS)',
-              route: RouteNames.pos,
-              color: Colors.green,
-            ),
-            const SizedBox(height: 15),
-            
-            _buildNavigationButton(
-              context,
-              icon: Icons.people,
-              label: 'Quản Lý Khách Hàng',
-              route: RouteNames.customers,
-              color: Colors.blue,
-            ),
-            const SizedBox(height: 15),
-            
-            _buildNavigationButton(
-              context,
-              icon: Icons.inventory,
-              label: 'Quản Lý Sản Phẩm',
-              route: RouteNames.products,
-              color: Colors.orange,
+            // Navigation cards - sử dụng Expanded để tránh overflow
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 1.1,
+                children: [
+                  _buildFeatureCard(
+                    context,
+                    icon: Icons.point_of_sale,
+                    title: 'Bán Hàng',
+                    subtitle: 'POS System',
+                    route: RouteNames.pos,
+                    color: Colors.green,
+                  ),
+                  _buildFeatureCard(
+                    context,
+                    icon: Icons.people,
+                    title: 'Khách Hàng',
+                    subtitle: 'Quản lý KH',
+                    route: RouteNames.customers,
+                    color: Colors.blue,
+                  ),
+                  _buildFeatureCard(
+                    context,
+                    icon: Icons.inventory,
+                    title: 'Sản Phẩm',
+                    subtitle: 'Kho hàng',
+                    route: RouteNames.products,
+                    color: Colors.orange,
+                  ),
+                  _buildFeatureCard(
+                    context,
+                    icon: Icons.analytics,
+                    title: 'Báo Cáo',
+                    subtitle: 'Thống kê',
+                    route: '/reports', // Add this route later
+                    color: Colors.purple,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -61,22 +78,78 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildNavigationButton(
+  Widget _buildFeatureCard(
     BuildContext context, {
     required IconData icon,
-    required String label,
+    required String title,
+    required String subtitle,
     required String route,
     required Color color,
   }) {
-    return ElevatedButton.icon(
-      onPressed: () => Navigator.pushNamed(context, route),
-      icon: Icon(icon, size: 24),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: InkWell(
+        onTap: () => Navigator.pushNamed(context, route),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 28,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Flexible(
+                child: Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
