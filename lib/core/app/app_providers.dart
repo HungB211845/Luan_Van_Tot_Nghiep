@@ -1,0 +1,14 @@
+import 'package:provider/provider.dart';
+import 'package:provider/single_child_widget.dart';
+import '../../features/customers/providers/customer_provider.dart';
+import '../../features/products/providers/product_provider.dart';
+import '../../features/pos/providers/transaction_provider.dart';
+
+class AppProviders {
+  static List<SingleChildWidget> get list => [
+    ChangeNotifierProvider(create: (_) => CustomerProvider()),
+    ChangeNotifierProvider(create: (_) => ProductProvider()),
+    ChangeNotifierProvider(create: (_) => TransactionProvider()),
+    // Dễ dàng thêm providers mới ở đây
+  ];
+}

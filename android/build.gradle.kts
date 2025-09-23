@@ -16,7 +16,9 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
-    project.evaluationDependsOn(":app")
+    if (project.path != ":app") {
+        evaluationDependsOn(":app")
+    }
 }
 
 tasks.register<Delete>("clean") {
