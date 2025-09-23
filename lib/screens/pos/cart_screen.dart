@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/customer_provider.dart';
+import '../../providers/transaction_provider.dart'; // Thêm dòng này
 import '../../view_models/pos_view_model.dart';
 
 class CartScreen extends StatefulWidget {

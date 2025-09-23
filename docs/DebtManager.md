@@ -10,7 +10,7 @@ ai đang nợ, nợ bao nhiêu, khi nào đến hạn, và thực hiện các ng
 ## Tạo Nợ (Creation):
 
 Tại màn hình CartScreen, người dùng chọn khách hàng, sau đó chọn phương thức thanh toán là "Ghi nợ" và xác nhận.
-Hệ thống tạo một Transaction mới và tự động tạo ra một bản ghi Debt tương ứng, liên kết với Transaction đó và Customer đã chọn.
+Hệ thống tạo một Transaction mới thông qua `TransactionService.createTransaction`. Nếu phương thức thanh toán là "Ghi nợ", `TransactionService` sẽ tự động gọi `DebtService.createDebtFromTransaction` để tạo ra một bản ghi Debt tương ứng, liên kết với Transaction đó và Customer đã chọn.
 
 ## Xem Nợ (Viewing):
 
@@ -93,6 +93,36 @@ class PaymentResult {
   });
 }
 
+// Bổ sung: Model cho Payment Preview
+class DebtAllocation {
+  final String debtId;
+  final double amountApplied;
+  final double remainingDebtAfter;
+  final String statusAfter;
+
+  DebtAllocation({
+    required this.debtId,
+    required this.amountApplied,
+    required this.remainingDebtAfter,
+    required this.statusAfter,
+  });
+}
+
+class PaymentPreview {
+  final List<DebtAllocation> allocations;
+  final double totalProcessed;
+  final double remainingCredit; // Số tiền khách trả thừa sau khi đã phân bổ hết nợ
+  final double totalDebtAfter; // Tổng nợ còn lại của khách hàng sau khi phân bổ
+
+  PaymentPreview({
+    required this.allocations,
+    required this.totalProcessed,
+    required this.remainingCredit,
+    required this.totalDebtAfter,
+  });
+}
+
+
 Future<Debt> createDebtFromTransaction(Transaction tx, Customer customer);
 Future<List<Debt>> getDebtsByCustomerId(String customerId);
 Future<PaymentResult> recordCustomerPayment({
@@ -105,6 +135,13 @@ Future<PaymentResult> recordCustomerPayment({
 Future<List<Debt>> getUnpaidDebts(String customerId, {PaymentStrategy sortBy = PaymentStrategy.FIFO});
 // Bổ sung: Hàm để gọi RPC calculate_overdue_interest
 Future<Map<String, dynamic>> calculateOverdueInterest(String debtId);
+
+// Bổ sung: Hàm previewCustomerPayment
+Future<PaymentPreview> previewCustomerPayment({
+  required String customerId,
+  required double totalAmount,
+  PaymentStrategy strategy = PaymentStrategy.FIFO,
+});
 ```
 
 Implementation mới cho `recordCustomerPayment` (trong `DebtService.dart`):
@@ -262,6 +299,12 @@ Một form đơn giản với các ô nhập: "Số tiền trả", "Ngày trả"
 
 Nút "Lưu" sẽ gọi `debtProvider.addPayment(customerId, amount, strategy, notes)`.
 **Bổ sung:** Form này cần cho phép người dùng nhập `notes` (ghi chú) cho khoản thanh toán. Cần có một cách để chọn `PaymentStrategy` (FIFO, OVERDUE_FIRST) nếu muốn người dùng có thể tùy chỉnh. Mặc định là FIFO.
+**Bổ sung: Enhanced UI Flow cho AddPaymentScreen:**
+1.  **Input amount:** Người dùng nhập số tiền muốn trả.
+2.  **Show PREVIEW allocation:** Gọi `DebtService.previewCustomerPayment` để hiển thị cách số tiền sẽ được phân bổ cho các khoản nợ, bao gồm số tiền còn lại sau khi trả và tổng nợ còn lại.
+3.  **User confirm:** Người dùng xác nhận việc phân bổ.
+4.  **Process payment:** Gọi `DebtService.recordCustomerPayment` để xử lý thanh toán.
+5.  **Show RESULT:** Hiển thị kết quả chi tiết của quá trình thanh toán.
 
 
 # Các quy tắc nghiệp vụ cốt lõi mà module DebtManager phải tuân thủ. Đây là linh hồn của module, code chỉ là phần thể xác.
@@ -295,3 +338,82 @@ Một quy tắc nghiệp vụ quan trọng khác là xử lý nợ quá hạn. N
 Cuối cùng là các quy tắc về toàn vẹn dữ liệu. Hệ thống phải đảm bảo một khoản nợ không thể tồn tại nếu không có khách hàng, và một khoản thanh toán không thể tồn tại nếu không có khoản nợ tương ứng. Mọi phép tính về số tiền còn lại phải luôn chính xác.
 
 Tất cả các quy tắc này phải được thực thi một cách nghiêm ngặt ở tầng Service (DebtService) để đảm bảo dù giao diện có thay đổi thế nào, logic nghiệp vụ cốt lõi vẫn luôn nhất quán và đúng đắn.
+
+**Bổ sung: Due Date Auto-Calculation:**
+```dart
+class DebtConfiguration {
+  static const Map<String, int> defaultDueDays = {
+    'VIP': 60,
+    'REGULAR': 30,
+    'NEW': 15,
+  };
+  
+  static DateTime calculateDueDate(String customerId, String customerType) {
+    // Logic cụ thể: Lấy số ngày nợ mặc định dựa trên customerType
+    final days = defaultDueDays[customerType] ?? defaultDueDays['REGULAR']!;
+    return DateTime.now().add(Duration(days: days));
+  }
+}
+```
+Logic này sẽ được sử dụng trong `DebtService.createDebtFromTransaction` để tính toán `due_date` cho khoản nợ mới.
+
+**Bổ sung: Interest Rate Management:**
+-   Lãi suất mặc định cho từng loại khách hàng sẽ được quản lý thông qua `DebtPolicy` (xem phần RECOMMENDATIONS).
+-   **Công thức tính lãi:** Lãi suất sẽ được tính theo lãi đơn (simple interest) hàng tháng. Ví dụ: 1.5% mỗi tháng.
+    -   `final dailyInterestRate = monthlyRate / 30;`
+    -   `final interestAmount = principalAmount * dailyInterestRate * daysLate;`
+    -   Công thức này sẽ được triển khai trong RPC `calculate_overdue_interest` trên Supabase.
+
+**Bổ sung: OVERDUE Status Transition (Automated):**
+-   Trạng thái "Quá hạn" (OVERDUE) sẽ được tự động cập nhật thông qua một `scheduled job` hoặc `database trigger` trên Supabase.
+```sql
+-- Ví dụ về Scheduled job hoặc Trigger (được chạy định kỳ)
+UPDATE debts
+SET status = 'OVERDUE'
+WHERE due_date < CURRENT_DATE
+  AND status IN ('UNPAID', 'PARTIALLY_PAID');
+```
+Logic này đảm bảo trạng thái nợ luôn được cập nhật chính xác mà không cần can thiệp thủ công.
+
+**Bổ sung: Business Rules (Tăng cường Validation & Edge Cases):**
+-   **Validation:**
+    -   **Maximum debt per customer:** Kiểm tra tổng số nợ của khách hàng không vượt quá hạn mức cho phép.
+    -   **Credit limit checking:** Kiểm tra hạn mức tín dụng của khách hàng trước khi cho phép giao dịch ghi nợ.
+    -   **Blacklist customer handling:** Xử lý khách hàng trong danh sách đen (không cho phép ghi nợ).
+-   **Edge Cases:**
+    -   **Customer delete nhưng còn debt:** Cần có quy trình xử lý khi khách hàng bị xóa nhưng vẫn còn nợ (ví dụ: chuyển nợ sang một tài khoản nợ xấu chung, hoặc yêu cầu thanh toán hết trước khi xóa).
+    -   **Debt forgiveness workflow:** Quy trình xóa nợ (ví dụ: khi khách hàng không có khả năng trả, hoặc có chính sách hỗ trợ).
+    -   **Bulk payment processing:** Xử lý khi một khoản thanh toán lớn được áp dụng cho nhiều khoản nợ (đã được đề cập trong `recordCustomerPayment`).
+
+**RECOMMENDATIONS:**
+1.  **Thêm DebtPolicy Configuration:**
+    ```dart
+    class DebtPolicy {
+      final double maxDebtPerCustomer;
+      final int maxUnpaidDebts;
+      final Map<String, double> interestRateByType; // Lãi suất theo loại khách hàng
+      final Map<String, int> dueDaysByType; // Số ngày nợ theo loại khách hàng
+    }
+    ```
+    `DebtPolicy` sẽ là một cấu hình tập trung cho các quy tắc nghiệp vụ liên quan đến nợ.
+
+2.  **Enhanced UI Flow cho AddPaymentScreen:**
+    1.  **Input amount:** Người dùng nhập số tiền muốn trả.
+    2.  **Show PREVIEW allocation:** Gọi `DebtService.previewCustomerPayment` để hiển thị cách số tiền sẽ được phân bổ cho các khoản nợ, bao gồm số tiền còn lại sau khi trả và tổng nợ còn lại.
+    3.  **User confirm:** Người dùng xác nhận việc phân bổ.
+    4.  **Process payment:** Gọi `DebtService.recordCustomerPayment` để xử lý thanh toán.
+    5.  **Show RESULT:** Hiển thị kết quả chi tiết của quá trình thanh toán.
+
+3.  **Debt Analytics Dashboard:**
+    ```dart
+    class DebtSummary {
+      final double totalOutstanding; // Tổng nợ chưa thanh toán
+      final int overdueCount; // Số lượng khoản nợ quá hạn
+      final double averageDaysLate; // Số ngày quá hạn trung bình
+      final Map<String, double> debtByCustomerType; // Nợ theo loại khách hàng
+    }
+    ```
+    Cần xây dựng các RPC/Views trên Supabase để cung cấp dữ liệu cho dashboard này.
+
+4.  **Notification Integration:**
+    -   Liên kết với một hệ thống `ReminderSystem` để tự động tạo và gửi thông báo (SMS, email) dựa trên trạng thái nợ (ví dụ: nhắc nhở sắp đến hạn, thông báo quá hạn).
