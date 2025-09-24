@@ -5,7 +5,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/product.dart';
+//import 'package:agricultural_pos/features/products/models/product.dart'; 
 
 // Cache entry với expiry time
 class CacheEntry<T> {
@@ -109,7 +109,7 @@ class CacheManager {
     
     try {
       final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
-      final entry = CacheEntry.fromJson(jsonData, fromJson);
+      final entry = CacheEntry.fromJson(jsonData, (dynamic d) => fromJson(d as Map<String, dynamic>));
       
       if (entry.isExpired) {
         await _prefs!.remove(key);
@@ -142,20 +142,34 @@ class CacheManager {
 
   Future<T?> get<T>(
     String key,
-    T Function(Map<String, dynamic>) fromJson,
+    T Function(dynamic) fromJson,
   ) async {
     // Thử memory cache trước (nhanh nhất)
     final memoryData = getMemory<T>(key);
     if (memoryData != null) return memoryData;
-    
+
+    // Initialize if needed
+    await initialize();
+
     // Nếu memory miss thì thử persistent cache
-    final persistentData = await getPersistent(key, fromJson);
-    if (persistentData != null) {
-      // Đưa data từ persistent lên memory cho lần sau
-      setMemory(key, persistentData);
-      return persistentData;
+    final jsonString = _prefs?.getString(key);
+    if (jsonString != null) {
+      try {
+        final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
+        final entry = CacheEntry.fromJson(jsonData, fromJson);
+
+        if (!entry.isExpired) {
+          // Đưa data từ persistent lên memory cho lần sau
+          setMemory(key, entry.data);
+          return entry.data;
+        } else {
+          await _prefs!.remove(key);
+        }
+      } catch (e) {
+        await _prefs!.remove(key);
+      }
     }
-    
+
     return null;
   }
 

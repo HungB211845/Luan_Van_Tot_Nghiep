@@ -3,9 +3,9 @@
 // =============================================================================
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/product.dart';
-import 'cache_manager.dart';
-import '../../../shared/models/paginated_result.dart';
+import 'package:agricultural_pos/features/products/models/product.dart';
+import 'package:agricultural_pos/services/cache_manager.dart';
+import 'package:agricultural_pos/shared/models/paginated_result.dart';
 
 class CachedProductService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -33,14 +33,23 @@ class CachedProductService {
 
     // Thử lấy từ cache trước
     if (useCache) {
-      final cachedResult = await _cache.get<PaginatedResult<Product>>(
+      final cachedData = await _cache.get<Map<String, dynamic>>(
         cacheKey,
-        (json) => PaginatedResult.fromJson(json, (item) => Product.fromJson(item)),
+        (json) => json as Map<String, dynamic>,
       );
-      
-      if (cachedResult != null) {
+
+      if (cachedData != null) {
         print('🎯 Cache HIT: $cacheKey');
-        return cachedResult;
+        // Reconstruct PaginatedResult from cached data
+        final items = (cachedData['items'] as List)
+            .map((item) => Product.fromJson(item as Map<String, dynamic>))
+            .toList();
+        return PaginatedResult.fromSupabaseResponse(
+          items: items,
+          totalCount: cachedData['totalCount'] as int,
+          offset: cachedData['offset'] as int,
+          limit: cachedData['limit'] as int,
+        );
       }
     }
 
@@ -50,9 +59,19 @@ class CachedProductService {
     try {
       final offset = (page - 1) * limit;
       
-      var query = _supabase
-          .from('products_with_details')
-          .select('*', count: CountOption.exact);
+      // Separate count query first
+      var countQuery = _supabase.from('products_with_details').select('id');
+      if (category != null) {
+        countQuery = countQuery.eq('category', category.toString().split('.').last);
+      }
+      if (searchQuery?.isNotEmpty == true) {
+        countQuery = countQuery.textSearch('search_vector', searchQuery!, config: 'vietnamese');
+      }
+      final countResponse = await countQuery;
+      final totalCount = countResponse.length;
+
+      // Then data query
+      var query = _supabase.from('products_with_details').select('*');
       
       if (category != null) {
         query = query.eq('category', category.toString().split('.').last);
@@ -65,24 +84,32 @@ class CachedProductService {
       final response = await query
           .order(sortBy, ascending: ascending)
           .range(offset, offset + limit - 1);
-      
+
+      // response is already List<Map<String, dynamic>> in Supabase 2.10.1
       final result = PaginatedResult.fromSupabaseResponse(
-        items: (response.data as List).map((json) => Product.fromJson(json)).toList(),
-        totalCount: response.count ?? 0,
+        items: (response as List).map((json) => Product.fromJson(json as Map<String, dynamic>)).toList(),
+        totalCount: totalCount,
         offset: offset,
         limit: limit,
       );
 
       // Cache kết quả cho lần sau
-      // Note: Caching might need adjustment if the full PaginatedResult object is not serializable directly
-      // For now, we assume it is or a custom toJson is implemented in the shared model.
-      // await _cache.set(
-      //   cacheKey,
-      //   result,
-      //   (data) => data.toJson((item) => item.toJson()), // This assumes toJson exists and works
-      //   expiry: Duration(minutes: 3), 
-      //   persistent: false,
-      // );
+      await _cache.set(
+        cacheKey,
+        {
+          'items': result.items.map((item) => item.toJson()).toList(),
+          'totalCount': result.totalCount,
+          'offset': offset,
+          'limit': limit,
+          'currentPage': result.currentPage,
+          'hasNextPage': result.hasNextPage,
+          'hasPreviousPage': result.hasPreviousPage,
+          'totalPages': result.totalPages,
+        },
+        (data) => data,
+        expiry: Duration(minutes: 3),
+        persistent: false,
+      );
 
       return result;
     } catch (e) {
