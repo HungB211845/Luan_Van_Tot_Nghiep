@@ -3,8 +3,8 @@ import '../models/product.dart';
 import '../models/product_batch.dart';
 import '../models/seasonal_price.dart';
 import '../models/banned_substance.dart';
-
 import '../models/company.dart';
+import '../../../shared/models/paginated_result.dart';
 
 class ProductService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -13,9 +13,17 @@ class ProductService {
   // PRODUCT CRUD OPERATIONS
   // =====================================================
 
-  /// Lấy tất cả products với details (price, stock, company)
-  Future<List<Product>> getProducts({ProductCategory? category}) async {
+  /// Lấy products với pagination (KHÔNG load tất cả một lúc)
+  Future<PaginatedResult<Product>> getProductsPaginated({
+    ProductCategory? category,
+    PaginationParams? params,
+    String? sortBy,
+    bool ascending = true,
+  }) async {
     try {
+      final paginationParams = params ?? PaginationParams.first();
+
+      // Build base query
       var query = _supabase.from('products_with_details').select('''
         id, sku, name, category, company_id, attributes, is_active, is_banned,
         image_url, description, created_at, updated_at, npk_ratio,
@@ -23,35 +31,290 @@ class ProductService {
         contains_banned_substance, company_name
       ''');
 
+      // Apply filters
       if (category != null) {
         query = query.eq('category', category.toString().split('.').last);
       }
 
-      final response = await query.order('name', ascending: true);
+      query = query.eq('is_active', true);
 
-      return (response as List)
+      // Apply sorting
+      final orderField = sortBy ?? 'name';
+
+      // Execute paginated query
+      final response = await query
+          .order(orderField, ascending: ascending)
+          .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
+
+      // Get total count
+      var countQuery = _supabase.from('products_with_details').select('id');
+      if (category != null) {
+        countQuery = countQuery.eq('category', category.toString().split('.').last);
+      }
+      countQuery = countQuery.eq('is_active', true);
+      final countResponse = await countQuery;
+      final totalCount = countResponse.length;
+
+      final products = (response as List)
           .map((json) => Product.fromJson(json))
           .toList();
+
+      return PaginatedResult.fromSupabaseResponse(
+        items: products,
+        totalCount: totalCount,
+        offset: paginationParams.offset,
+        limit: paginationParams.pageSize,
+      );
     } catch (e) {
       throw Exception('Lỗi lấy danh sách sản phẩm: $e');
     }
   }
 
-  /// Tìm kiếm products theo tên, SKU, hoặc attributes
-  Future<List<Product>> searchProducts(String query) async {
+  /// Legacy method cho backward compatibility
+  @Deprecated('Use getProductsPaginated() instead để tránh load quá nhiều data')
+  Future<List<Product>> getProducts({ProductCategory? category}) async {
+    final result = await getProductsPaginated(category: category);
+    return result.items;
+  }
+
+  /// Tìm kiếm products với Full-Text Search + Pagination
+  /// Độ phức tạp: O(log n) thay vì O(n) của ILIKE
+  /// Hỗ trợ Vietnamese language và ranking theo độ liên quan
+  Future<PaginatedResult<Product>> searchProductsPaginated({
+    required String query,
+    PaginationParams? params,
+    ProductCategory? category,
+    double? minPrice,
+    double? maxPrice,
+    bool? inStock,
+  }) async {
     try {
+      // Validate query
+      if (query.trim().isEmpty) {
+        return PaginatedResult.empty();
+      }
+
+      final paginationParams = params ?? PaginationParams.first();
+
+      // Build base query với full-text search
+      var queryBuilder = _supabase
+          .from('products_with_details')
+          .select('''
+            *,
+            ts_rank(search_vector, plainto_tsquery('vietnamese', '$query')) as rank
+          ''')
+          .textSearch('search_vector', query, config: 'vietnamese')
+          .eq('is_active', true);
+
+      // Apply filters
+      if (category != null) {
+        queryBuilder = queryBuilder.eq('category', category.toString().split('.').last);
+      }
+
+      if (minPrice != null) {
+        queryBuilder = queryBuilder.gte('current_price', minPrice);
+      }
+
+      if (maxPrice != null) {
+        queryBuilder = queryBuilder.lte('current_price', maxPrice);
+      }
+
+      if (inStock == true) {
+        queryBuilder = queryBuilder.gt('available_stock', 0);
+      }
+
+      // Execute paginated query
+      final response = await queryBuilder
+          .order('rank', ascending: false)
+          .order('name', ascending: true)
+          .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
+
+      // Get total count cho pagination
+      var countQuery = _supabase
+          .from('products_with_details')
+          .select('id')
+          .textSearch('search_vector', query, config: 'vietnamese')
+          .eq('is_active', true);
+
+      if (category != null) {
+        countQuery = countQuery.eq('category', category.toString().split('.').last);
+      }
+      if (minPrice != null) {
+        countQuery = countQuery.gte('current_price', minPrice);
+      }
+      if (maxPrice != null) {
+        countQuery = countQuery.lte('current_price', maxPrice);
+      }
+      if (inStock == true) {
+        countQuery = countQuery.gt('available_stock', 0);
+      }
+
+      final countResponse = await countQuery;
+      final totalCount = countResponse.length;
+
+      final products = (response as List)
+          .map((json) => Product.fromJson(json))
+          .toList();
+
+      return PaginatedResult.fromSupabaseResponse(
+        items: products,
+        totalCount: totalCount,
+        offset: paginationParams.offset,
+        limit: paginationParams.pageSize,
+      );
+    } catch (e) {
+      // Fallback về basic search
+      return _fallbackSearchPaginated(query, params);
+    }
+  }
+
+  /// Legacy search method cho backward compatibility
+  @Deprecated('Use searchProductsPaginated() instead để có pagination')
+  Future<List<Product>> searchProducts(String query) async {
+    final result = await searchProductsPaginated(query: query);
+    return result.items;
+  }
+
+  /// Fallback search method with pagination using ILIKE
+  Future<PaginatedResult<Product>> _fallbackSearchPaginated(
+    String query,
+    PaginationParams? params,
+  ) async {
+    try {
+      final paginationParams = params ?? PaginationParams.first();
+
       final response = await _supabase
           .from('products_with_details')
           .select('*')
           .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
           .eq('is_active', true)
-          .order('name', ascending: true);
+          .order('name', ascending: true)
+          .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
+
+      // Get total count
+      final countResponse = await _supabase
+          .from('products_with_details')
+          .select('id')
+          .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
+          .eq('is_active', true);
+
+      final totalCount = countResponse.length;
+
+      final products = (response as List)
+          .map((json) => Product.fromJson(json))
+          .toList();
+
+      return PaginatedResult.fromSupabaseResponse(
+        items: products,
+        totalCount: totalCount,
+        offset: paginationParams.offset,
+        limit: paginationParams.pageSize,
+      );
+    } catch (e) {
+      throw Exception('Lỗi tìm kiếm sản phẩm: $e');
+    }
+  }
+
+  /// Legacy fallback search method
+  @Deprecated('Use _fallbackSearchPaginated() instead')
+  Future<List<Product>> _fallbackSearch(String query) async {
+    final result = await _fallbackSearchPaginated(query, null);
+    return result.items;
+  }
+
+  /// Product Batch Operations với Pagination
+  /// Lấy all batches của một product với pagination
+  Future<PaginatedResult<ProductBatch>> getProductBatchesPaginated({
+    required String productId,
+    PaginationParams? params,
+  }) async {
+    try {
+      final paginationParams = params ?? PaginationParams.first();
+
+      final response = await _supabase
+          .from('product_batches')
+          .select('*')
+          .eq('product_id', productId)
+          .eq('is_available', true)
+          .order('received_date', ascending: true) // FIFO order
+          .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
+
+      // Get total count
+      final countResponse = await _supabase
+          .from('product_batches')
+          .select('id')
+          .eq('product_id', productId)
+          .eq('is_available', true);
+
+      final totalCount = countResponse.length;
+
+      final batches = (response as List)
+          .map((json) => ProductBatch.fromJson(json))
+          .toList();
+
+      return PaginatedResult.fromSupabaseResponse(
+        items: batches,
+        totalCount: totalCount,
+        offset: paginationParams.offset,
+        limit: paginationParams.pageSize,
+      );
+    } catch (e) {
+      throw Exception('Lỗi lấy thông tin lô hàng: $e');
+    }
+  }
+
+  /// Quick search cho POS screen (tìm nhanh theo tên hoặc SKU)
+  /// Optimized cho tốc độ, không cần ranking phức tạp
+  Future<List<Product>> quickSearchForPOS(String query) async {
+    try {
+      if (query.trim().isEmpty) {
+        return [];
+      }
+
+      // Nếu query giống SKU pattern (có thể là barcode scan), ưu tiên exact match
+      if (RegExp(r'^[A-Z0-9]{4,}$').hasMatch(query.toUpperCase())) {
+        final exactMatch = await scanProductBySKU(query.toUpperCase());
+        if (exactMatch != null) {
+          return [exactMatch];
+        }
+      }
+
+      // Otherwise use full-text search với limit nhỏ cho tốc độ
+      final response = await _supabase
+          .from('products_with_details')
+          .select('*')
+          .textSearch('search_vector', query, config: 'vietnamese')
+          .eq('is_active', true)
+          .gt('available_stock', 0) // Chỉ hiện sản phẩm còn hàng
+          .order('ts_rank(search_vector, plainto_tsquery(\'vietnamese\', \'$query\'))', ascending: false)
+          .limit(10); // Limit nhỏ cho POS
 
       return (response as List)
           .map((json) => Product.fromJson(json))
           .toList();
     } catch (e) {
-      throw Exception('Lỗi tìm kiếm sản phẩm: $e');
+      // Fallback cho POS
+      return _quickFallbackSearch(query);
+    }
+  }
+
+  /// Quick fallback search for POS
+  Future<List<Product>> _quickFallbackSearch(String query) async {
+    try {
+      final response = await _supabase
+          .from('products_with_details')
+          .select('*')
+          .or('name.ilike.%$query%,sku.ilike.%$query%')
+          .eq('is_active', true)
+          .gt('available_stock', 0)
+          .order('name', ascending: true)
+          .limit(10);
+
+      return (response as List)
+          .map((json) => Product.fromJson(json))
+          .toList();
+    } catch (e) {
+      throw Exception('Lỗi tìm kiếm nhanh: $e');
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../products/models/product_batch.dart'; // Cần cho _reduceInventoryFIFO
 import '../models/transaction.dart';
 import '../models/transaction_item.dart';
+import '../../../shared/models/paginated_result.dart';
 // import '../../customers/models/customer.dart'; // Tạm thời bỏ comment
 // import '../../debt/services/debt_service.dart'; // Tạm thời bỏ comment
 
@@ -138,6 +139,227 @@ class TransactionService {
     return 'INV$dateStr$timeStr';
   }
 
+  // =====================================================
+  // TRANSACTION QUERIES - PAGINATED (RECOMMENDED)
+  // =====================================================
+
+  /// Get transaction history with pagination
+  Future<PaginatedResult<Transaction>> getTransactionHistoryPaginated({
+    PaginationParams? params,
+    String? customerId,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool? isDebt,
+    PaymentMethod? paymentMethod,
+  }) async {
+    try {
+      final paginationParams = params ?? const PaginationParams();
+
+      var query = _supabase
+          .from('transactions')
+          .select('*');
+
+      // Apply filters
+      if (customerId != null) {
+        query = query.eq('customer_id', customerId);
+      }
+
+      if (startDate != null) {
+        query = query.gte('transaction_date', startDate.toIso8601String());
+      }
+
+      if (endDate != null) {
+        query = query.lte('transaction_date', endDate.toIso8601String());
+      }
+
+      if (isDebt != null) {
+        query = query.eq('is_debt', isDebt);
+      }
+
+      if (paymentMethod != null) {
+        query = query.eq('payment_method', paymentMethod.toString().split('.').last);
+      }
+
+      // Apply pagination
+      final response = await query
+          .order(paginationParams.sortBy ?? 'transaction_date', ascending: paginationParams.ascending)
+          .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
+
+      // Get total count separately
+      var countQuery = _supabase.from('transactions').select('id');
+      if (customerId != null) {
+        countQuery = countQuery.eq('customer_id', customerId);
+      }
+      if (startDate != null) {
+        countQuery = countQuery.gte('transaction_date', startDate.toIso8601String());
+      }
+      if (endDate != null) {
+        countQuery = countQuery.lte('transaction_date', endDate.toIso8601String());
+      }
+      if (isDebt != null) {
+        countQuery = countQuery.eq('is_debt', isDebt);
+      }
+      if (paymentMethod != null) {
+        countQuery = countQuery.eq('payment_method', paymentMethod.toString().split('.').last);
+      }
+      final countResponse = await countQuery;
+      final int totalCount = countResponse.length;
+
+      final List<dynamic> data = response as List<dynamic>;
+
+      final transactions = data
+          .map((json) => Transaction.fromJson(json))
+          .toList();
+
+      return PaginatedResult.fromSupabaseResponse(
+        items: transactions,
+        totalCount: totalCount,
+        offset: paginationParams.offset,
+        limit: paginationParams.pageSize,
+      );
+    } catch (e) {
+      throw Exception('Lỗi lấy lịch sử giao dịch với phân trang: $e');
+    }
+  }
+
+  /// Search transactions with full-text search and pagination
+  Future<PaginatedResult<Transaction>> searchTransactionsPaginated({
+    required String query,
+    PaginationParams? params,
+    String? customerId,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool? isDebt,
+    PaymentMethod? paymentMethod,
+  }) async {
+    try {
+      final paginationParams = params ?? const PaginationParams();
+
+      var supabaseQuery = _supabase
+          .from('transactions')
+          .select('*');
+
+      // Full-text search on invoice_number and notes
+      if (query.trim().isNotEmpty) {
+        supabaseQuery = supabaseQuery.or(
+          'invoice_number.ilike.%$query%,notes.ilike.%$query%'
+        );
+      }
+
+      // Apply filters
+      if (customerId != null) {
+        supabaseQuery = supabaseQuery.eq('customer_id', customerId);
+      }
+
+      if (startDate != null) {
+        supabaseQuery = supabaseQuery.gte('transaction_date', startDate.toIso8601String());
+      }
+
+      if (endDate != null) {
+        supabaseQuery = supabaseQuery.lte('transaction_date', endDate.toIso8601String());
+      }
+
+      if (isDebt != null) {
+        supabaseQuery = supabaseQuery.eq('is_debt', isDebt);
+      }
+
+      if (paymentMethod != null) {
+        supabaseQuery = supabaseQuery.eq('payment_method', paymentMethod.toString().split('.').last);
+      }
+
+      // Apply pagination
+      final response = await supabaseQuery
+          .order(paginationParams.sortBy ?? 'transaction_date', ascending: paginationParams.ascending)
+          .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
+
+      // Get total count separately
+      var countQuery = _supabase.from('transactions').select('id');
+      if (query.trim().isNotEmpty) {
+        countQuery = countQuery.or('invoice_number.ilike.%$query%,notes.ilike.%$query%');
+      }
+      if (customerId != null) {
+        countQuery = countQuery.eq('customer_id', customerId);
+      }
+      if (startDate != null) {
+        countQuery = countQuery.gte('transaction_date', startDate.toIso8601String());
+      }
+      if (endDate != null) {
+        countQuery = countQuery.lte('transaction_date', endDate.toIso8601String());
+      }
+      if (isDebt != null) {
+        countQuery = countQuery.eq('is_debt', isDebt);
+      }
+      if (paymentMethod != null) {
+        countQuery = countQuery.eq('payment_method', paymentMethod.toString().split('.').last);
+      }
+      final countResponse = await countQuery;
+      final int totalCount = countResponse.length;
+
+      final List<dynamic> data = response as List<dynamic>;
+
+      final transactions = data
+          .map((json) => Transaction.fromJson(json))
+          .toList();
+
+      return PaginatedResult.fromSupabaseResponse(
+        items: transactions,
+        totalCount: totalCount,
+        offset: paginationParams.offset,
+        limit: paginationParams.pageSize,
+      );
+    } catch (e) {
+      throw Exception('Lỗi tìm kiếm giao dịch với phân trang: $e');
+    }
+  }
+
+  /// Get debt transactions with pagination
+  Future<PaginatedResult<Transaction>> getDebtTransactionsPaginated({
+    PaginationParams? params,
+    String? customerId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      return await getTransactionHistoryPaginated(
+        params: params,
+        customerId: customerId,
+        startDate: startDate,
+        endDate: endDate,
+        isDebt: true,
+      );
+    } catch (e) {
+      throw Exception('Lỗi lấy danh sách giao dịch nợ với phân trang: $e');
+    }
+  }
+
+  /// Get today's transactions with pagination
+  Future<PaginatedResult<Transaction>> getTodayTransactionsPaginated({
+    PaginationParams? params,
+    String? customerId,
+    PaymentMethod? paymentMethod,
+  }) async {
+    try {
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+      final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59);
+
+      return await getTransactionHistoryPaginated(
+        params: params,
+        customerId: customerId,
+        startDate: startOfDay,
+        endDate: endOfDay,
+        paymentMethod: paymentMethod,
+      );
+    } catch (e) {
+      throw Exception('Lỗi lấy giao dịch hôm nay với phân trang: $e');
+    }
+  }
+
+  // =====================================================
+  // TRANSACTION QUERIES - LEGACY (DEPRECATED)
+  // =====================================================
+
+  @deprecated
   /// Lấy transaction history
   Future<List<Transaction>> getTransactionHistory({
     String? customerId,
@@ -194,6 +416,7 @@ Future<Transaction?> getTransactionById(String transactionId) async {
   }
 }
 
+  @deprecated
   /// Lấy transactions với debt flag
   Future<List<Transaction>> getDebtTransactions({String? customerId}) async {
     try {

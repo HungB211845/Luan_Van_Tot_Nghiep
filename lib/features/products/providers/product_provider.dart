@@ -9,6 +9,7 @@ import '../../pos/models/transaction_item.dart';
 import '../../pos/models/transaction_item_details.dart';
 import '../models/company.dart';
 import '../services/product_service.dart';
+import '../../../shared/models/paginated_result.dart';
 
 
 enum ProductStatus { idle, loading, success, error }
@@ -27,6 +28,16 @@ class ProductProvider extends ChangeNotifier {
   Product? _selectedProduct;
   ProductCategory? _selectedCategory;
   String _searchQuery = '';
+
+  // Pagination state
+  PaginatedResult<Product>? _paginatedProducts;
+  bool _isLoadingMore = false;
+  PaginationParams _currentPaginationParams = const PaginationParams();
+
+  // Batch pagination state
+  PaginatedResult<ProductBatch>? _paginatedBatches;
+  bool _isBatchesLoadingMore = false;
+  PaginationParams _currentBatchPaginationParams = const PaginationParams();
 
   // Batches & Inventory
   List<ProductBatch> _productBatches = [];
@@ -98,14 +109,200 @@ class ProductProvider extends ChangeNotifier {
   List<TransactionItemDetails> get activeTransactionItems => _activeTransactionItems;
   // ============================
 
+  // Pagination getters
+  PaginatedResult<Product>? get paginatedProducts => _paginatedProducts;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMoreProducts => _paginatedProducts?.hasNextPage ?? false;
+  PaginationParams get currentPaginationParams => _currentPaginationParams;
+
+  // Batch pagination getters
+  PaginatedResult<ProductBatch>? get paginatedBatches => _paginatedBatches;
+  bool get isBatchesLoadingMore => _isBatchesLoadingMore;
+  bool get hasMoreBatches => _paginatedBatches?.hasNextPage ?? false;
+  PaginationParams get currentBatchPaginationParams => _currentBatchPaginationParams;
+
   // Utility getters
   int getProductStock(String productId) => _stockMap[productId] ?? 0;
   double getCurrentPrice(String productId) => _currentPrices[productId] ?? 0.0;
 
   // =====================================================
-  // PRODUCT OPERATIONS
+  // PRODUCT OPERATIONS - PAGINATED (RECOMMENDED)
   // =====================================================
 
+  /// Load products with pagination (recommended approach)
+  Future<void> loadProductsPaginated({
+    ProductCategory? category,
+    int pageSize = 20,
+    String? sortBy,
+    bool ascending = true,
+  }) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      _currentPaginationParams = PaginationParams(
+        page: 1,
+        pageSize: pageSize,
+        sortBy: sortBy,
+        ascending: ascending,
+      );
+
+      _paginatedProducts = await _productService.getProductsPaginated(
+        params: _currentPaginationParams,
+        category: category,
+      );
+
+      // Update legacy _products list for backward compatibility
+      _products = _paginatedProducts!.items;
+      _selectedCategory = category;
+
+      // Update stock and price maps
+      for (final product in _products) {
+        _stockMap[product.id] = product.availableStock ?? 0;
+        _currentPrices[product.id] = product.currentPrice ?? 0.0;
+      }
+
+      // Clear old search state
+      _filteredProducts = [];
+      _searchQuery = '';
+
+      _setStatus(ProductStatus.success);
+      _clearError();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  /// Load more products (pagination)
+  Future<void> loadMoreProducts() async {
+    if (!hasMoreProducts || _isLoadingMore || _paginatedProducts == null) return;
+
+    _isLoadingMore = true;
+    notifyListeners();
+
+    try {
+      final nextParams = _currentPaginationParams.nextPage();
+      final nextPage = await _productService.getProductsPaginated(
+        params: nextParams,
+        category: _selectedCategory,
+      );
+
+      // Merge results
+      _paginatedProducts = _paginatedProducts!.merge(nextPage);
+      _currentPaginationParams = nextParams;
+
+      // Update legacy _products list
+      _products = _paginatedProducts!.items;
+
+      // Update stock and price maps for new products
+      for (final product in nextPage.items) {
+        _stockMap[product.id] = product.availableStock ?? 0;
+        _currentPrices[product.id] = product.currentPrice ?? 0.0;
+      }
+
+      _isLoadingMore = false;
+      _clearError();
+      notifyListeners();
+    } catch (e) {
+      _isLoadingMore = false;
+      _setError(e.toString());
+    }
+  }
+
+  /// Search products with pagination
+  Future<void> searchProductsPaginated({
+    required String query,
+    ProductCategory? category,
+    double? minPrice,
+    double? maxPrice,
+    bool? inStock,
+    int pageSize = 20,
+    String? sortBy,
+    bool ascending = true,
+  }) async {
+    _searchQuery = query.trim();
+
+    if (_searchQuery.isEmpty) {
+      await loadProductsPaginated(
+        category: category,
+        pageSize: pageSize,
+        sortBy: sortBy,
+        ascending: ascending,
+      );
+      return;
+    }
+
+    _setStatus(ProductStatus.loading);
+    try {
+      _currentPaginationParams = PaginationParams(
+        page: 1,
+        pageSize: pageSize,
+        sortBy: sortBy,
+        ascending: ascending,
+      );
+
+      _paginatedProducts = await _productService.searchProductsPaginated(
+        query: _searchQuery,
+        params: _currentPaginationParams,
+        category: category,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        inStock: inStock,
+      );
+
+      // Update filtered products for backward compatibility
+      _filteredProducts = _paginatedProducts!.items;
+
+      _setStatus(ProductStatus.success);
+      _clearError();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  /// Load more search results
+  Future<void> loadMoreSearchResults({
+    required String query,
+    ProductCategory? category,
+    double? minPrice,
+    double? maxPrice,
+    bool? inStock,
+  }) async {
+    if (!hasMoreProducts || _isLoadingMore || _paginatedProducts == null) return;
+
+    _isLoadingMore = true;
+    notifyListeners();
+
+    try {
+      final nextParams = _currentPaginationParams.nextPage();
+      final nextPage = await _productService.searchProductsPaginated(
+        query: query,
+        params: nextParams,
+        category: category,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        inStock: inStock,
+      );
+
+      // Merge results
+      _paginatedProducts = _paginatedProducts!.merge(nextPage);
+      _currentPaginationParams = nextParams;
+
+      // Update filtered products
+      _filteredProducts = _paginatedProducts!.items;
+
+      _isLoadingMore = false;
+      _clearError();
+      notifyListeners();
+    } catch (e) {
+      _isLoadingMore = false;
+      _setError(e.toString());
+    }
+  }
+
+  // =====================================================
+  // PRODUCT OPERATIONS - LEGACY (DEPRECATED)
+  // =====================================================
+
+  @deprecated
   Future<void> loadProducts({ProductCategory? category}) async {
     _setStatus(ProductStatus.loading);
     try {
@@ -149,6 +346,36 @@ class ProductProvider extends ChangeNotifier {
     } catch (e) {
       _setError(e.toString());
     }
+  }
+
+  /// Quick search cho POS screen
+  List<Product> _posSearchResults = [];
+  bool get hasPosSearchResults => _posSearchResults.isNotEmpty;
+
+  Future<void> quickSearchForPOS(String query) async {
+    if (query.trim().isEmpty) {
+      _posSearchResults = [];
+      notifyListeners();
+      return;
+    }
+
+    try {
+      _posSearchResults = await _productService.quickSearchForPOS(query.trim());
+      notifyListeners();
+    } catch (e) {
+      _posSearchResults = [];
+      _setError('Lỗi tìm kiếm: ${e.toString()}');
+    }
+  }
+
+  List<Product> get posSearchResultsList => _posSearchResults;
+
+  /// Clear search results
+  void clearSearchResults() {
+    _posSearchResults = [];
+    _searchQuery = '';
+    _filteredProducts = [];
+    notifyListeners();
   }
 
   Future<bool> addProduct(Product product) async {
@@ -237,9 +464,75 @@ class ProductProvider extends ChangeNotifier {
   }
 
   // =====================================================
-  // INVENTORY & BATCH OPERATIONS
+  // INVENTORY & BATCH OPERATIONS - PAGINATED
   // =====================================================
 
+  /// Load product batches with pagination
+  Future<void> loadProductBatchesPaginated({
+    required String productId,
+    int pageSize = 20,
+    String? sortBy,
+    bool ascending = false, // Default: newest first
+  }) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      _currentBatchPaginationParams = PaginationParams(
+        page: 1,
+        pageSize: pageSize,
+        sortBy: sortBy,
+        ascending: ascending,
+      );
+
+      _paginatedBatches = await _productService.getProductBatchesPaginated(
+        productId: productId,
+        params: _currentBatchPaginationParams,
+      );
+
+      // Update legacy _productBatches list for backward compatibility
+      _productBatches = _paginatedBatches!.items;
+
+      _setStatus(ProductStatus.success);
+      _clearError();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  /// Load more batches (pagination)
+  Future<void> loadMoreBatches(String productId) async {
+    if (!hasMoreBatches || _isBatchesLoadingMore || _paginatedBatches == null) return;
+
+    _isBatchesLoadingMore = true;
+    notifyListeners();
+
+    try {
+      final nextParams = _currentBatchPaginationParams.nextPage();
+      final nextPage = await _productService.getProductBatchesPaginated(
+        productId: productId,
+        params: nextParams,
+      );
+
+      // Merge results
+      _paginatedBatches = _paginatedBatches!.merge(nextPage);
+      _currentBatchPaginationParams = nextParams;
+
+      // Update legacy _productBatches list
+      _productBatches = _paginatedBatches!.items;
+
+      _isBatchesLoadingMore = false;
+      _clearError();
+      notifyListeners();
+    } catch (e) {
+      _isBatchesLoadingMore = false;
+      _setError(e.toString());
+    }
+  }
+
+  // =====================================================
+  // INVENTORY & BATCH OPERATIONS - LEGACY
+  // =====================================================
+
+  @deprecated
   Future<void> loadProductBatches(String productId) async {
     _setStatus(ProductStatus.loading);
     try {
@@ -683,11 +976,69 @@ class ProductProvider extends ChangeNotifier {
   }
 
   // =====================================================
+  // PAGINATION UTILITIES
+  // =====================================================
+
+  /// Reset pagination state and reload first page
+  Future<void> resetProductsPagination({
+    ProductCategory? category,
+    int pageSize = 20,
+    String? sortBy,
+    bool ascending = true,
+  }) async {
+    _paginatedProducts = null;
+    _isLoadingMore = false;
+    _currentPaginationParams = const PaginationParams();
+
+    await loadProductsPaginated(
+      category: category,
+      pageSize: pageSize,
+      sortBy: sortBy,
+      ascending: ascending,
+    );
+  }
+
+  /// Reset batch pagination state and reload first page
+  Future<void> resetBatchesPagination({
+    required String productId,
+    int pageSize = 20,
+    String? sortBy,
+    bool ascending = false,
+  }) async {
+    _paginatedBatches = null;
+    _isBatchesLoadingMore = false;
+    _currentBatchPaginationParams = const PaginationParams();
+
+    await loadProductBatchesPaginated(
+      productId: productId,
+      pageSize: pageSize,
+      sortBy: sortBy,
+      ascending: ascending,
+    );
+  }
+
+  /// Clear all pagination state
+  void clearPaginationState() {
+    _paginatedProducts = null;
+    _paginatedBatches = null;
+    _isLoadingMore = false;
+    _isBatchesLoadingMore = false;
+    _currentPaginationParams = const PaginationParams();
+    _currentBatchPaginationParams = const PaginationParams();
+    notifyListeners();
+  }
+
+  // =====================================================
   // REFRESH & RELOAD
   // =====================================================
 
   Future<void> refresh() async {
-    await loadProducts(category: _selectedCategory);
+    // Use paginated method if pagination state exists, otherwise use legacy method
+    if (_paginatedProducts != null) {
+      await resetProductsPagination(category: _selectedCategory);
+    } else {
+      await loadProducts(category: _selectedCategory);
+    }
     await loadAlerts();
     await loadDashboardStats();
   }
