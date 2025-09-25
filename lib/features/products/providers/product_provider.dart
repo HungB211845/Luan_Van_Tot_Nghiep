@@ -52,8 +52,7 @@ class ProductProvider extends ChangeNotifier {
   // Banned Substances
   List<BannedSubstance> _bannedSubstances = [];
 
-  // Companies
-  List<Company> _companies = [];
+  
 
   // Shopping Cart (for POS)
   List<CartItem> _cartItems = [];
@@ -84,7 +83,7 @@ class ProductProvider extends ChangeNotifier {
   List<ProductBatch> get productBatches => _productBatches;
   List<SeasonalPrice> get seasonalPrices => _seasonalPrices;
   List<BannedSubstance> get bannedSubstances => _bannedSubstances;
-  List<Company> get companies => _companies;
+  
 
   // Cart getters
   List<CartItem> get cartItems => _cartItems;
@@ -578,6 +577,60 @@ class ProductProvider extends ChangeNotifier {
     }
   }
 
+  // Refresh inventory after goods receipt from PO
+  Future<void> refreshInventoryAfterGoodsReceipt(List<String> productIds) async {
+    try {
+      // Refresh stock for affected products
+      for (final productId in productIds) {
+        await _updateProductStock(productId);
+      }
+
+      // Refresh current product batches if viewing a specific product
+      if (_selectedProduct != null && productIds.contains(_selectedProduct!.id)) {
+        await loadProductBatches(_selectedProduct!.id);
+      }
+
+      // Refresh paginated batches if loaded with a specific product
+      if (_paginatedBatches != null && _selectedProduct != null && productIds.contains(_selectedProduct!.id)) {
+        await loadProductBatchesPaginated(
+          productId: _selectedProduct!.id,
+          pageSize: 20,
+        );
+      }
+
+      // Refresh expiring batches report if it was loaded
+      if (_expiringBatches.isNotEmpty) {
+        await loadExpiringBatchesReport();
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error refreshing inventory after goods receipt: $e');
+    }
+  }
+
+  // Refresh all inventory data
+  Future<void> refreshAllInventoryData() async {
+    try {
+      _setStatus(ProductStatus.loading);
+
+      // Reload stock map for all products
+      final products = _products.isNotEmpty ? _products : await _productService.getProducts();
+      for (final product in products) {
+        await _updateProductStock(product.id);
+      }
+
+      // Refresh expiring batches report if it was loaded
+      if (_expiringBatches.isNotEmpty) {
+        await loadExpiringBatchesReport();
+      }
+
+      _setStatus(ProductStatus.success);
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
   Future<bool> deleteProductBatch(String batchId, String productId) async {
     _setStatus(ProductStatus.loading);
     try {
@@ -597,6 +650,17 @@ class ProductProvider extends ChangeNotifier {
       _expiringBatches = await _productService.getExpiringBatches();
       _lowStockProducts = await _productService.getLowStockProducts();
       notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  Future<void> loadExpiringBatchesReport({int months = 1}) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      _expiringBatches = await _productService.getExpiringBatches(months: months);
+      _setStatus(ProductStatus.success);
+      _clearError();
     } catch (e) {
       _setError(e.toString());
     }
@@ -900,22 +964,7 @@ class ProductProvider extends ChangeNotifier {
     }
   }
 
-  // =====================================================
-  // COMPANY OPERATIONS
-  // =====================================================
-
-  /// Hàm để tải danh sách nhà cung cấp
-  Future<void> loadCompanies() async {
-    // Không cần set status loading vì đây là tác vụ nền, không cần block UI
-    try {
-      _companies = await _productService.getCompanies();
-      // Thông báo cho các widget đang lắng nghe rằng có dữ liệu mới
-      notifyListeners();
-    } catch (e) {
-      // Nếu có lỗi, cập nhật trạng thái lỗi chung
-      _setError(e.toString());
-    }
-  }
+  
 
   // =====================================================
   // DASHBOARD & ANALYTICS

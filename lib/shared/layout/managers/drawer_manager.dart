@@ -3,6 +3,7 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import '../../../core/routing/route_names.dart'; // Cần import RouteNames
 import '../models/navigation_item.dart';
 
 class DrawerManager {
@@ -372,4 +373,44 @@ class DrawerManager {
       ),
     );
   }
+}
+
+// =============================================================================
+// APP NAVIGATION ITEMS - CẤU HÌNH CÁC MỤC TRONG MENU
+// =============================================================================
+
+class AppNavigationItems {
+  static List<NavigationItem> get main => [
+        NavigationItem(
+          icon: Icons.point_of_sale,
+          label: 'Bán Hàng',
+          route: RouteNames.pos,
+        ),
+        NavigationItem(
+          icon: Icons.inventory_2,
+          label: 'Sản Phẩm',
+          route: RouteNames.products,
+        ),
+        NavigationItem(
+          icon: Icons.business,
+          label: 'Nhà Cung Cấp',
+          route: RouteNames.companies,
+        ),
+        NavigationItem(
+          icon: Icons.receipt,
+          label: 'Đơn Nhập Hàng',
+          route: RouteNames.purchaseOrders,
+        ),
+        NavigationItem(
+          icon: Icons.people,
+          label: 'Khách Hàng',
+          route: RouteNames.customers,
+        ),
+        NavigationItem(
+          icon: Icons.home,
+          label: 'Trang Chủ',
+          route: RouteNames.home,
+        ),
+        // Thêm mục mới ở đây
+      ];
 }

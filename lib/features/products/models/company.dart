@@ -1,14 +1,14 @@
 // lib/models/company.dart
 
 class Company {
-  final String id; // Đây là UUID thật từ Supabase
+  final String id;
   final String name;
   final String? phone;
   final String? address;
   final String? contactPerson;
   final String? note;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   Company({
     required this.id,
@@ -17,8 +17,8 @@ class Company {
     this.address,
     this.contactPerson,
     this.note,
-    required this.createdAt,
-    required this.updatedAt,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory Company.fromJson(Map<String, dynamic> json) {
@@ -29,15 +29,14 @@ class Company {
       address: json['address'],
       contactPerson: json['contact_person'],
       note: json['note'],
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
     );
   }
 
-  // toJson không thực sự cần thiết nếu mày không tạo/cập nhật company từ app
-  // nhưng có sẵn cũng tốt.
   Map<String, dynamic> toJson() {
     return {
+      // không gửi id, createdAt, updatedAt vì chúng được quản lý bởi DB
       'name': name,
       'phone': phone,
       'address': address,

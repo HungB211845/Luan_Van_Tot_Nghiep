@@ -5,6 +5,7 @@ import '../../models/fertilizer_attributes.dart';
 import '../../models/pesticide_attributes.dart';
 import '../../models/seed_attributes.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/company_provider.dart'; // Thêm import CompanyProvider
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -48,9 +49,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   void initState() {
     super.initState();
-    // Yêu cầu Provider tải danh sách nhà cung cấp ngay khi màn hình khởi tạo
+    // Yêu cầu CompanyProvider tải danh sách nhà cung cấp
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProductProvider>().loadCompanies();
+      context.read<CompanyProvider>().loadCompanies();
     });
   }
 
@@ -183,10 +184,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
         const SizedBox(height: 16),
 
         // Nhà cung cấp
-        Consumer<ProductProvider>(
+        Consumer<CompanyProvider>(
           builder: (context, provider, child) {
             // Nếu chưa có dữ liệu thì hiển thị dropdown bị vô hiệu hóa
-            if (provider.companies.isEmpty) {
+            if (provider.isLoading && provider.companies.isEmpty) {
               return DropdownButtonFormField<String>(
                 decoration: _buildInputDecoration(
                   label: 'Nhà cung cấp',
@@ -313,38 +314,36 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
         const SizedBox(height: 16),
 
+        // Loại phân bón
+        DropdownButtonFormField<String>(
+          value: _fertilizerTypeController.text.isEmpty ? null : _fertilizerTypeController.text,
+          decoration: _buildInputDecoration(
+            label: 'Loại',
+            hint: 'Chọn loại',
+            icon: Icons.type_specimen,
+          ),
+          items: ['vô cơ', 'hữu cơ', 'hỗn hợp'].map((type) {
+            return DropdownMenuItem<String>(
+              value: type,
+              child: Text(type),
+            );
+          }).toList(),
+          onChanged: (value) {
+            _fertilizerTypeController.text = value ?? '';
+          },
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Vui lòng chọn loại';
+            }
+            return null;
+          },
+        ),
+
+        const SizedBox(height: 16),
+
+        // Khối lượng và Đơn vị
         Row(
           children: [
-            // Loại phân bón
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _fertilizerTypeController.text.isEmpty ? null : _fertilizerTypeController.text,
-                decoration: _buildInputDecoration(
-                  label: 'Loại',
-                  hint: 'Chọn loại',
-                  icon: Icons.type_specimen,
-                ),
-                items: ['vô cơ', 'hữu cơ', 'hỗn hợp'].map((type) {
-                  return DropdownMenuItem<String>(
-                    value: type,
-                    child: Text(type),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  _fertilizerTypeController.text = value ?? '';
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Vui lòng chọn loại';
-                  }
-                  return null;
-                },
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // Khối lượng
             Expanded(
               child: TextFormField(
                 controller: _weightController,
@@ -364,16 +363,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 },
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // Đơn vị khối lượng
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _weightUnitController.text.isEmpty ? null : _weightUnitController.text,
+                value: _weightUnitController.text.isEmpty ? 'kg' : _weightUnitController.text,
                 decoration: _buildInputDecoration(
                   label: 'Đơn vị',
-                  hint: 'kg',
                 ),
                 items: ['kg', 'tấn', 'bao'].map((unit) {
                   return DropdownMenuItem<String>(
@@ -430,28 +425,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
         const SizedBox(height: 16),
 
+        // Nồng độ
+        TextFormField(
+          controller: _concentrationController,
+          decoration: _buildInputDecoration(
+            label: 'Nồng độ',
+            hint: '4SC, 25EC',
+          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Vui lòng nhập nồng độ';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+
+        // Thể tích và Đơn vị
         Row(
           children: [
-            // Nồng độ
-            Expanded(
-              child: TextFormField(
-                controller: _concentrationController,
-                decoration: _buildInputDecoration(
-                  label: 'Nồng độ',
-                  hint: '4SC, 25EC',
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập nồng độ';
-                  }
-                  return null;
-                },
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // Thể tích
             Expanded(
               child: TextFormField(
                 controller: _volumeController,
@@ -471,18 +463,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 },
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // Đơn vị thể tích
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _volumeUnitController.text.isEmpty ? null : _volumeUnitController.text,
+                value: _volumeUnitController.text.isEmpty ? 'ml' : _volumeUnitController.text,
                 decoration: _buildInputDecoration(
                   label: 'Đơn vị',
-                  hint: 'ml',
                 ),
-                items: ['ml', 'lít', 'chai', 'lọ'].map((unit) {
+                items: ['ml', 'lít', 'chai', 'gói', 'lọ'].map((unit) {
                   return DropdownMenuItem<String>(
                     value: unit,
                     child: Text(unit),
@@ -519,53 +507,45 @@ class _AddProductScreenState extends State<AddProductScreen> {
         ),
         const SizedBox(height: 12),
 
-        Row(
-          children: [
-            // Tên giống
-            Expanded(
-              child: TextFormField(
-                controller: _strainController,
-                decoration: _buildInputDecoration(
-                  label: 'Tên giống',
-                  hint: 'OM18, ST24',
-                  icon: Icons.grass,
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập tên giống';
-                  }
-                  return null;
-                },
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // Nguồn gốc
-            Expanded(
-              child: TextFormField(
-                controller: _originController,
-                decoration: _buildInputDecoration(
-                  label: 'Nguồn gốc',
-                  hint: 'Việt Nam, Nhật Bản',
-                  icon: Icons.place,
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập nguồn gốc';
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
+        // Tên giống
+        TextFormField(
+          controller: _strainController,
+          decoration: _buildInputDecoration(
+            label: 'Tên giống',
+            hint: 'OM18, ST24',
+            icon: Icons.grass,
+          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Vui lòng nhập tên giống';
+            }
+            return null;
+          },
         ),
 
         const SizedBox(height: 16),
 
+        // Nguồn gốc
+        TextFormField(
+          controller: _originController,
+          decoration: _buildInputDecoration(
+            label: 'Nguồn gốc',
+            hint: 'Việt Nam, Nhật Bản',
+            icon: Icons.place,
+          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Vui lòng nhập nguồn gốc';
+            }
+            return null;
+          },
+        ),
+
+        const SizedBox(height: 16),
+
+        // Tỷ lệ nảy mầm và Độ thuần chủng
         Row(
           children: [
-            // Tỷ lệ nảy mầm
             Expanded(
               child: TextFormField(
                 controller: _germinationRateController,
@@ -586,10 +566,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 },
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // Độ thuần chủng
             Expanded(
               child: TextFormField(
                 controller: _purityController,

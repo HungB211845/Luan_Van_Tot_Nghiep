@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/seasonal_price.dart';
 import '../../providers/product_provider.dart';
+import '../../../../shared/utils/formatter.dart';
 
 class AddSeasonalPriceScreen extends StatefulWidget {
   const AddSeasonalPriceScreen({Key? key}) : super(key: key);
@@ -212,7 +213,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
                     icon: Icons.calendar_today,
                   ),
                   child: Text(
-                    _formatDate(_startDate),
+                    AppFormatter.formatDate(_startDate),
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
@@ -231,7 +232,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
                     icon: Icons.event,
                   ),
                   child: Text(
-                    _formatDate(_endDate),
+                    AppFormatter.formatDate(_endDate),
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
@@ -380,9 +381,6 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
     }
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-  }
 
   int _calculateDuration() {
     return _endDate.difference(_startDate).inDays + 1;

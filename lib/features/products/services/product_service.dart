@@ -77,6 +77,35 @@ class ProductService {
     return result.items;
   }
 
+  /// Get products filtered by company (for PO creation)
+  Future<List<Product>> getProductsByCompany(String? companyId) async {
+    try {
+      var query = _supabase.from('products_with_details').select('''
+        id, sku, name, category, company_id, attributes, is_active, is_banned,
+        image_url, description, created_at, updated_at, npk_ratio,
+        active_ingredient, seed_strain, current_price, available_stock,
+        contains_banned_substance, company_name
+      ''');
+
+      // Filter by company if provided
+      if (companyId != null) {
+        query = query.eq('company_id', companyId);
+      }
+
+      // Only active products
+      query = query.eq('is_active', true);
+
+      // Order by name for better UX
+      final response = await query.order('name', ascending: true);
+
+      return (response as List)
+          .map((json) => Product.fromJson(json))
+          .toList();
+    } catch (e) {
+      throw Exception('Error loading products by company: $e');
+    }
+  }
+
   /// Tìm kiếm products với Full-Text Search + Pagination
   /// Độ phức tạp: O(log n) thay vì O(n) của ILIKE
   /// Hỗ trợ Vietnamese language và ranking theo độ liên quan
@@ -236,7 +265,8 @@ class ProductService {
           .select('*')
           .eq('product_id', productId)
           .eq('is_available', true)
-          .order('received_date', ascending: true) // FIFO order
+          .gt('quantity', 0)
+          .order('received_date', ascending: false) // Newest first for display
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
       // Get total count
@@ -244,7 +274,8 @@ class ProductService {
           .from('product_batches')
           .select('id')
           .eq('product_id', productId)
-          .eq('is_available', true);
+          .eq('is_available', true)
+          .gt('quantity', 0);
 
       final totalCount = countResponse.length;
 
@@ -515,7 +546,7 @@ class ProductService {
   Future<int> getAvailableStock(String productId) async {
     try {
       final result = await _supabase
-          .rpc('get_available_stock', params: {'product_id_param': productId});
+          .rpc('get_available_stock', params: {'product_uuid': productId});
 
       return result as int;
     } catch (e) {
@@ -524,8 +555,12 @@ class ProductService {
   }
 
   /// Lấy danh sách lô hàng sắp hết hạn
-  Future<List<Map<String, dynamic>>> getExpiringBatches() async {
+  Future<List<Map<String, dynamic>>> getExpiringBatches({int? months}) async {
     try {
+      if (months != null) {
+        final response = await _supabase.rpc('get_expiring_batches_report', params: {'p_months': months});
+        return List<Map<String, dynamic>>.from(response);
+      }
       final response = await _supabase
           .from('expiring_batches')
           .select('*')
@@ -559,7 +594,7 @@ class ProductService {
   Future<double> getCurrentPrice(String productId) async {
     try {
       final result = await _supabase
-          .rpc('get_current_price', params: {'product_id_param': productId});
+          .rpc('get_current_price', params: {'product_uuid': productId});
 
       return (result ?? 0).toDouble();
     } catch (e) {

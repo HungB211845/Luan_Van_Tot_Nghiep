@@ -48,6 +48,7 @@ lib/
           edit_batch_screen.dart
           add_seasonal_price_screen.dart
           edit_seasonal_price_screen.dart
+          batch_history_screen.dart  # Màn lịch sử Lô hàng tái sử dụng (theo productId)
       services/
         product_service.dart
     pos/

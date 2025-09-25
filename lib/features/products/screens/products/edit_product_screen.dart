@@ -5,6 +5,7 @@ import '../../models/fertilizer_attributes.dart';
 import '../../models/pesticide_attributes.dart';
 import '../../models/seed_attributes.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/company_provider.dart'; // Thêm import
 
 class EditProductScreen extends StatefulWidget {
   final Product product;
@@ -56,9 +57,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
     // Điền dữ liệu cho các thuộc tính đặc thù
     _populateAttributeControllers();
 
-    // Tải danh sách công ty
+    // Tải danh sách công ty từ CompanyProvider
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProductProvider>().loadCompanies();
+      context.read<CompanyProvider>().loadCompanies();
     });
   }
 
@@ -166,7 +167,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        Consumer<ProductProvider>(
+        Consumer<CompanyProvider>(
           builder: (context, provider, child) {
             return DropdownButtonFormField<String>(
               value: _selectedCompanyId,

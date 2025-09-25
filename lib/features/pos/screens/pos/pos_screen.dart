@@ -7,6 +7,7 @@ import '../../../customers/providers/customer_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../view_models/pos_view_model.dart';
 import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../shared/utils/formatter.dart'; // Thêm import
 import '../cart/cart_screen.dart';
 
 class POSScreen extends StatefulWidget {
@@ -123,9 +124,9 @@ class _POSScreenState extends State<POSScreen> {
                       child: Text(product.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
                     ),
                     const SizedBox(height: 4),
-                    Text('${_viewModel!.productProvider.getCurrentPrice(product.id).toStringAsFixed(0)}đ', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
+                    Text(AppFormatter.formatCurrency(_viewModel!.productProvider.getCurrentPrice(product.id)), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
                     const SizedBox(height: 4),
-                    Text('Tồn: ${_viewModel!.productProvider.getProductStock(product.id)}', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+                    Text('Tồn: ${AppFormatter.formatNumber(_viewModel!.productProvider.getProductStock(product.id))}', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
                     const SizedBox(height: 8),
                     _buildQuantityStepper(product, quantityInCart),
                   ],
@@ -169,7 +170,7 @@ class _POSScreenState extends State<POSScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(productProvider.cartItems.isEmpty ? 'Giỏ hàng trống' : '${productProvider.cartItemsCount} sản phẩm', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                    Text('${productProvider.cartTotal.toStringAsFixed(0)}đ', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+                    Text(AppFormatter.formatCurrency(productProvider.cartTotal), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
                   ],
                 ),
               ),

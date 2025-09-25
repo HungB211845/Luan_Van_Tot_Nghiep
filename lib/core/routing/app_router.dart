@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
-import '../../features/customers/screens/customers/customer_list_screen.dart'; // Cập nhật đường dẫn
-import '../../features/products/screens/products/product_list_screen.dart'; // Cập nhật đường dẫn
-import '../../features/pos/screens/pos/pos_screen.dart'; // Cập nhật đường dẫn
-import '../../features/pos/screens/cart/cart_screen.dart'; // Cập nhật đường dẫn
-import '../../features/pos/screens/transaction/transaction_success_screen.dart'; // Cập nhật đường dẫn
+import '../../features/customers/screens/customers/customer_list_screen.dart';
+import '../../features/products/models/company.dart';
+import '../../features/products/models/purchase_order.dart';
+import '../../features/products/screens/products/product_list_screen.dart';
+import '../../features/products/screens/company/company_list_screen.dart';
+import '../../features/products/screens/company/add_edit_company_screen.dart';
+import '../../features/products/screens/company/company_detail_screen.dart';
+import '../../features/products/screens/purchase_order/create_po_screen.dart';
+import '../../features/products/screens/purchase_order/po_list_screen.dart';
+import '../../features/products/screens/purchase_order/po_detail_screen.dart';
+import '../../features/pos/screens/pos/pos_screen.dart';
+import '../../features/pos/screens/cart/cart_screen.dart';
+import '../../features/pos/screens/transaction/transaction_success_screen.dart';
+import '../../features/reports/screens/reports_screen.dart';
 import '../../presentation/home/home_screen.dart';
 import 'route_names.dart';
+import '../../features/products/screens/purchase_order/po_receive_success_screen.dart';
 
 class AppRouter {
   static const String home = RouteNames.home;
@@ -20,6 +30,34 @@ class AppRouter {
         
       case RouteNames.products:
         return MaterialPageRoute(builder: (_) => const ProductListScreen());
+
+      case RouteNames.companies:
+        return MaterialPageRoute(builder: (_) => const CompanyListScreen());
+
+      case RouteNames.addCompany:
+        return MaterialPageRoute(builder: (_) => const AddEditCompanyScreen());
+
+      case RouteNames.editCompany:
+        final company = settings.arguments as Company;
+        return MaterialPageRoute(builder: (_) => AddEditCompanyScreen(company: company));
+
+      case RouteNames.companyDetail:
+        final company = settings.arguments as Company;
+        return MaterialPageRoute(builder: (_) => CompanyDetailScreen(company: company));
+
+      case RouteNames.purchaseOrders:
+        return MaterialPageRoute(builder: (_) => const PurchaseOrderListScreen());
+
+      case RouteNames.purchaseOrderDetail:
+        final po = settings.arguments as PurchaseOrder;
+        return MaterialPageRoute(builder: (_) => PurchaseOrderDetailScreen(purchaseOrder: po));
+
+      case RouteNames.createPurchaseOrder:
+        return MaterialPageRoute(builder: (_) => const CreatePurchaseOrderScreen());
+      
+      case RouteNames.purchaseOrderReceiveSuccess:
+        final poNumber = settings.arguments as String?;
+        return MaterialPageRoute(builder: (_) => POReceiveSuccessScreen(poNumber: poNumber));
         
       case RouteNames.pos:
         return MaterialPageRoute(builder: (_) => const POSScreen());
@@ -28,8 +66,11 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CartScreen());
 
       case RouteNames.transactionSuccess: // Thêm route cho TransactionSuccessScreen
-        final args = settings.arguments as String?; // Lấy transactionId
+        final args = settings.arguments as String?;
         return MaterialPageRoute(builder: (_) => TransactionSuccessScreen(transactionId: args!));
+
+      case RouteNames.reports:
+        return MaterialPageRoute(builder: (_) => const ReportsScreen());
         
       default:
         return MaterialPageRoute(

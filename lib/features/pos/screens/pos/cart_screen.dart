@@ -6,6 +6,7 @@ import '../../../products/providers/product_provider.dart';
 import '../../../customers/providers/customer_provider.dart';
 import '../../providers/transaction_provider.dart'; // Thêm dòng này
 import '../../view_models/pos_view_model.dart';
+import '../../../../shared/utils/formatter.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({Key? key}) : super(key: key);
@@ -180,7 +181,7 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '${cartItem.priceAtSale.toStringAsFixed(0)}đ/đơn vị',
+                                '${AppFormatter.formatCurrency(cartItem.priceAtSale)}/đơn vị',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey[700],
@@ -194,7 +195,7 @@ class _CartScreenState extends State<CartScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '${cartItem.subTotal.toStringAsFixed(0)}đ',
+                              AppFormatter.formatCurrency(cartItem.subTotal),
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
@@ -337,7 +338,7 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ),
                   Text(
-                    '${productProvider.cartTotal.toStringAsFixed(0)}đ',
+                    AppFormatter.formatCurrency(productProvider.cartTotal),
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -504,7 +505,7 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tổng tiền: ${context.read<ProductProvider>().cartTotal.toStringAsFixed(0)}đ',
+                    'Tổng tiền: ${AppFormatter.formatCurrency(context.read<ProductProvider>().cartTotal)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
