@@ -1,12 +1,4 @@
-import 'dart:convert';
-
-enum PurchaseOrderStatus {
-  DRAFT,
-  SENT,
-  CONFIRMED,
-  DELIVERED,
-  CANCELLED,
-}
+import 'purchase_order_status.dart';
 
 class PurchaseOrder {
   final String id;
@@ -24,6 +16,7 @@ class PurchaseOrder {
   final String? paymentTerms;
   final String? notes;
   final String? createdBy;
+  final String storeId; // Add storeId
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -35,7 +28,7 @@ class PurchaseOrder {
     required this.orderDate,
     this.expectedDeliveryDate,
     this.deliveryDate,
-    this.status = PurchaseOrderStatus.DRAFT,
+    this.status = PurchaseOrderStatus.draft,
     this.subtotal = 0.0,
     this.taxAmount = 0.0,
     this.totalAmount = 0.0,
@@ -43,6 +36,7 @@ class PurchaseOrder {
     this.paymentTerms,
     this.notes,
     this.createdBy,
+    required this.storeId, // Add storeId
     required this.createdAt,
     required this.updatedAt,
   });
@@ -61,7 +55,7 @@ class PurchaseOrder {
           ? DateTime.parse(map['delivery_date'])
           : null,
       status: PurchaseOrderStatus.values
-          .firstWhere((e) => e.name == map['status'], orElse: () => PurchaseOrderStatus.DRAFT),
+          .firstWhere((e) => e.name == map['status'], orElse: () => PurchaseOrderStatus.draft),
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
       taxAmount: (map['tax_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
@@ -69,6 +63,7 @@ class PurchaseOrder {
       paymentTerms: map['payment_terms'],
       notes: map['notes'],
       createdBy: map['created_by'],
+      storeId: map['store_id'] ?? '', // Add storeId
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
     );
@@ -90,6 +85,7 @@ class PurchaseOrder {
       'payment_terms': paymentTerms,
       'notes': notes,
       'created_by': createdBy,
+      'store_id': storeId, // Add storeId
     };
   }
 }

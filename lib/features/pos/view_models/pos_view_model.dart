@@ -4,6 +4,7 @@ import '../../products/models/product.dart';
 import '../../products/providers/product_provider.dart';
 import '../../customers/providers/customer_provider.dart';
 import '../models/transaction.dart';
+import '../models/payment_method.dart';
 import '../providers/transaction_provider.dart';
 
 class POSViewModel {

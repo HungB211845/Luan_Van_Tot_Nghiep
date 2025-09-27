@@ -10,6 +10,7 @@ class PurchaseOrderItem {
   final double totalCost;
   final int receivedQuantity;
   final String? notes;
+  final String storeId; // Add storeId
   final DateTime createdAt;
   final String? productName; // Optional: enriched from join with products
 
@@ -23,6 +24,7 @@ class PurchaseOrderItem {
     required this.totalCost,
     this.receivedQuantity = 0,
     this.notes,
+    required this.storeId, // Add storeId
     required this.createdAt,
     this.productName,
   });
@@ -37,6 +39,7 @@ class PurchaseOrderItem {
       'unit': unit, // Thêm vào map
       'received_quantity': receivedQuantity,
       'notes': notes,
+      'store_id': storeId, // Add storeId
     };
   }
 
@@ -60,6 +63,7 @@ class PurchaseOrderItem {
       totalCost: (map['total_cost'] as num?)?.toDouble() ?? 0.0,
       receivedQuantity: map['received_quantity']?.toInt() ?? 0,
       notes: map['notes'],
+      storeId: map['store_id'] ?? '', // Add storeId
       createdAt: DateTime.parse(map['created_at']),
       productName: resolvedProductName,
     );

@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'app_providers.dart';
 import '../routing/app_router.dart';
+import '../routing/route_names.dart';
 
 class AppWidget extends StatelessWidget {
   const AppWidget({super.key});
@@ -34,7 +35,7 @@ class AppWidget extends StatelessWidget {
       
         // Routing config
         onGenerateRoute: AppRouter.generateRoute,
-        initialRoute: AppRouter.home,
+        initialRoute: RouteNames.splash,
         debugShowCheckedModeBanner: false,
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
+import '../../models/payment_method.dart';
 import '../../../products/providers/product_provider.dart';
 import '../../../customers/providers/customer_provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -473,7 +474,7 @@ class _CartScreenState extends State<CartScreen> {
 
   // Hiển thị hộp thoại xác nhận thanh toán
   void _showCheckoutDialog() {
-    PaymentMethod selectedPaymentMethod = PaymentMethod.CASH;
+    PaymentMethod selectedPaymentMethod = PaymentMethod.cash;
     // Chụp lấy Navigator và ScaffoldMessenger trước khi vào dialog
     final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -499,7 +500,7 @@ class _CartScreenState extends State<CartScreen> {
                   const Text('Chọn phương thức thanh toán:', style: TextStyle(fontWeight: FontWeight.w500)),
                   RadioListTile<PaymentMethod>(
                     title: const Text('Tiền mặt'),
-                    value: PaymentMethod.CASH,
+                    value: PaymentMethod.cash,
                     groupValue: selectedPaymentMethod,
                     onChanged: (value) {
                       setDialogState(() {
@@ -509,7 +510,7 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                   RadioListTile<PaymentMethod>(
                     title: const Text('Ghi nợ'),
-                    value: PaymentMethod.DEBT,
+                    value: PaymentMethod.debt,
                     groupValue: selectedPaymentMethod,
                     onChanged: _viewModel.selectedCustomer != null ? (value) {
                       setDialogState(() {
@@ -535,7 +536,7 @@ class _CartScreenState extends State<CartScreen> {
 
                     final transactionId = await _viewModel.handleCheckout(
                       paymentMethod: selectedPaymentMethod,
-                      isDebt: selectedPaymentMethod == PaymentMethod.DEBT,
+                      isDebt: selectedPaymentMethod == PaymentMethod.debt,
                     );
 
                     if (transactionId != null) {

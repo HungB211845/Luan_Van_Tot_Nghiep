@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../models/purchase_order.dart';
+import '../../models/purchase_order_status.dart';
 import '../../providers/purchase_order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../../../core/routing/route_names.dart';
@@ -57,7 +58,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 const SizedBox(height: 24),
                 _buildPOItems(provider),
                 const SizedBox(height: 24),
-                if (po.status == PurchaseOrderStatus.DELIVERED)
+                if (po.status == PurchaseOrderStatus.delivered)
                   _buildGeneratedBatches(provider),
               ],
             ),
@@ -160,7 +161,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         if (po == null) return const SizedBox.shrink();
 
         // Show different actions based on PO status
-        if (po.status == PurchaseOrderStatus.DELIVERED) {
+        if (po.status == PurchaseOrderStatus.delivered) {
           // Already delivered - show info
           return Container(
             padding: const EdgeInsets.all(16.0),
@@ -198,7 +199,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           );
         }
 
-        if (po.status != PurchaseOrderStatus.SENT && po.status != PurchaseOrderStatus.CONFIRMED) {
+        if (po.status != PurchaseOrderStatus.sent && po.status != PurchaseOrderStatus.confirmed) {
           return const SizedBox.shrink();
         }
 
@@ -363,41 +364,51 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
               // Capture dependencies BEFORE closing dialog to avoid using context after dispose
               final productProvider = context.read<ProductProvider>();
               final navigator = Navigator.of(context);
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+
               // Close dialog first
               navigator.pop();
 
               final success = await provider.receivePO(po.id);
+
+              // Check mounted before using any context-dependent operations
               if (!mounted) return;
-              if (mounted) {
-                if (success) {
-                  // Refresh inventory after successful goods receipt
-                  final productIds = provider.getProductIdsFromPO(po.id);
-                  await productProvider.refreshInventoryAfterGoodsReceipt(productIds);
-                  // Force refresh all inventory data to ensure UI reflects new stock across the app
-                  await productProvider.refreshAllInventoryData();
-                  // Optional: reload products list to refresh available_stock from view
-                  await productProvider.loadProductsPaginated();
-                  // Navigate to success screen, then back to PO list
-                  navigator.pushNamed(
-                    RouteNames.purchaseOrderReceiveSuccess,
-                    arguments: po.poNumber,
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const Icon(Icons.error, color: Colors.white),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Có lỗi xảy ra khi nhận hàng')),
-                        ],
-                      ),
-                      backgroundColor: Colors.red,
-                      duration: const Duration(seconds: 4),
-                      behavior: SnackBarBehavior.floating,
+
+              if (success) {
+                // Refresh inventory after successful goods receipt
+                final productIds = provider.getProductIdsFromPO(po.id);
+                await productProvider.refreshInventoryAfterGoodsReceipt(productIds);
+                // Force refresh all inventory data to ensure UI reflects new stock across the app
+                await productProvider.refreshAllInventoryData();
+                // Optional: reload products list to refresh available_stock from view
+                await productProvider.loadProductsPaginated();
+
+                // Check mounted again before navigation
+                if (!mounted) return;
+
+                // Navigate to success screen, then back to PO list
+                navigator.pushNamed(
+                  RouteNames.purchaseOrderReceiveSuccess,
+                  arguments: po.poNumber,
+                );
+              } else {
+                // Check mounted before showing SnackBar
+                if (!mounted) return;
+
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.error, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Có lỗi xảy ra khi nhận hàng')),
+                      ],
                     ),
-                  );
-                }
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 4),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               }
             },
           ),

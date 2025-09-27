@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../providers/customer_provider.dart';
 import '../../models/customer.dart';
 
@@ -40,8 +41,16 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
     });
 
     try {
+      final storeId = context.read<AuthProvider>().currentStore?.id;
+      if (storeId == null || storeId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không xác định được cửa hàng hiện tại. Vui lòng đăng nhập lại.')),
+        );
+        return;
+      }
       final customer = Customer(
         id: '', // Supabase sẽ generate UUID
+        storeId: storeId,
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
         address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),

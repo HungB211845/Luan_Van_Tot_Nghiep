@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/base_service.dart';
 import '../models/product.dart';
 import '../models/product_batch.dart';
 import '../models/seasonal_price.dart';
@@ -6,7 +7,7 @@ import '../models/banned_substance.dart';
 import '../models/company.dart';
 import '../../../shared/models/paginated_result.dart';
 
-class ProductService {
+class ProductService extends BaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // =====================================================
@@ -26,10 +27,11 @@ class ProductService {
       // Build base query
       var query = _supabase.from('products_with_details').select('''
         id, sku, name, category, company_id, attributes, is_active, is_banned,
-        image_url, description, created_at, updated_at, npk_ratio,
+        image_url, description, created_at, updated_at, min_stock_level, npk_ratio,
         active_ingredient, seed_strain, current_price, available_stock,
-        contains_banned_substance, company_name
+        company_name, store_id
       ''');
+      query = addStoreFilter(query);
 
       // Apply filters
       if (category != null) {
@@ -47,7 +49,9 @@ class ProductService {
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
       // Get total count
-      var countQuery = _supabase.from('products_with_details').select('id');
+      var countQuery = addStoreFilter(
+        _supabase.from('products_with_details').select('id'),
+      );
       if (category != null) {
         countQuery = countQuery.eq('category', category.toString().split('.').last);
       }
@@ -82,9 +86,9 @@ class ProductService {
     try {
       var query = _supabase.from('products_with_details').select('''
         id, sku, name, category, company_id, attributes, is_active, is_banned,
-        image_url, description, created_at, updated_at, npk_ratio,
+        image_url, description, created_at, updated_at, min_stock_level, npk_ratio,
         active_ingredient, seed_strain, current_price, available_stock,
-        contains_banned_substance, company_name
+        company_name, store_id
       ''');
 
       // Filter by company if provided
@@ -134,6 +138,7 @@ class ProductService {
           ''')
           .textSearch('search_vector', query, config: 'vietnamese')
           .eq('is_active', true);
+      queryBuilder = addStoreFilter(queryBuilder);
 
       // Apply filters
       if (category != null) {
@@ -159,11 +164,11 @@ class ProductService {
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
       // Get total count cho pagination
-      var countQuery = _supabase
+      var countQuery = addStoreFilter(_supabase
           .from('products_with_details')
           .select('id')
           .textSearch('search_vector', query, config: 'vietnamese')
-          .eq('is_active', true);
+          .eq('is_active', true));
 
       if (category != null) {
         countQuery = countQuery.eq('category', category.toString().split('.').last);
@@ -212,20 +217,22 @@ class ProductService {
     try {
       final paginationParams = params ?? PaginationParams.first();
 
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('products_with_details')
           .select('*')
           .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
-          .eq('is_active', true)
+          .eq('is_active', true))
           .order('name', ascending: true)
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
       // Get total count
-      final countResponse = await _supabase
-          .from('products_with_details')
-          .select('id')
-          .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
-          .eq('is_active', true);
+      final countResponse = await addStoreFilter(
+        _supabase
+            .from('products_with_details')
+            .select('id')
+            .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
+            .eq('is_active', true),
+      );
 
       final totalCount = countResponse.length;
 
@@ -260,9 +267,9 @@ class ProductService {
     try {
       final paginationParams = params ?? PaginationParams.first();
 
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('product_batches')
-          .select('*')
+          .select('*'))
           .eq('product_id', productId)
           .eq('is_available', true)
           .gt('quantity', 0)
@@ -270,12 +277,12 @@ class ProductService {
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
       // Get total count
-      final countResponse = await _supabase
+      final countResponse = await addStoreFilter(_supabase
           .from('product_batches')
           .select('id')
           .eq('product_id', productId)
           .eq('is_available', true)
-          .gt('quantity', 0);
+          .gt('quantity', 0));
 
       final totalCount = countResponse.length;
 
@@ -311,12 +318,12 @@ class ProductService {
       }
 
       // Otherwise use full-text search với limit nhỏ cho tốc độ
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('products_with_details')
           .select('*')
           .textSearch('search_vector', query, config: 'vietnamese')
           .eq('is_active', true)
-          .gt('available_stock', 0) // Chỉ hiện sản phẩm còn hàng
+          .gt('available_stock', 0)) // Chỉ hiện sản phẩm còn hàng
           .order('ts_rank(search_vector, plainto_tsquery(\'vietnamese\', \'$query\'))', ascending: false)
           .limit(10); // Limit nhỏ cho POS
 
@@ -332,12 +339,12 @@ class ProductService {
   /// Quick fallback search for POS
   Future<List<Product>> _quickFallbackSearch(String query) async {
     try {
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('products_with_details')
           .select('*')
           .or('name.ilike.%$query%,sku.ilike.%$query%')
           .eq('is_active', true)
-          .gt('available_stock', 0)
+          .gt('available_stock', 0))
           .order('name', ascending: true)
           .limit(10);
 
@@ -352,10 +359,10 @@ class ProductService {
   /// Lấy product theo ID
   Future<Product?> getProductById(String productId) async {
     try {
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('products_with_details')
           .select('*')
-          .eq('id', productId)
+          .eq('id', productId))
           .single();
 
       return Product.fromJson(response);
@@ -368,10 +375,10 @@ class ProductService {
   Future<Product> createProduct(Product product) async {
     try {
       // Check SKU duplicate
-      final existingSku = await _supabase
+      final existingSku = await addStoreFilter(_supabase
           .from('products')
           .select('id')
-          .eq('sku', product.sku)
+          .eq('sku', product.sku))
           .maybeSingle();
 
       if (existingSku != null) {
@@ -388,9 +395,13 @@ class ProductService {
         }
       }
 
+      final productData = product.toJson();
+      // Remove id field for INSERT since database will generate it
+      productData.remove('id');
+
       final response = await _supabase
           .from('products')
-          .insert(product.toJson())
+          .insert(addStoreId(productData))
           .select()
           .single();
 
@@ -413,10 +424,12 @@ class ProductService {
         }
       }
 
+      ensureAuthenticated();
       final response = await _supabase
           .from('products')
           .update(product.toJson())
           .eq('id', product.id)
+          .eq('store_id', currentStoreId!)
           .select()
           .single();
 
@@ -429,10 +442,12 @@ class ProductService {
   /// Xóa product (soft delete)
   Future<void> deleteProduct(String productId) async {
     try {
+      ensureAuthenticated();
       await _supabase
           .from('products')
           .update({'is_active': false})
-          .eq('id', productId);
+          .eq('id', productId)
+          .eq('store_id', currentStoreId!);
     } catch (e) {
       throw Exception('Lỗi xóa sản phẩm: $e');
     }
@@ -462,9 +477,10 @@ class ProductService {
   /// Lấy danh sách tất cả nhà cung cấp
   Future<List<Company>> getCompanies() async {
     try {
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('companies')
-          .select('*')
+          .select('*'))
+          .eq('is_active', true)
           .order('name', ascending: true);
 
       return (response as List)
@@ -501,9 +517,13 @@ class ProductService {
   /// Thêm batch mới (nhập kho)
   Future<ProductBatch> addProductBatch(ProductBatch batch) async {
     try {
+      final batchData = batch.toJson();
+      // Remove id field for INSERT since database will generate it
+      batchData.remove('id');
+
       final response = await _supabase
           .from('product_batches')
-          .insert(batch.toJson())
+          .insert(addStoreId(batchData))
           .select()
           .single();
 
@@ -516,10 +536,12 @@ class ProductService {
   /// Cập nhật thông tin một lô hàng
   Future<ProductBatch> updateProductBatch(ProductBatch batch) async {
     try {
+      ensureAuthenticated();
       final response = await _supabase
           .from('product_batches')
           .update(batch.toJson())
           .eq('id', batch.id)
+          .eq('store_id', currentStoreId!)
           .select()
           .single();
       return ProductBatch.fromJson(response);
@@ -531,10 +553,12 @@ class ProductService {
   /// Xóa một lô hàng (soft delete)
   Future<void> deleteProductBatch(String batchId) async {
     try {
+      ensureAuthenticated();
       await _supabase
           .from('product_batches')
           .update({'is_available': false}) // Dùng soft delete
-          .eq('id', batchId);
+          .eq('id', batchId)
+          .eq('store_id', currentStoreId!);
     } catch (e) {
       throw Exception('Lỗi xóa lô hàng: $e');
     }
@@ -558,31 +582,117 @@ class ProductService {
   Future<List<Map<String, dynamic>>> getExpiringBatches({int? months}) async {
     try {
       if (months != null) {
-        final response = await _supabase.rpc('get_expiring_batches_report', params: {'p_months': months});
-        return List<Map<String, dynamic>>.from(response);
+        // Try RPC first
+        try {
+          final response = await _supabase.rpc('get_expiring_batches_report', params: {'p_months': months});
+          return List<Map<String, dynamic>>.from(response);
+        } catch (rpcError) {
+          print('RPC get_expiring_batches_report failed: $rpcError');
+          return await _getExpiringBatchesFallback(months);
+        }
       }
-      final response = await _supabase
-          .from('expiring_batches')
-          .select('*')
-          .order('days_until_expiry', ascending: true);
-
-      return List<Map<String, dynamic>>.from(response);
+      
+      // Try view first, fallback to manual query
+      try {
+        final response = await addStoreFilter(_supabase
+            .from('expiring_batches')
+            .select('*'))
+            .order('days_until_expiry', ascending: true);
+        return List<Map<String, dynamic>>.from(response);
+      } catch (viewError) {
+        print('View expiring_batches not available, using fallback: $viewError');
+        return await _getExpiringBatchesFallback(1); // Default 1 month
+      }
     } catch (e) {
       throw Exception('Lỗi lấy danh sách hàng sắp hết hạn: $e');
+    }
+  }
+
+  /// Fallback method to get expiring batches without view/RPC
+  Future<List<Map<String, dynamic>>> _getExpiringBatchesFallback(int months) async {
+    try {
+      final futureDate = DateTime.now().add(Duration(days: months * 30));
+      
+      final response = await addStoreFilter(_supabase
+          .from('product_batches')
+          .select('*, products(name, sku)'))
+          .eq('is_available', true)
+          .not('expiry_date', 'is', null)
+          .lte('expiry_date', futureDate.toIso8601String().split('T')[0])
+          .order('expiry_date', ascending: true);
+      
+      return (response as List).map((batch) {
+        final expiryDate = DateTime.parse(batch['expiry_date']);
+        final daysUntilExpiry = expiryDate.difference(DateTime.now()).inDays;
+        
+        return {
+          'id': batch['id'],
+          'product_id': batch['product_id'],
+          'batch_number': batch['batch_number'],
+          'quantity': batch['quantity'],
+          'expiry_date': batch['expiry_date'],
+          'days_until_expiry': daysUntilExpiry,
+          'product_name': batch['products']?['name'] ?? 'Unknown',
+          'product_sku': batch['products']?['sku'] ?? '',
+        };
+      }).toList();
+    } catch (e) {
+      print('Fallback expiring batches query failed: $e');
+      return [];
     }
   }
 
   /// Lấy danh sách sản phẩm sắp hết hàng
   Future<List<Map<String, dynamic>>> getLowStockProducts() async {
     try {
-      final response = await _supabase
-          .from('low_stock_products')
-          .select('*')
-          .order('current_stock', ascending: true);
-
-      return List<Map<String, dynamic>>.from(response);
+      // Try using view first, fallback to manual query if view doesn't exist
+      try {
+        final response = await addStoreFilter(_supabase
+            .from('low_stock_products')
+            .select('*'))
+            .order('current_stock', ascending: true);
+        return List<Map<String, dynamic>>.from(response);
+      } catch (viewError) {
+        // Fallback: manual query if view doesn't exist or lacks store_id
+        print('View low_stock_products not available, using fallback query: $viewError');
+        return await _getLowStockProductsFallback();
+      }
     } catch (e) {
       throw Exception('Lỗi lấy danh sách hàng sắp hết: $e');
+    }
+  }
+
+  /// Fallback method to get low stock products without view
+  Future<List<Map<String, dynamic>>> _getLowStockProductsFallback() async {
+    try {
+      // Get products with their current stock manually
+      final response = await addStoreFilter(_supabase
+          .from('products_with_details')
+          .select('id, name, sku, category, min_stock_level, available_stock, company_name, is_active'))
+          .eq('is_active', true)
+          .order('available_stock', ascending: true);
+      
+      // Filter products where current stock <= min_stock_level
+      final products = (response as List).where((product) {
+        final currentStock = product['available_stock'] ?? 0;
+        final minStock = product['min_stock_level'] ?? 0;
+        return currentStock <= minStock;
+      }).toList();
+      
+      return products.map((p) => {
+        'id': p['id'],
+        'name': p['name'],
+        'sku': p['sku'],
+        'category': p['category'],
+        'min_stock_level': p['min_stock_level'],
+        'current_stock': p['available_stock'],
+        'company_name': p['company_name'],
+        'is_active': p['is_active'],
+      }).toList();
+    } catch (e) {
+      // If even fallback fails, return empty list
+      print('Fallback low stock query failed: $e');
+      return [];
     }
   }
 
@@ -605,10 +715,10 @@ class ProductService {
   /// Lấy tất cả seasonal prices của product
   Future<List<SeasonalPrice>> getSeasonalPrices(String productId) async {
     try {
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('seasonal_prices')
           .select('*')
-          .eq('product_id', productId)
+          .eq('product_id', productId))
           .order('start_date', ascending: false);
 
       return (response as List)
@@ -632,7 +742,7 @@ class ProductService {
 
       final response = await _supabase
           .from('seasonal_prices')
-          .insert(price.toJson())
+          .insert(addStoreId(price.toJson()))
           .select()
           .single();
 
@@ -645,10 +755,12 @@ class ProductService {
   /// Cập nhật seasonal price
   Future<SeasonalPrice> updateSeasonalPrice(SeasonalPrice price) async {
     try {
+      ensureAuthenticated();
       final response = await _supabase
           .from('seasonal_prices')
           .update(price.toJson())
           .eq('id', price.id)
+          .eq('store_id', currentStoreId!)
           .select()
           .single();
 
@@ -662,10 +774,12 @@ class ProductService {
   Future<void> deleteSeasonalPrice(String priceId) async {
     try {
       // Dùng soft delete bằng cách update isActive = false
+      ensureAuthenticated();
       await _supabase
           .from('seasonal_prices')
           .update({'is_active': false})
-          .eq('id', priceId);
+          .eq('id', priceId)
+          .eq('store_id', currentStoreId!);
     } catch (e) {
       throw Exception('Lỗi xóa giá: $e');
     }
@@ -721,10 +835,9 @@ class ProductService {
   Future<Map<String, dynamic>> getProductDashboardStats() async {
     try {
       // Total products
-     final totalProductsResponse = await _supabase
-          .from('products')
-          .select('id')
-          .eq('is_active', true);
+     final totalProductsResponse = await addStoreFilter(
+          _supabase.from('products').select('id').eq('is_active', true),
+      );
 
       final totalProductsCount = totalProductsResponse.length;
       // Low stock count
@@ -772,7 +885,7 @@ class ProductService {
     bool? expiringSoon,
   }) async {
     try {
-      var query = _supabase.from('products_with_details').select('*');
+      var query = addStoreFilter(_supabase.from('products_with_details').select('*'));
 
       // Filtering
       if (category != null) {

@@ -12,6 +12,7 @@ class ProductBatch {
   final String? supplierBatchId;
   final String? notes;
   final bool isAvailable;
+  final String storeId; // Add storeId
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? productName; // Optional: enriched via join products(name)
@@ -31,6 +32,7 @@ class ProductBatch {
     this.supplierBatchId,
     this.notes,
     this.isAvailable = true,
+    required this.storeId, // Add storeId
     required this.createdAt,
     required this.updatedAt,
     this.productName,
@@ -70,6 +72,7 @@ class ProductBatch {
       supplierBatchId: json['supplier_batch_id'],
       notes: json['notes'],
       isAvailable: json['is_available'] ?? true,
+      storeId: json['store_id'], // Add storeId
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
       productName: resolvedProductName,
@@ -85,13 +88,15 @@ class ProductBatch {
       'batch_number': batchNumber,
       'quantity': quantity,
       'cost_price': costPrice,
-      'selling_price': sellingPrice,
+      // Note: selling_price is not stored in product_batches table
+      // It should be stored in seasonal_prices table instead
       'received_date': receivedDate.toIso8601String().split('T')[0],
       if (expiryDate != null)
         'expiry_date': expiryDate!.toIso8601String().split('T')[0],
       'supplier_batch_id': supplierBatchId,
       'notes': notes,
       'is_available': isAvailable,
+      'store_id': storeId, // Add storeId
     };
   }
 
@@ -126,6 +131,7 @@ class ProductBatch {
     String? supplierId,
     String? productName,
     String? supplierName,
+    String? storeId, // Add storeId
   }) {
     return ProductBatch(
       id: id,
@@ -141,6 +147,7 @@ class ProductBatch {
       supplierBatchId: supplierBatchId ?? this.supplierBatchId,
       notes: notes ?? this.notes,
       isAvailable: isAvailable ?? this.isAvailable,
+      storeId: storeId ?? this.storeId, // Add storeId
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       productName: productName ?? this.productName,

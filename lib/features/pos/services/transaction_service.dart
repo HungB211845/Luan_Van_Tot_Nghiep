@@ -1,14 +1,14 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/base_service.dart';
 import '../../products/models/product_batch.dart'; // Cần cho _reduceInventoryFIFO
 import '../models/transaction.dart';
 import '../models/transaction_item.dart';
+import '../models/payment_method.dart';
 import '../../../shared/models/paginated_result.dart';
 // import '../../customers/models/customer.dart'; // Tạm thời bỏ comment
 // import '../../debt/services/debt_service.dart'; // Tạm thời bỏ comment
 
-// enum PaymentMethod { CASH, DEBT } // Tạm thời bỏ comment, sẽ dùng từ models/transaction.dart
-
-class TransactionService {
+class TransactionService extends BaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
   // final DebtService _debtService; // Tạm thời bỏ comment
 
@@ -27,20 +27,21 @@ class TransactionService {
     // Customer? customer, // Tạm thời bỏ comment
   }) async {
     try {
+      ensureAuthenticated();
       // Tính total amount
       final totalAmount = items.fold<double>(
         0, (sum, item) => sum + item.subTotal
       );
 
       // Tạo transaction trước
-      final transactionData = {
+      final transactionData = addStoreId({
         'customer_id': customerId,
         'total_amount': totalAmount,
-        'is_debt': paymentMethod == PaymentMethod.DEBT, // Xác định isDebt dựa vào paymentMethod
-        'payment_method': paymentMethod.toString().split('.').last,
+        'is_debt': paymentMethod == PaymentMethod.debt, // Xác định isDebt dựa vào paymentMethod
+        'payment_method': paymentMethod.value,
         'notes': notes,
         'invoice_number': _generateInvoiceNumber(),
-      };
+      });
 
       final transactionResponse = await _supabase
           .from('transactions')
@@ -54,7 +55,7 @@ class TransactionService {
       final itemsData = items.map((item) {
         final itemData = item.toJson();
         itemData['transaction_id'] = transactionId;
-        return itemData;
+        return addStoreId(itemData);
       }).toList();
 
       await _supabase
@@ -84,9 +85,9 @@ class TransactionService {
   Future<void> _reduceInventoryFIFO(String productId, int quantityToReduce) async {
     try {
       // Lấy batches theo FIFO order
-      final batches = await _supabase
+      final batches = await addStoreFilter(_supabase
           .from('product_batches')
-          .select('*')
+          .select('*'))
           .eq('product_id', productId)
           .eq('is_available', true)
           .gt('quantity', 0)
@@ -122,10 +123,12 @@ class TransactionService {
   /// Update batch quantity (khi bán hàng) - Di chuyển từ ProductService
   Future<void> _updateBatchQuantity(String batchId, int newQuantity) async {
     try {
+      ensureAuthenticated();
       await _supabase
           .from('product_batches')
           .update({'quantity': newQuantity})
-          .eq('id', batchId);
+          .eq('id', batchId)
+          .eq('store_id', currentStoreId!);
     } catch (e) {
       throw Exception('Lỗi cập nhật số lượng lô hàng: $e');
     }
@@ -155,9 +158,9 @@ class TransactionService {
     try {
       final paginationParams = params ?? const PaginationParams();
 
-      var query = _supabase
+      var query = addStoreFilter(_supabase
           .from('transactions')
-          .select('*');
+          .select('*'));
 
       // Apply filters
       if (customerId != null) {
@@ -177,7 +180,7 @@ class TransactionService {
       }
 
       if (paymentMethod != null) {
-        query = query.eq('payment_method', paymentMethod.toString().split('.').last);
+        query = query.eq('payment_method', paymentMethod.value);
       }
 
       // Apply pagination
@@ -186,7 +189,7 @@ class TransactionService {
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
       // Get total count separately
-      var countQuery = _supabase.from('transactions').select('id');
+      var countQuery = addStoreFilter(_supabase.from('transactions').select('id'));
       if (customerId != null) {
         countQuery = countQuery.eq('customer_id', customerId);
       }
@@ -235,9 +238,9 @@ class TransactionService {
     try {
       final paginationParams = params ?? const PaginationParams();
 
-      var supabaseQuery = _supabase
+      var supabaseQuery = addStoreFilter(_supabase
           .from('transactions')
-          .select('*');
+          .select('*'));
 
       // Full-text search on invoice_number and notes
       if (query.trim().isNotEmpty) {
@@ -389,9 +392,9 @@ class TransactionService {
   /// Lấy transaction items của một transaction
   Future<List<TransactionItem>> getTransactionItems(String transactionId) async {
     try {
-      final response = await _supabase
+      final response = await addStoreFilter(_supabase
           .from('transaction_items')
-          .select('*')
+          .select('*'))
           .eq('transaction_id', transactionId);
 
       return (response as List)
@@ -405,9 +408,9 @@ class TransactionService {
   /// Lấy thông tin một giao dịch theo ID
 Future<Transaction?> getTransactionById(String transactionId) async {
   try {
-    final response = await _supabase
+    final response = await addStoreFilter(_supabase
         .from('transactions')
-        .select()
+        .select())
         .eq('id', transactionId)
         .maybeSingle();
     return response == null ? null : Transaction.fromJson(response);
@@ -444,9 +447,9 @@ Future<Transaction?> getTransactionById(String transactionId) async {
   Future<Map<String, dynamic>> getTodaySalesStats() async {
     try {
       final today = DateTime.now().toIso8601String().split('T')[0];
-      final todaySales = await _supabase
+      final todaySales = await addStoreFilter(_supabase
           .from('transactions')
-          .select('total_amount')
+          .select('total_amount'))
           .gte('transaction_date', '${today}T00:00:00')
           .lt('transaction_date', '${today}T23:59:59');
 

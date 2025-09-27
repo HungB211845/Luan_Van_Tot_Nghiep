@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/company.dart';
 import '../../providers/company_provider.dart';
+import '../../../../shared/services/base_service.dart';
 
 class AddEditCompanyScreen extends StatefulWidget {
   final Company? company;
@@ -52,6 +53,9 @@ class _AddEditCompanyScreenState extends State<AddEditCompanyScreen> {
         phone: _phoneController.text,
         address: _addressController.text,
         contactPerson: _contactPersonController.text,
+        createdAt: widget.company?.createdAt ?? DateTime.now(),
+        updatedAt: DateTime.now(),
+        storeId: BaseService.getDefaultStoreId(),
       );
 
       bool success = false;

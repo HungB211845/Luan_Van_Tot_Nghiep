@@ -1,17 +1,4 @@
-enum PaymentMethod { CASH, BANK_TRANSFER, DEBT }
-
-extension PaymentMethodExtension on PaymentMethod {
-  String get displayName {
-    switch (this) {
-      case PaymentMethod.CASH:
-        return 'Tiền Mặt';
-      case PaymentMethod.BANK_TRANSFER:
-        return 'Chuyển Khoản';
-      case PaymentMethod.DEBT:
-        return 'Ghi Nợ';
-    }
-  }
-}
+import 'payment_method.dart';
 
 class Transaction {
   final String id;
@@ -23,6 +10,7 @@ class Transaction {
   final String? notes;
   final String? invoiceNumber;
   final String? createdBy;
+  final String storeId; // Add storeId
   final DateTime createdAt;
 
   Transaction({
@@ -31,10 +19,11 @@ class Transaction {
     required this.totalAmount,
     required this.transactionDate,
     this.isDebt = false,
-    this.paymentMethod = PaymentMethod.CASH,
+    this.paymentMethod = PaymentMethod.cash,
     this.notes,
     this.invoiceNumber,
     this.createdBy,
+    required this.storeId, // Add storeId
     required this.createdAt,
   });
 
@@ -45,13 +34,11 @@ class Transaction {
       totalAmount: (json['total_amount']).toDouble(),
       transactionDate: DateTime.parse(json['transaction_date']),
       isDebt: json['is_debt'] ?? false,
-      paymentMethod: PaymentMethod.values.firstWhere(
-        (e) => e.toString().split('.').last == json['payment_method'],
-        orElse: () => PaymentMethod.CASH,
-      ),
+      paymentMethod: PaymentMethod.fromString(json['payment_method'] ?? 'CASH'),
       notes: json['notes'],
       invoiceNumber: json['invoice_number'],
       createdBy: json['created_by'],
+      storeId: json['store_id'], // Add storeId
       createdAt: DateTime.parse(json['created_at']),
     );
   }
@@ -62,10 +49,11 @@ class Transaction {
       'total_amount': totalAmount,
       'transaction_date': transactionDate.toIso8601String(),
       'is_debt': isDebt,
-      'payment_method': paymentMethod.toString().split('.').last,
+      'payment_method': paymentMethod.value,
       'notes': notes,
       'invoice_number': invoiceNumber,
       'created_by': createdBy,
+      'store_id': storeId, // Add storeId
     };
   }
 
@@ -78,6 +66,7 @@ class Transaction {
     String? notes,
     String? invoiceNumber,
     String? createdBy,
+    String? storeId, // Add storeId
   }) {
     return Transaction(
       id: id,
@@ -89,6 +78,7 @@ class Transaction {
       notes: notes ?? this.notes,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       createdBy: createdBy ?? this.createdBy,
+      storeId: storeId ?? this.storeId, // Add storeId
       createdAt: createdAt,
     );
   }

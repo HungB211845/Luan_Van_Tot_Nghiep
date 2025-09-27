@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/company.dart';
 import '../models/product.dart';
 import '../services/company_service.dart';
+import '../../../shared/services/base_service.dart';
 
 enum CompanyStatus { idle, loading, success, error }
 
@@ -59,6 +60,19 @@ class CompanyProvider extends ChangeNotifier {
   // Thêm company mới
   Future<bool> addCompany(Company company) async {
     try {
+      // Store guard
+      if (BaseService.currentUserStoreId == null || BaseService.currentUserStoreId!.isEmpty) {
+        _errorMessage = 'Không xác định được cửa hàng. Vui lòng đăng nhập lại.';
+        notifyListeners();
+        return false;
+      }
+      // Duplicate name check (per store)
+      final exists = await _companyService.existsCompanyName(company.name);
+      if (exists) {
+        _errorMessage = 'Tên nhà cung cấp đã tồn tại trong cửa hàng.';
+        notifyListeners();
+        return false;
+      }
       final newCompany = await _companyService.createCompany(company);
       _companies.add(newCompany);
       notifyListeners();
@@ -73,6 +87,19 @@ class CompanyProvider extends ChangeNotifier {
   // Cập nhật company
   Future<bool> updateCompany(Company company) async {
     try {
+      // Store guard
+      if (BaseService.currentUserStoreId == null || BaseService.currentUserStoreId!.isEmpty) {
+        _errorMessage = 'Không xác định được cửa hàng. Vui lòng đăng nhập lại.';
+        notifyListeners();
+        return false;
+      }
+      // Duplicate name check (exclude current id)
+      final exists = await _companyService.existsCompanyName(company.name, excludeId: company.id);
+      if (exists) {
+        _errorMessage = 'Tên nhà cung cấp đã tồn tại trong cửa hàng.';
+        notifyListeners();
+        return false;
+      }
       final updatedCompany = await _companyService.updateCompany(company);
       final index = _companies.indexWhere((c) => c.id == company.id);
       if (index != -1) {

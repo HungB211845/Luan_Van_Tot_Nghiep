@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../models/purchase_order.dart';
 import '../models/purchase_order_item.dart';
+import '../models/purchase_order_status.dart';
 import '../models/product_batch.dart';
 import '../services/purchase_order_service.dart';
 import '../services/product_service.dart'; // For product filtering
 import '../models/product.dart'; // For adding to cart
 import './product_provider.dart'; // Import ProductProvider
+import '../../../shared/services/base_service.dart';
 
 // Trạng thái cho giỏ hàng nhập
 
@@ -459,7 +461,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
   }
 
   // Create Purchase Order from Cart
-  Future<PurchaseOrder?> createPOFromCart({String? notes, PurchaseOrderStatus status = PurchaseOrderStatus.DRAFT}) async {
+  Future<PurchaseOrder?> createPOFromCart({String? notes, PurchaseOrderStatus status = PurchaseOrderStatus.draft}) async {
     final validItems = validPOCartItems;
     if (_selectedSupplierId == null || validItems.isEmpty) {
       _setError('Vui lòng chọn nhà cung cấp và thêm sản phẩm có số lượng > 0 vào đơn hàng');
@@ -478,6 +480,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
       subtotal: poCartTotal,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      storeId: BaseService.getDefaultStoreId(),
     );
 
     final items = validItems.map((cartItem) => PurchaseOrderItem(
@@ -489,6 +492,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
       unit: cartItem.unit,
       totalCost: cartItem.quantity * cartItem.unitCost,
       createdAt: DateTime.now(),
+      storeId: BaseService.getDefaultStoreId(),
     )).toList();
 
     try {

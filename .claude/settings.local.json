@@ -6,7 +6,8 @@
       "Bash(flutter analyze:*)",
       "Bash(find:*)",
       "Bash(flutter run:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(flutter build:*)"
     ],
     "deny": [],
     "ask": []

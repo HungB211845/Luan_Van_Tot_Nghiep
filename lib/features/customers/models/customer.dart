@@ -1,5 +1,6 @@
 class Customer {
   final String id;
+  final String storeId; // ADD: For multi-tenant isolation
   final String name;
   final String? phone;
   final String? address;
@@ -11,6 +12,7 @@ class Customer {
 
   Customer({
     required this.id,
+    required this.storeId, // ADD: Required field
     required this.name,
     this.phone,
     this.address,
@@ -24,6 +26,7 @@ class Customer {
   factory Customer.fromJson(Map<String, dynamic> json) {
     return Customer(
       id: json['id'],
+      storeId: json['store_id'], // ADD: Map store_id field
       name: json['name'],
       phone: json['phone'],
       address: json['address'],
@@ -43,6 +46,7 @@ class Customer {
       'debt_limit': debtLimit,
       'interest_rate': interestRate,
       'note': note,
+      'store_id': storeId, // Add storeId
     };
   }
 
@@ -56,6 +60,7 @@ class Customer {
   }) {
     return Customer(
       id: id,
+      storeId: storeId,
       name: name ?? this.name,
       phone: phone ?? this.phone,
       address: address ?? this.address,

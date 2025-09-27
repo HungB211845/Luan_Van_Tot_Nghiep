@@ -7,6 +7,7 @@ import '../../providers/purchase_order_provider.dart';
 import '../../models/company.dart';
 import '../../models/product.dart';
 import '../../models/purchase_order.dart';
+import '../../models/purchase_order_status.dart';
 import '../../../../core/routing/route_names.dart';
 
 class CreatePurchaseOrderScreen extends StatefulWidget {
@@ -423,7 +424,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             onPressed: poProvider.poCartItems.isEmpty ? null : () async {
               final newPO = await poProvider.createPOFromCart(
                 notes: _notesController.text,
-                status: PurchaseOrderStatus.DRAFT,
+                status: PurchaseOrderStatus.draft,
               );
               if (newPO != null) {
                 Navigator.of(context).pop();
@@ -441,7 +442,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             onPressed: poProvider.poCartItems.isEmpty ? null : () async {
                final newPO = await poProvider.createPOFromCart(
                 notes: _notesController.text,
-                status: PurchaseOrderStatus.SENT,
+                status: PurchaseOrderStatus.sent,
               );
               if (newPO != null) {
                 Navigator.of(context).pop(); // Pop current screen

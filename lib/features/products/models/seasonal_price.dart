@@ -8,6 +8,7 @@ class SeasonalPrice {
   final bool isActive;
   final double? markupPercentage;
   final String? notes;
+  final String storeId; // Add storeId
   final DateTime createdAt;
 
   SeasonalPrice({
@@ -20,6 +21,7 @@ class SeasonalPrice {
     this.isActive = true,
     this.markupPercentage,
     this.notes,
+    required this.storeId, // Add storeId
     required this.createdAt,
   });
 
@@ -34,6 +36,7 @@ class SeasonalPrice {
       isActive: json['is_active'] ?? true,
       markupPercentage: json['markup_percentage']?.toDouble(),
       notes: json['notes'],
+      storeId: json['store_id'], // Add storeId
       createdAt: DateTime.parse(json['created_at']),
     );
   }
@@ -48,6 +51,7 @@ class SeasonalPrice {
       'is_active': isActive,
       'markup_percentage': markupPercentage,
       'notes': notes,
+      'store_id': storeId, // Add storeId
     };
   }
 
@@ -67,6 +71,7 @@ class SeasonalPrice {
     bool? isActive,
     double? markupPercentage,
     String? notes,
+    String? storeId, // Add storeId
   }) {
     return SeasonalPrice(
       id: id,
@@ -78,6 +83,7 @@ class SeasonalPrice {
       isActive: isActive ?? this.isActive,
       markupPercentage: markupPercentage ?? this.markupPercentage,
       notes: notes ?? this.notes,
+      storeId: storeId ?? this.storeId, // Add storeId
       createdAt: createdAt,
     );
   }

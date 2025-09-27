@@ -9,6 +9,7 @@ import '../../providers/product_provider.dart';
 import '../../providers/purchase_order_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/services/base_service.dart';
 
 class AddBatchScreen extends StatefulWidget {
   const AddBatchScreen({Key? key}) : super(key: key);
@@ -52,10 +53,18 @@ class _AddBatchScreenState extends State<AddBatchScreen> {
     try {
       await context.read<PurchaseOrderProvider>().loadPurchaseOrders();
       _purchaseOrders = context.read<PurchaseOrderProvider>().purchaseOrders;
+      print('Loaded ${_purchaseOrders.length} purchase orders');
+
       await context.read<CompanyProvider>().loadCompanies();
       _suppliers = context.read<CompanyProvider>().companies;
+      print('Loaded ${_suppliers.length} companies');
     } catch (e) {
-      // Handle error if needed
+      print('Error loading data for batch screen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi tải dữ liệu: $e')),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -166,19 +175,23 @@ class _AddBatchScreenState extends State<AddBatchScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<PurchaseOrder>(
-          value: _selectedPurchaseOrder,
-          hint: const Text('Chọn đơn nhập hàng (PO)'),
-          isExpanded: true,
-          items: _purchaseOrders.map((po) {
-            return DropdownMenuItem(
-              value: po,
-              child: Text(po.poNumber ?? 'PO không có mã'),
-            );
-          }).toList(),
-          onChanged: _onPOSelected,
-          decoration: _buildInputDecoration(label: 'Đơn nhập hàng'),
-        ),
+        _isLoading
+          ? const LinearProgressIndicator()
+          : DropdownButtonFormField<PurchaseOrder>(
+              value: _selectedPurchaseOrder,
+              hint: Text(_purchaseOrders.isEmpty
+                ? 'Không có đơn hàng nào'
+                : 'Chọn đơn nhập hàng (PO) - ${_purchaseOrders.length} đơn'),
+              isExpanded: true,
+              items: _purchaseOrders.map((po) {
+                return DropdownMenuItem(
+                  value: po,
+                  child: Text(po.poNumber ?? 'PO không có mã'),
+                );
+              }).toList(),
+              onChanged: _purchaseOrders.isEmpty ? null : _onPOSelected,
+              decoration: _buildInputDecoration(label: 'Đơn nhập hàng'),
+            ),
         if (_selectedSupplier != null)
           Padding(
             padding: const EdgeInsets.only(top: 8.0),
@@ -519,7 +532,7 @@ class _AddBatchScreenState extends State<AddBatchScreen> {
       }
 
       final newBatch = ProductBatch(
-        id: '', 
+        id: '',
         productId: selectedProduct.id,
         batchNumber: _batchNumberController.text.trim(),
         quantity: int.parse(_quantityController.text.trim()),
@@ -538,6 +551,7 @@ class _AddBatchScreenState extends State<AddBatchScreen> {
         updatedAt: DateTime.now(),
         purchaseOrderId: _selectedPurchaseOrder?.id,
         supplierId: _selectedSupplier?.id,
+        storeId: BaseService.getDefaultStoreId() ?? '',
       );
 
       final success = await provider.addProductBatch(newBatch);
@@ -555,6 +569,7 @@ class _AddBatchScreenState extends State<AddBatchScreen> {
             isActive: true, // Automatically activate the new price
             notes: 'Tự động tạo từ việc thêm lô hàng mới',
             createdAt: DateTime.now(),
+            storeId: BaseService.getDefaultStoreId() ?? '',
           );
           await provider.addSeasonalPrice(newPrice);
         }

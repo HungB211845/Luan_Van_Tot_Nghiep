@@ -6,6 +6,7 @@ import '../../models/pesticide_attributes.dart';
 import '../../models/seed_attributes.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart'; // Thêm import CompanyProvider
+import '../../../../shared/services/base_service.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -754,7 +755,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         sku: _skuController.text.trim(),
         name: _nameController.text.trim(),
         category: _selectedCategory,
-        companyId: _selectedCompanyId,
+        companyId: _selectedCompanyId?.isEmpty == true ? null : _selectedCompanyId,
         attributes: _buildAttributes(),
         isActive: true,
         isBanned: false,
@@ -763,6 +764,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             : null,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        storeId: BaseService.getDefaultStoreId() ?? '',
       );
 
       // Gọi ProductProvider để lưu

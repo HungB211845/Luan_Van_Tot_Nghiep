@@ -904,3 +904,54 @@ ORDER BY po.expected_delivery_date ASC;
 
 company management nằm ở  trong main navigation drawer , thêm Route names cho các company screens, Deep linking từ product detail → company detail 
 
+
+# Company Manager (Nhà Cung Cấp)
+
+Tài liệu mô tả cách thức hoạt động module Nhà Cung Cấp (Company) trong AgriPOS, theo mô hình 3 lớp: UI (Screens) → Provider (State Management) → Service (Business Logic & API).
+
+## Kiến trúc
+- **Model**: `lib/features/products/models/company.dart`
+- **Service**: `lib/features/products/services/product_service.dart`
+  - Hàm: `getCompanies()`
+- **Provider**: `lib/features/products/providers/company_provider.dart`
+  - State: `companies`, `isLoading`
+  - Hàm: `loadCompanies()`
+- **Screens**: Sử dụng CompanyProvider để hiển thị/filter NCC
+  - Ví dụ: `po_list_screen.dart` (lọc PO theo NCC), `product_detail_screen.dart` (lọc lô theo NCC), `batch_history_screen.dart` (lọc lịch sử lô theo NCC)
+
+## Data Flow
+1. UI gọi `CompanyProvider.loadCompanies()` (thường trong `initState` hoặc trước khi mở filter sheet).
+2. Provider gọi `ProductService.getCompanies()`
+3. Service gọi Supabase: `from('companies').select('*').order('name')`
+4. Provider set `companies` và notify UI.
+
+## Cách dùng trong UI (ví dụ FilterChip)
+```dart
+final companyProvider = context.watch<CompanyProvider>();
+SingleChildScrollView(
+  scrollDirection: Axis.horizontal,
+  child: Row(
+    children: companyProvider.companies.map((c) {
+      final selected = selectedSupplierIds.contains(c.id);
+      return Padding(
+        padding: const EdgeInsets.only(right: 8.0),
+        child: FilterChip(
+          label: Text(c.name),
+          selected: selected,
+          onSelected: (val) {
+            // toggle supplier filter
+          },
+        ),
+      );
+    }).toList(),
+  ),
+);
+```
+
+## Lưu ý RLS/Policy
+- Bảng `companies` cần quyền SELECT cho vai trò app (authenticated/anon tùy cấu hình) để UI có thể tải danh sách NCC trong các filter.
+
+## Best Practices
+- Tải NCC một lần và share qua Provider, hạn chế gọi lại nhiều lần.
+- Với danh sách NCC dài, cân nhắc thêm text search để filter client-side.
+ 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/seasonal_price.dart';
 import '../../providers/product_provider.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/services/base_service.dart';
 
 class AddSeasonalPriceScreen extends StatefulWidget {
   const AddSeasonalPriceScreen({Key? key}) : super(key: key);
@@ -442,6 +443,7 @@ class _AddSeasonalPriceScreenState extends State<AddSeasonalPriceScreen> {
             ? _notesController.text.trim()
             : null,
         createdAt: DateTime.now(),
+        storeId: BaseService.getDefaultStoreId(),
       );
 
       // Gọi Provider để lưu

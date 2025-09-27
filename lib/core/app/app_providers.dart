@@ -5,6 +5,10 @@ import '../../features/products/providers/product_provider.dart';
 import '../../features/pos/providers/transaction_provider.dart';
 import '../../features/products/providers/company_provider.dart';
 import '../../features/products/providers/purchase_order_provider.dart';
+import '../../features/auth/providers/auth_provider.dart';
+import '../../features/auth/providers/permission_provider.dart';
+import '../../features/auth/providers/store_provider.dart';
+import '../../features/auth/providers/session_provider.dart';
 
 class AppProviders {
   static List<SingleChildWidget> get list => [
@@ -12,6 +16,10 @@ class AppProviders {
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => CompanyProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => PermissionProvider()),
+        ChangeNotifierProvider(create: (_) => StoreProvider()),
+        ChangeNotifierProvider(create: (_) => SessionProvider()),
         ChangeNotifierProvider(
           create: (context) => PurchaseOrderProvider(
             Provider.of<ProductProvider>(context, listen: false),

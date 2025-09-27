@@ -7,9 +7,11 @@ import '../models/banned_substance.dart';
 import '../../pos/models/transaction.dart';
 import '../../pos/models/transaction_item.dart';
 import '../../pos/models/transaction_item_details.dart';
+import '../../pos/models/payment_method.dart';
 import '../models/company.dart';
 import '../services/product_service.dart';
 import '../../../shared/models/paginated_result.dart';
+import '../../../shared/services/base_service.dart';
 
 
 enum ProductStatus { idle, loading, success, error }
@@ -831,7 +833,7 @@ class ProductProvider extends ChangeNotifier {
 
   Future<String?> checkout({
     String? customerId,
-    PaymentMethod paymentMethod = PaymentMethod.CASH,
+    PaymentMethod paymentMethod = PaymentMethod.cash,
     bool isDebt = false,
     String? notes,
   }) async {
@@ -853,6 +855,7 @@ class ProductProvider extends ChangeNotifier {
         priceAtSale: cartItem.priceAtSale,
         subTotal: cartItem.subTotal,
         createdAt: DateTime.now(),
+        storeId: BaseService.getDefaultStoreId(),
       )).toList();
 
       final transactionId = await _transactionService.createTransaction(
@@ -939,6 +942,7 @@ class ProductProvider extends ChangeNotifier {
             attributes: {},
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
+            storeId: BaseService.getDefaultStoreId(),
           ),
         );
 

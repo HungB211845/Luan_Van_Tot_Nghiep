@@ -13,6 +13,7 @@ import '../../providers/purchase_order_provider.dart'; // Thêm import
 import '../../../../shared/utils/formatter.dart'; // Thêm import
 import '../../../../core/routing/route_names.dart'; // Thêm import
 import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../shared/services/base_service.dart';
 import 'add_batch_screen.dart';
 import 'add_seasonal_price_screen.dart';
 import 'edit_product_screen.dart';
@@ -935,7 +936,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
     final supplier = companyProvider.companies.firstWhere(
       (c) => c.id == batch.supplierId,
-      orElse: () => Company(id: '', name: 'Không xác định', createdAt: DateTime.now(), updatedAt: DateTime.now()),
+      orElse: () => Company(id: '', name: 'Không xác định', createdAt: DateTime.now(), updatedAt: DateTime.now(), storeId: BaseService.getDefaultStoreId()),
     );
 
     return Card(

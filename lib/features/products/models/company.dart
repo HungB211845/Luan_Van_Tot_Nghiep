@@ -7,6 +7,7 @@ class Company {
   final String? address;
   final String? contactPerson;
   final String? note;
+  final String storeId; // Add storeId
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -17,6 +18,7 @@ class Company {
     this.address,
     this.contactPerson,
     this.note,
+    required this.storeId, // Add storeId
     this.createdAt,
     this.updatedAt,
   });
@@ -29,6 +31,7 @@ class Company {
       address: json['address'],
       contactPerson: json['contact_person'],
       note: json['note'],
+      storeId: json['store_id'], // Add storeId
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
     );
@@ -42,6 +45,7 @@ class Company {
       'address': address,
       'contact_person': contactPerson,
       'note': note,
+      'store_id': storeId, // Add storeId
     };
   }
 }

@@ -7,6 +7,7 @@ import '../../../../core/routing/route_names.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../models/purchase_order.dart';
+import '../../models/purchase_order_status.dart';
 import '../../providers/purchase_order_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../models/company.dart';
@@ -316,23 +317,23 @@ class _PurchaseOrderListScreenState extends State<PurchaseOrderListScreen> {
     String text = status.name;
 
     switch (status) {
-      case PurchaseOrderStatus.DRAFT:
+      case PurchaseOrderStatus.draft:
         color = Colors.grey;
         text = 'Nháp';
         break;
-      case PurchaseOrderStatus.SENT:
+      case PurchaseOrderStatus.sent:
         color = Colors.blue;
         text = 'Đã gửi';
         break;
-      case PurchaseOrderStatus.CONFIRMED:
+      case PurchaseOrderStatus.confirmed:
         color = Colors.orange;
         text = 'Đã xác nhận';
         break;
-      case PurchaseOrderStatus.DELIVERED:
+      case PurchaseOrderStatus.delivered:
         color = Colors.green;
         text = 'Đã nhận hàng';
         break;
-      case PurchaseOrderStatus.CANCELLED:
+      case PurchaseOrderStatus.cancelled:
         color = Colors.red;
         text = 'Đã hủy';
         break;
@@ -429,28 +430,28 @@ class _FilterSortSheetState extends State<FilterSortSheet> {
               children: [
                 FilterChip(
                   label: const Text('Nháp'),
-                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.DRAFT),
-                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.DRAFT),
+                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.draft),
+                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.draft),
                 ),
                 FilterChip(
                   label: const Text('Đã gửi'),
-                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.SENT),
-                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.SENT),
+                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.sent),
+                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.sent),
                 ),
                 FilterChip(
                   label: const Text('Đã xác nhận'),
-                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.CONFIRMED),
-                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.CONFIRMED),
+                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.confirmed),
+                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.confirmed),
                 ),
                 FilterChip(
                   label: const Text('Đã nhận hàng'),
-                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.DELIVERED),
-                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.DELIVERED),
+                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.delivered),
+                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.delivered),
                 ),
                 FilterChip(
                   label: const Text('Đã hủy'),
-                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.CANCELLED),
-                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.CANCELLED),
+                  selected: poProvider.statusFilters.contains(PurchaseOrderStatus.cancelled),
+                  onSelected: (_) => poProvider.toggleStatusFilter(PurchaseOrderStatus.cancelled),
                 ),
               ],
             ),

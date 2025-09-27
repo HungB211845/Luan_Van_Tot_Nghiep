@@ -9,7 +9,6 @@ enum ProductCategory {
   SEED,
 }
 
-// === BẮT ĐẦU PHẦN THÊM MỚI ===
 extension ProductCategoryExtension on ProductCategory {
   String get displayName {
     switch (this) {
@@ -22,7 +21,6 @@ extension ProductCategoryExtension on ProductCategory {
     }
   }
 }
-// === KẾT THÚC PHẦN THÊM MỚI ===
 
 class Product {
   final String id;
@@ -35,16 +33,12 @@ class Product {
   final bool isBanned;
   final String? imageUrl;
   final String? description;
-
-  // === THÊM 2 DÒNG NÀY VÀO ===
+  final String storeId;
+  final int minStockLevel;
   final int? availableStock;
   final double? currentPrice;
-  // ============================
-
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  // Computed fields from database
   final String? npkRatio;
   final String? activeIngredient;
   final String? seedStrain;
@@ -60,12 +54,10 @@ class Product {
     this.isBanned = false,
     this.imageUrl,
     this.description,
-
-    // === THÊM 2 DÒNG NÀY VÀO ===
+    this.minStockLevel = 0,
+    required this.storeId,
     this.availableStock,
     this.currentPrice,
-    // ============================
-
     required this.createdAt,
     required this.updatedAt,
     this.npkRatio,
@@ -89,13 +81,10 @@ class Product {
       isBanned: json['is_banned'] ?? false,
       imageUrl: json['image_url'],
       description: json['description'],
-
-      // === THÊM 2 DÒNG NÀY VÀO ===
-      // Dùng as num? để an toàn, rồi chuyển đổi sang kiểu đúng
+      storeId: json['store_id'],
+      minStockLevel: json['min_stock_level'] as int? ?? 0,
       availableStock: (json['available_stock'] as num?)?.toInt(),
       currentPrice: (json['current_price'] as num?)?.toDouble(),
-      // ============================
-
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
       npkRatio: json['npk_ratio'],
@@ -106,46 +95,56 @@ class Product {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id.isEmpty ? null : id,
       'sku': sku,
       'name': name,
       'category': category.toString().split('.').last,
-      'company_id': companyId,
+      'company_id': companyId?.isEmpty == true ? null : companyId,
       'attributes': jsonEncode(attributes),
       'is_active': isActive,
       'is_banned': isBanned,
       'image_url': imageUrl,
       'description': description,
+      'store_id': storeId.isEmpty ? null : storeId,
+      'min_stock_level': minStockLevel,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
+
+  // Category display name
+  String get categoryDisplayName => category.displayName;
 
   // Getter methods cho attributes theo category
   FertilizerAttributes? get fertilizerAttributes {
     if (category != ProductCategory.FERTILIZER) return null;
-    return FertilizerAttributes.fromJson(attributes);
+    try {
+      return FertilizerAttributes.fromJson(attributes);
+    } catch (e) {
+      return null;
+    }
   }
 
   PesticideAttributes? get pesticideAttributes {
     if (category != ProductCategory.PESTICIDE) return null;
-    return PesticideAttributes.fromJson(attributes);
+    try {
+      return PesticideAttributes.fromJson(attributes);
+    } catch (e) {
+      return null;
+    }
   }
 
   SeedAttributes? get seedAttributes {
     if (category != ProductCategory.SEED) return null;
-    return SeedAttributes.fromJson(attributes);
-  }
-
-  String get categoryDisplayName {
-    switch (category) {
-      case ProductCategory.FERTILIZER:
-        return 'Phân Bón';
-      case ProductCategory.PESTICIDE:
-        return 'Thuốc BVTV';
-      case ProductCategory.SEED:
-        return 'Lúa Giống';
+    try {
+      return SeedAttributes.fromJson(attributes);
+    } catch (e) {
+      return null;
     }
   }
 
   Product copyWith({
+    String? id,
     String? sku,
     String? name,
     ProductCategory? category,
@@ -155,9 +154,18 @@ class Product {
     bool? isBanned,
     String? imageUrl,
     String? description,
+    String? storeId,
+    int? minStockLevel,
+    int? availableStock,
+    double? currentPrice,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? npkRatio,
+    String? activeIngredient,
+    String? seedStrain,
   }) {
     return Product(
-      id: id,
+      id: id ?? this.id,
       sku: sku ?? this.sku,
       name: name ?? this.name,
       category: category ?? this.category,
@@ -167,11 +175,15 @@ class Product {
       isBanned: isBanned ?? this.isBanned,
       imageUrl: imageUrl ?? this.imageUrl,
       description: description ?? this.description,
-      createdAt: createdAt,
-      updatedAt: DateTime.now(),
-      npkRatio: npkRatio,
-      activeIngredient: activeIngredient,
-      seedStrain: seedStrain,
+      storeId: storeId ?? this.storeId,
+      minStockLevel: minStockLevel ?? this.minStockLevel,
+      availableStock: availableStock ?? this.availableStock,
+      currentPrice: currentPrice ?? this.currentPrice,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      npkRatio: npkRatio ?? this.npkRatio,
+      activeIngredient: activeIngredient ?? this.activeIngredient,
+      seedStrain: seedStrain ?? this.seedStrain,
     );
   }
 }

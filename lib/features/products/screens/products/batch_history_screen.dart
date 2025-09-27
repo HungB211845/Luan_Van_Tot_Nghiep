@@ -67,6 +67,7 @@ import '../../providers/company_provider.dart';
 import '../../models/company.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../shared/services/base_service.dart';
 
 class BatchHistoryScreen extends StatefulWidget {
   final String productId;
@@ -501,7 +502,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
     final companyProvider = context.watch<CompanyProvider>();
     final supplier = companyProvider.companies.firstWhere(
       (c) => c.id == batch.supplierId,
-      orElse: () => Company(id: '', name: 'Không xác định', createdAt: DateTime.now(), updatedAt: DateTime.now()),
+      orElse: () => Company(id: '', name: 'Không xác định', createdAt: DateTime.now(), updatedAt: DateTime.now(), storeId: BaseService.getDefaultStoreId()),
     );
 
     return Card(

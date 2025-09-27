@@ -7,6 +7,7 @@ class TransactionItem {
   final double priceAtSale;
   final double subTotal;
   final double discountAmount;
+  final String storeId; // Add storeId
   final DateTime createdAt;
 
   TransactionItem({
@@ -18,6 +19,7 @@ class TransactionItem {
     required this.priceAtSale,
     required this.subTotal,
     this.discountAmount = 0,
+    required this.storeId, // Add storeId
     required this.createdAt,
   });
 
@@ -31,6 +33,7 @@ class TransactionItem {
       priceAtSale: (json['price_at_sale']).toDouble(),
       subTotal: (json['sub_total']).toDouble(),
       discountAmount: (json['discount_amount'] ?? 0).toDouble(),
+      storeId: json['store_id'], // Add storeId
       createdAt: DateTime.parse(json['created_at']),
     );
   }
@@ -44,6 +47,7 @@ class TransactionItem {
       'price_at_sale': priceAtSale,
       'sub_total': subTotal,
       'discount_amount': discountAmount,
+      'store_id': storeId, // Add storeId
     };
   }
 
@@ -65,6 +69,7 @@ class TransactionItem {
     double? priceAtSale,
     double? subTotal,
     double? discountAmount,
+    String? storeId, // Add storeId
   }) {
     return TransactionItem(
       id: id,
@@ -75,6 +80,7 @@ class TransactionItem {
       priceAtSale: priceAtSale ?? this.priceAtSale,
       subTotal: subTotal ?? this.subTotal,
       discountAmount: discountAmount ?? this.discountAmount,
+      storeId: storeId ?? this.storeId, // Add storeId
       createdAt: createdAt,
     );
   }

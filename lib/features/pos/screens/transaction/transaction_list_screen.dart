@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../pos/providers/transaction_provider.dart';
 import '../../../customers/providers/customer_provider.dart';
 import '../../../pos/models/transaction.dart';
+import '../../../pos/models/payment_method.dart'; // ADD: Missing import
 
 class TransactionListScreen extends StatefulWidget {
   const TransactionListScreen({Key? key}) : super(key: key);
@@ -246,12 +247,12 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
   Color _getPaymentMethodColor(PaymentMethod method) {
     switch (method) {
-      case PaymentMethod.CASH:
+      case PaymentMethod.cash:
         return Colors.green;
-      case PaymentMethod.BANK_TRANSFER:
-        return Colors.blue;
-      case PaymentMethod.DEBT:
+      case PaymentMethod.debt:
         return Colors.orange;
+      default:
+        return Colors.grey;
     }
   }
 

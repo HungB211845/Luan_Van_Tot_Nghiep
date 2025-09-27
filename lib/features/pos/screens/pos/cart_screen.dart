@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
+import '../../models/payment_method.dart'; // ADD: Missing import
 import '../../../products/providers/product_provider.dart';
 import '../../../customers/providers/customer_provider.dart';
 import '../../providers/transaction_provider.dart'; // Thêm dòng này
@@ -487,7 +488,7 @@ class _CartScreenState extends State<CartScreen> {
 
   // Hiển thị hộp thoại xác nhận thanh toán
   void _showCheckoutDialog() {
-    PaymentMethod selectedPaymentMethod = PaymentMethod.CASH;
+    PaymentMethod selectedPaymentMethod = PaymentMethod.cash;
 
     showDialog(
       context: context,
@@ -518,7 +519,7 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                   RadioListTile<PaymentMethod>(
                     title: const Text('Tiền mặt'),
-                    value: PaymentMethod.CASH,
+                    value: PaymentMethod.cash,
                     groupValue: selectedPaymentMethod,
                     onChanged: (value) {
                       setDialogState(() {
@@ -528,7 +529,7 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                   RadioListTile<PaymentMethod>(
                     title: const Text('Ghi nợ'),
-                    value: PaymentMethod.DEBT,
+                    value: PaymentMethod.debt,
                     groupValue: selectedPaymentMethod,
                     onChanged: _viewModel.selectedCustomer != null
                         ? (value) {
@@ -551,7 +552,7 @@ class _CartScreenState extends State<CartScreen> {
                     _viewModel
                         .handleCheckout(
                           paymentMethod: selectedPaymentMethod,
-                          isDebt: selectedPaymentMethod == PaymentMethod.DEBT,
+                          isDebt: selectedPaymentMethod == PaymentMethod.debt,
                         )
                         .then((transactionId) {
                           if (!mounted) return;

@@ -79,11 +79,27 @@ class HomeScreen extends StatelessWidget {
                   ),
                   _buildFeatureCard(
                     context,
+                    icon: Icons.history,
+                    title: 'Lịch Sử Giao Dịch',
+                    subtitle: 'Xem giao dịch POS',
+                    route: RouteNames.transactionList,
+                    color: Colors.deepOrange,
+                  ),
+                  _buildFeatureCard(
+                    context,
                     icon: Icons.analytics,
                     title: 'Báo Cáo',
                     subtitle: 'Thống kê',
                     route: '/reports', // Add this route later
                     color: Colors.purple,
+                  ),
+                  _buildFeatureCard(
+                    context,
+                    icon: Icons.person,
+                    title: 'Tài khoản',
+                    subtitle: 'Quản lý tài khoản',
+                    route: RouteNames.profile,
+                    color: Colors.brown,
                   ),
                 ],
               ),

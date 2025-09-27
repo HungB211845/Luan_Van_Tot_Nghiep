@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/transaction.dart';
 import '../models/transaction_item.dart';
+import '../models/payment_method.dart';
 import '../services/transaction_service.dart';
 import '../../../shared/models/paginated_result.dart';
 

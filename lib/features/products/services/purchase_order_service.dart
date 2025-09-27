@@ -1,17 +1,19 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/base_service.dart';
 import '../models/purchase_order.dart';
 import '../models/purchase_order_item.dart';
+import '../models/purchase_order_status.dart';
 import '../models/product_batch.dart'; // Thêm import
 
-class PurchaseOrderService {
+class PurchaseOrderService extends BaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // Lấy danh sách đơn nhập hàng (có thể thêm phân trang sau)
   Future<List<PurchaseOrder>> getPurchaseOrders() async {
     try {
-      final response = await _supabase
-          .from('purchase_orders_with_details') // Dùng view để có thêm thông tin supplier
-          .select('*')
+      final response = await addStoreFilter(
+        _supabase.from('purchase_orders_with_details').select('*'),
+      )
           .order('order_date', ascending: false);
       return (response as List)
           .map((json) => PurchaseOrder.fromMap(json))
@@ -52,16 +54,16 @@ class PurchaseOrderService {
   // Lấy chi tiết một đơn nhập hàng và các sản phẩm của nó
   Future<Map<String, dynamic>> getPurchaseOrderDetails(String poId) async {
     try {
-      final poResponse = await _supabase
-          .from('purchase_orders_with_details')
-          .select('*')
+      final poResponse = await addStoreFilter(
+        _supabase.from('purchase_orders_with_details').select('*'),
+      )
           .eq('id', poId)
           .single();
 
       // Join products to enrich with product name for UI
-      final itemsResponse = await _supabase
-          .from('purchase_order_items')
-          .select('id,purchase_order_id,product_id,quantity,unit_cost,unit,total_cost,received_quantity,notes,created_at, products(name)')
+      final itemsResponse = await addStoreFilter(
+        _supabase.from('purchase_order_items').select('id,purchase_order_id,product_id,quantity,unit_cost,unit,total_cost,received_quantity,notes,created_at, products(name)'),
+      )
           .eq('purchase_order_id', poId);
 
       return {
@@ -79,13 +81,14 @@ class PurchaseOrderService {
   Future<PurchaseOrder> createPurchaseOrder(
       PurchaseOrder order, List<PurchaseOrderItem> items) async {
     try {
+      ensureAuthenticated();
       // 1. Insert the main purchase order
       final poMap = order.toMap();
       poMap.remove('id'); // ID is auto-generated
 
       final poResponse = await _supabase
           .from('purchase_orders')
-          .insert(poMap)
+          .insert(addStoreId(poMap))
           .select()
           .single();
 
@@ -100,7 +103,9 @@ class PurchaseOrderService {
         itemsToInsert.add(itemMap);
       }
 
-      await _supabase.from('purchase_order_items').insert(itemsToInsert);
+      // add store_id for each item
+      final itemsWithStore = itemsToInsert.map((m) => addStoreId(m)).toList();
+      await _supabase.from('purchase_order_items').insert(itemsWithStore);
 
       // Return the newly created purchase order
       return PurchaseOrder.fromMap(poResponse);
@@ -113,10 +118,12 @@ class PurchaseOrderService {
   Future<PurchaseOrder> updatePurchaseOrderStatus(
       String poId, PurchaseOrderStatus status) async {
     try {
+      ensureAuthenticated();
       final response = await _supabase
           .from('purchase_orders')
           .update({'status': status.name})
           .eq('id', poId)
+          .eq('store_id', currentStoreId!)
           .select()
           .single();
       return PurchaseOrder.fromMap(response);
@@ -129,13 +136,15 @@ class PurchaseOrderService {
   Future<PurchaseOrder> receivePurchaseOrder(String poId) async {
     try {
       // Cập nhật trạng thái và ngày nhận hàng
+      ensureAuthenticated();
       final response = await _supabase
           .from('purchase_orders')
           .update({
-            'status': PurchaseOrderStatus.DELIVERED.name,
+            'status': PurchaseOrderStatus.delivered.name,
             'delivery_date': DateTime.now().toIso8601String(),
           })
           .eq('id', poId)
+          .eq('store_id', currentStoreId!)
           .select()
           .single();
 
@@ -151,9 +160,9 @@ class PurchaseOrderService {
   // Lấy các lô hàng được tạo từ một PO
   Future<List<ProductBatch>> getBatchesFromPO(String poId) async {
     try {
-      final response = await _supabase
-          .from('product_batches')
-          .select('id,product_id,purchase_order_id,supplier_id,batch_number,quantity,cost_price,received_date,expiry_date,supplier_batch_id,notes,is_available,created_at,updated_at, products(name), companies(name)')
+      final response = await addStoreFilter(
+        _supabase.from('product_batches').select('id,product_id,purchase_order_id,supplier_id,batch_number,quantity,cost_price,received_date,expiry_date,supplier_batch_id,notes,is_available,created_at,updated_at, products(name), companies(name)'),
+      )
           .eq('purchase_order_id', poId)
           .order('created_at', ascending: false);
       return (response as List)

@@ -23,16 +23,27 @@ temperature: 0.3
 
 Dự án này là AgriPOS, một ứng dụng POS quản lý vật tư nông nghiệp, được xây dựng bằng Flutter và Supabase.
 
-**Đây là các file kiến trúc cốt lõi của dự án. Hãy dựa vào đây để trả lời các câu hỏi về code:**
+**Kiến trúc hiện tại của dự án tuân thủ mạnh mẽ MVVM-C (Model-View-ViewModel-Coordinator) và các nguyên tắc của Clean Architecture.**
 
-Các file model nằm trong thư mục `lib/models/`.
-Các file provider nằm trong thư mục `lib/providers/`.
-Các file service nằm trong thư mục `lib/services/`.
-Các file UI nằm trong thư mục `lib/screens/`.
+**Cấu trúc thư mục và vai trò kiến trúc cốt lõi:**
+
+*   **`lib/core/`**: Chứa các thành phần cốt lõi của ứng dụng như quản lý Providers (`app/app_providers.dart`) và hệ thống định tuyến (`routing/`). Đây là lớp **Coordinator** trong MVVM-C.
+*   **`lib/features/<feature_name>/`**: Tổ chức theo tính năng (ví dụ: `products`, `customers`, `pos`). Mỗi tính năng bao gồm:
+    *   **`models/`**: **Entities (Lớp Domain)**. Các lớp Dart thuần túy định nghĩa cấu trúc dữ liệu cốt lõi của ứng dụng (ví dụ: `Product`, `PurchaseOrder`).
+    *   **`providers/`**: **ViewModels (MVVM-C) / Lớp Ứng dụng (Clean Architecture)**. Các `ChangeNotifier` quản lý trạng thái UI, hiển thị dữ liệu cho Views và chứa logic nghiệp vụ (Use Cases) cho tính năng đó. Chúng tương tác với lớp `services` để tìm nạp/lưu trữ dữ liệu.
+    *   **`screens/`**: **Views (MVVM-C) / Frameworks & Drivers (Clean Architecture)**. Các widget Flutter chịu trách nhiệm hiển thị UI và gửi sự kiện người dùng đến các Providers.
+    *   **`services/`**: **Interface Adapters (Clean Architecture)**. Các lớp này (ví dụ: `ProductService`, `PurchaseOrderService`) trừu tượng hóa nguồn dữ liệu, chứa logic tương tác với Supabase.
+*   **`lib/shared/`**: Chứa các thành phần, model, dịch vụ, tiện ích và widget dùng chung trên toàn bộ ứng dụng.
+
+**Mô hình 3 lớp (UI -> Provider -> Service) được áp dụng như sau:**
+
+*   **UI (Views):** Nằm trong `lib/features/<feature_name>/screens/`.
+*   **Provider (State Management / ViewModels / Use Cases):** Nằm trong `lib/features/<feature_name>/providers/`.
+*   **Service (Business Logic & API / Data Access):** Nằm trong `lib/features/<feature_name>/services/`.
 
 **Để tham khảo đặc tả hệ thống (specs) chi tiết, hãy đọc file sau:**
 
-- `file:///Users/p/Desktop/LVTN/agricultural_pos/docs/'
+- `file:///Users/p/Desktop/LVTN/agricultural_pos/docs/'`
 
 **Khi tao hỏi về code, hãy ưu tiên tham chiếu đến nội dung của các file quan trọng sau (nếu tao cung cấp):**
 
