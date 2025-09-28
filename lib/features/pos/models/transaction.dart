@@ -2,6 +2,7 @@ import 'payment_method.dart';
 
 class Transaction {
   final String id;
+  final String storeId;
   final String? customerId;
   final double totalAmount;
   final DateTime transactionDate;
@@ -10,11 +11,14 @@ class Transaction {
   final String? notes;
   final String? invoiceNumber;
   final String? createdBy;
-  final String storeId; // Add storeId
   final DateTime createdAt;
+
+  // Enriched data, not part of the 'transactions' table schema
+  final String? customerName;
 
   Transaction({
     required this.id,
+    required this.storeId,
     this.customerId,
     required this.totalAmount,
     required this.transactionDate,
@@ -23,28 +27,51 @@ class Transaction {
     this.notes,
     this.invoiceNumber,
     this.createdBy,
-    required this.storeId, // Add storeId
     required this.createdAt,
+    this.customerName, // Enriched data
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
+    final customerData = json['customers'];
     return Transaction(
       id: json['id'],
+      storeId: json['store_id'],
       customerId: json['customer_id'],
-      totalAmount: (json['total_amount']).toDouble(),
+      totalAmount: (json['total_amount'] as num? ?? 0).toDouble(),
       transactionDate: DateTime.parse(json['transaction_date']),
       isDebt: json['is_debt'] ?? false,
       paymentMethod: PaymentMethod.fromString(json['payment_method'] ?? 'CASH'),
       notes: json['notes'],
       invoiceNumber: json['invoice_number'],
       createdBy: json['created_by'],
-      storeId: json['store_id'], // Add storeId
       createdAt: DateTime.parse(json['created_at']),
+      // Handle nested customer data if available
+      customerName: customerData is Map ? customerData['name'] : null,
     );
   }
-
+  
+  /// Factory constructor for data coming from the 'search_transactions' RPC
+  factory Transaction.fromRpcJson(Map<String, dynamic> json) {
+    return Transaction(
+      id: json['id'],
+      storeId: json['store_id'], // Fixed: use correct field name from RPC output
+      customerId: json['customer_id'],
+      totalAmount: (json['total_amount'] as num? ?? 0).toDouble(),
+      transactionDate: DateTime.parse(json['transaction_date']),
+      isDebt: json['is_debt'] ?? false,
+      paymentMethod: PaymentMethod.fromString(json['payment_method'] ?? 'CASH'),
+      notes: json['notes'],
+      invoiceNumber: json['invoice_number'],
+      createdBy: json['created_by'],
+      createdAt: DateTime.parse(json['created_at']),
+      // Enriched fields from the RPC
+      customerName: json['customer_name'],
+    );
+  }
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
+      'store_id': storeId,
       'customer_id': customerId,
       'total_amount': totalAmount,
       'transaction_date': transactionDate.toIso8601String(),
@@ -53,11 +80,13 @@ class Transaction {
       'notes': notes,
       'invoice_number': invoiceNumber,
       'created_by': createdBy,
-      'store_id': storeId, // Add storeId
+      'created_at': createdAt.toIso8601String(),
     };
   }
 
   Transaction copyWith({
+    String? id,
+    String? storeId,
     String? customerId,
     double? totalAmount,
     DateTime? transactionDate,
@@ -66,10 +95,12 @@ class Transaction {
     String? notes,
     String? invoiceNumber,
     String? createdBy,
-    String? storeId, // Add storeId
+    DateTime? createdAt,
+    String? customerName,
   }) {
     return Transaction(
-      id: id,
+      id: id ?? this.id,
+      storeId: storeId ?? this.storeId,
       customerId: customerId ?? this.customerId,
       totalAmount: totalAmount ?? this.totalAmount,
       transactionDate: transactionDate ?? this.transactionDate,
@@ -78,8 +109,8 @@ class Transaction {
       notes: notes ?? this.notes,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       createdBy: createdBy ?? this.createdBy,
-      storeId: storeId ?? this.storeId, // Add storeId
-      createdAt: createdAt,
+      createdAt: createdAt ?? this.createdAt,
+      customerName: customerName ?? this.customerName,
     );
   }
 }

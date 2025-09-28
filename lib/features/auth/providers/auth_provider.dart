@@ -98,17 +98,14 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Legacy login method - DEPRECATED for security
+  @Deprecated('Use signInWithStore() instead for multi-tenant security')
   Future<bool> signIn(String email, String password) async {
-    _setState(_state.copyWith(isLoading: true, errorMessage: null));
-    final result = await _authService.signInWithEmail(email, password);
-    if (result.isSuccess && result.profile != null) {
-      BaseService.setCurrentUserProfile(result.profile);
-      BaseService.setCurrentUserStoreId(result.profile!.storeId);
-      _setState(auth.AuthState(status: auth.AuthStatus.authenticated, userProfile: result.profile, store: result.store, isLoading: false));
-      return true;
-    }
-    _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
-    return false;
+    // Force users to use store-aware login
+    throw UnsupportedError(
+      'Direct email/password login is not allowed. '
+      'Use signInWithStore(email, password, storeCode) instead for security.'
+    );
   }
 
   /// NEW: Store-aware login method

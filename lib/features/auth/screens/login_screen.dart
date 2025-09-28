@@ -91,37 +91,33 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleBiometricLogin() async {
-    // Điều hướng tới màn BiometricLogin hoặc xác thực trực tiếp nếu muốn.
-    Navigator.of(context).pushNamed(RouteNames.biometricLogin);
+    // SECURITY: Disable biometric until store-aware implementation
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đăng nhập sinh trắc học tạm thời không khả dụng. Vui lòng sử dụng email/password với mã cửa hàng.'),
+        backgroundColor: Colors.orange,
+      ),
+    );
   }
 
   Future<void> _handleGoogle() async {
-    final res = await _oauth.signInWithGoogle();
-    if (!mounted) return;
-    if (!res.isSuccess) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.errorMessage ?? 'Đăng nhập Google thất bại')),
-      );
-    } else {
-      // OAuth sẽ quay lại app qua deep link, Splash/AuthProvider sẽ xử lý session.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đang mở Google để xác thực...')),
-      );
-    }
+    // SECURITY: Disable OAuth until store-aware implementation
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đăng nhập Google tạm thời không khả dụng. Vui lòng sử dụng email/password với mã cửa hàng.'),
+        backgroundColor: Colors.orange,
+      ),
+    );
   }
 
   Future<void> _handleFacebook() async {
-    final res = await _oauth.signInWithFacebook();
-    if (!mounted) return;
-    if (!res.isSuccess) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.errorMessage ?? 'Đăng nhập Facebook thất bại')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đang mở Facebook để xác thực...')),
-      );
-    }
+    // SECURITY: Disable OAuth until store-aware implementation  
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đăng nhập Facebook tạm thời không khả dụng. Vui lòng sử dụng email/password với mã cửa hàng.'),
+        backgroundColor: Colors.orange,
+      ),
+    );
   }
 
   @override

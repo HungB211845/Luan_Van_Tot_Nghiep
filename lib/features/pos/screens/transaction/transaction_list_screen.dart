@@ -1,25 +1,69 @@
-// lib/screens/transaction/transaction_list_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../../pos/providers/transaction_provider.dart';
+
+import '../../../customers/models/customer.dart';
 import '../../../customers/providers/customer_provider.dart';
-import '../../../pos/models/transaction.dart';
-import '../../../pos/models/payment_method.dart'; // ADD: Missing import
+import '../../models/payment_method.dart';
+import '../../models/transaction.dart';
+import '../../providers/transaction_provider.dart';
+import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/widgets/loading_widget.dart';
+import 'transaction_detail_screen.dart';
 
 class TransactionListScreen extends StatefulWidget {
-  const TransactionListScreen({Key? key}) : super(key: key);
+  const TransactionListScreen({super.key});
 
   @override
   State<TransactionListScreen> createState() => _TransactionListScreenState();
 }
 
 class _TransactionListScreenState extends State<TransactionListScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TransactionProvider>().loadTransactionHistory();
+      // Initial load
+      context.read<TransactionProvider>().loadTransactions();
+      // Load customers for the filter sheet
+      context.read<CustomerProvider>().loadCustomers();
     });
+
+    _searchController.addListener(_onSearchChanged);
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      final provider = context.read<TransactionProvider>();
+      final newFilter = provider.filter.copyWith(searchText: _searchController.text);
+      provider.updateFilter(newFilter);
+    });
+  }
+
+  void _onScroll() {
+    final provider = context.read<TransactionProvider>();
+    if (provider.hasMore &&
+        !provider.isLoadingMore &&
+        _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
+      provider.loadMore();
+    }
   }
 
   @override
@@ -27,76 +71,128 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lịch Sử Giao Dịch'),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () => _showFilterSheet(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              context.read<TransactionProvider>().refresh();
-            },
+            onPressed: () => context.read<TransactionProvider>().refresh(),
           ),
         ],
       ),
-      body: Consumer<TransactionProvider>(
-        builder: (context, transactionProvider, child) {
-          if (transactionProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (transactionProvider.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Có lỗi xảy ra',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    transactionProvider.errorMessage,
-                    style: TextStyle(color: Colors.red[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => transactionProvider.refresh(),
-                    child: const Text('Thử lại'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (transactionProvider.transactions.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'Chưa có giao dịch nào',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: transactionProvider.transactions.length,
-            itemBuilder: (context, index) {
-              final transaction = transactionProvider.transactions[index];
-              return _buildTransactionCard(context, transaction);
-            },
-          );
-        },
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          _buildQuickChips(),
+          Expanded(child: _buildTransactionList()),
+        ],
       ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Tìm theo mã HĐ hoặc tên khách hàng...',
+          prefixIcon: const Icon(Icons.search, size: 20),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.grey[200],
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickChips() {
+    final provider = context.read<TransactionProvider>();
+    final currentFilter = provider.filter;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        children: [
+          ActionChip(label: const Text('Hôm nay'), onPressed: () {
+            final now = DateTime.now();
+            provider.updateFilter(currentFilter.copyWith(startDate: DateTime(now.year, now.month, now.day), endDate: now));
+          }),
+          const SizedBox(width: 8),
+          ActionChip(label: const Text('7 ngày'), onPressed: () {
+             final now = DateTime.now();
+            provider.updateFilter(currentFilter.copyWith(startDate: now.subtract(const Duration(days: 6)), endDate: now));
+          }),
+          const SizedBox(width: 8),
+          ActionChip(label: const Text('30 ngày'), onPressed: () {
+             final now = DateTime.now();
+            provider.updateFilter(currentFilter.copyWith(startDate: now.subtract(const Duration(days: 29)), endDate: now));
+          }),
+          const Spacer(),
+          if (currentFilter.startDate != null || currentFilter.endDate != null)
+            ActionChip(avatar: const Icon(Icons.clear, size: 16), label: const Text('Xóa ngày'), onPressed: () {
+              provider.updateFilter(currentFilter.copyWith(clearStartDate: true, clearEndDate: true));
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionList() {
+    return Consumer<TransactionProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading && provider.transactions.isEmpty) {
+          return const Center(child: LoadingWidget(message: 'Đang tải giao dịch...'));
+        }
+
+        if (provider.status == TransactionStatus.error && provider.transactions.isEmpty) {
+          return Center(child: Text('Lỗi: ${provider.errorMessage}'));
+        }
+
+        if (provider.transactions.isEmpty) {
+          return const Center(child: Text('Không tìm thấy giao dịch nào.'));
+        }
+
+        final grouped = provider.groupedTransactions;
+        final dateKeys = grouped.keys.toList();
+
+        return RefreshIndicator(
+          onRefresh: provider.refresh,
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(16),
+            itemCount: dateKeys.length + (provider.hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index == dateKeys.length) {
+                return _buildLoadingFooter();
+              }
+
+              final dateKey = dateKeys[index];
+              final transactionsOnDate = grouped[dateKey]!;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16, bottom: 8, left: 4),
+                    child: Text(
+                      '$dateKey  •  ${transactionsOnDate.length} giao dịch',
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, fontSize: 14),
+                    ),
+                  ),
+                  ...transactionsOnDate.map((tx) => _buildTransactionCard(context, tx)),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -104,13 +200,22 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () {
-          context.read<TransactionProvider>().selectTransaction(transaction);
-          _showTransactionDetails(context, transaction);
+        borderRadius: BorderRadius.circular(12),
+        onLongPress: () {
+          Clipboard.setData(ClipboardData(text: transaction.invoiceNumber ?? ''));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Đã sao chép mã HĐ: ${transaction.invoiceNumber}')),
+          );
         },
-        borderRadius: BorderRadius.circular(8),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => TransactionDetailScreen(transaction: transaction),
+            ),
+          );
+        },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -119,125 +224,39 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    transaction.invoiceNumber ?? 'N/A',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                  Expanded(
+                    child: Text(
+                      transaction.invoiceNumber ?? 'N/A',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueGrey),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getPaymentMethodColor(transaction.paymentMethod),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      transaction.paymentMethod.displayName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                  Text(
+                    AppFormatter.formatCurrency(transaction.totalAmount),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
+              Text(
+                transaction.customerName ?? 'Khách lẻ',
+                style: TextStyle(color: Colors.grey[700], fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 4),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (transaction.customerId != null)
-                          Consumer<CustomerProvider>(
-                            builder: (context, customerProvider, child) {
-                              final customer = customerProvider.customers
-                                  .where((c) => c.id == transaction.customerId)
-                                  .isNotEmpty 
-                                  ? customerProvider.customers.where((c) => c.id == transaction.customerId).first
-                                  : null;
-                              return Text(
-                                customer?.name ?? 'Khách hàng không xác định',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              );
-                            },
-                          )
-                        else
-                          Text(
-                            'Khách lẻ',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_formatDateTime(transaction.transactionDate)}',
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+                  Text(
+                    AppFormatter.formatDateTime(transaction.transactionDate),
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '${transaction.totalAmount.toStringAsFixed(0)}đ',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.green,
-                        ),
-                      ),
-                      if (transaction.isDebt)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange[100],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange[300]!),
-                          ),
-                          child: Text(
-                            'Ghi nợ',
-                            style: TextStyle(
-                              color: Colors.orange[700],
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  const Spacer(),
+                  _buildPaymentMethodChip(transaction.paymentMethod),
+                  if (transaction.isDebt) ...[
+                    const SizedBox(width: 8),
+                    _buildDebtStatusChip(true) // Assuming is_debt=true means unpaid
+                  ]
                 ],
               ),
-              if (transaction.notes != null && transaction.notes!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Ghi chú: ${transaction.notes}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[700],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -245,139 +264,269 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     );
   }
 
-  Color _getPaymentMethodColor(PaymentMethod method) {
-    switch (method) {
-      case PaymentMethod.cash:
-        return Colors.green;
-      case PaymentMethod.debt:
-        return Colors.orange;
-      default:
-        return Colors.grey;
-    }
+  Widget _buildPaymentMethodChip(PaymentMethod method) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: method == PaymentMethod.cash ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: method == PaymentMethod.cash ? Colors.green : Colors.orange, width: 0.5)
+      ),
+      child: Text(
+        method.displayName,
+        style: TextStyle(color: method == PaymentMethod.cash ? Colors.green[800] : Colors.orange[800], fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  Widget _buildDebtStatusChip(bool isUnpaid) {
+     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isUnpaid ? Colors.red.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isUnpaid ? Colors.red : Colors.blue, width: 0.5)
+      ),
+      child: Text(
+        isUnpaid ? 'Còn nợ' : 'Đã trả',
+        style: TextStyle(color: isUnpaid ? Colors.red[800] : Colors.blue[800], fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
   }
 
-  void _showTransactionDetails(BuildContext context, Transaction transaction) {
+  Widget _buildLoadingFooter() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 16.0),
+      child: Center(child: LoadingWidget(message: 'Đang tải thêm...')),
+    );
+  }
+
+  void _showFilterSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      builder: (_) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: context.read<TransactionProvider>()),
+          ChangeNotifierProvider.value(value: context.read<CustomerProvider>()),
+        ],
+        child: const _FilterSheet(),
       ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        maxChildSize: 0.9,
-        minChildSize: 0.5,
-        expand: false,
-        builder: (context, scrollController) {
-          return Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Chi tiết giao dịch',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildDetailRow('Mã hóa đơn', transaction.invoiceNumber ?? 'N/A'),
-                _buildDetailRow('Ngày giao dịch', _formatDateTime(transaction.transactionDate)),
-                _buildDetailRow('Phương thức', transaction.paymentMethod.displayName),
-                _buildDetailRow('Tổng tiền', '${transaction.totalAmount.toStringAsFixed(0)}đ'),
-                if (transaction.notes?.isNotEmpty == true)
-                  _buildDetailRow('Ghi chú', transaction.notes!),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  'Chi tiết sản phẩm',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Consumer<TransactionProvider>(
-                    builder: (context, provider, child) {
-                      if (provider.isLoading) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      
-                      if (provider.transactionItems.isEmpty) {
-                        return const Center(
-                          child: Text('Không có chi tiết sản phẩm'),
-                        );
-                      }
+    );
+  }
+}
 
-                      return ListView.builder(
-                        controller: scrollController,
-                        itemCount: provider.transactionItems.length,
-                        itemBuilder: (context, index) {
-                          final item = provider.transactionItems[index];
-                          return ListTile(
-                            dense: true,
-                            title: Text('Sản phẩm ${item.productId}'), // TODO: Get product name
-                            subtitle: Text('Số lượng: ${item.quantity}'),
-                            trailing: Text('${item.subTotal.toStringAsFixed(0)}đ'),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    ).then((_) {
-      // Load transaction details when bottom sheet opens
-      context.read<TransactionProvider>().loadTransactionDetails(transaction.id);
-    });
+/// The content of the filter bottom sheet.
+class _FilterSheet extends StatefulWidget {
+  const _FilterSheet();
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late TransactionFilter _localFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _localFilter = context.read<TransactionProvider>().filter;
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.8,
+      padding: const EdgeInsets.all(20),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
+          const Text('Bộ lọc nâng cao', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Divider(height: 24),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-              ),
+            child: ListView(
+              children: [
+                _buildDateRangePicker(),
+                const SizedBox(height: 16),
+                _buildAmountRange(),
+                const SizedBox(height: 16),
+                _buildPaymentMethodFilter(),
+                const SizedBox(height: 16),
+                _buildDebtStatusFilter(),
+                const SizedBox(height: 16),
+                _buildCustomerFilter(),
+              ],
             ),
           ),
+          const Divider(height: 24),
+          _buildActionButtons(),
         ],
       ),
+    );
+  }
+
+  Widget _buildDateRangePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Khoảng ngày', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.date_range, size: 18),
+                label: Text(_localFilter.startDate == null ? 'Từ ngày' : AppFormatter.formatDate(_localFilter.startDate!)),
+                onPressed: () async {
+                  final picked = await showDatePicker(context: context, initialDate: _localFilter.startDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+                  if (picked != null) setState(() => _localFilter = _localFilter.copyWith(startDate: picked));
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.date_range, size: 18),
+                label: Text(_localFilter.endDate == null ? 'Đến ngày' : AppFormatter.formatDate(_localFilter.endDate!)),
+                onPressed: () async {
+                  final picked = await showDatePicker(context: context, initialDate: _localFilter.endDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+                  if (picked != null) setState(() => _localFilter = _localFilter.copyWith(endDate: picked));
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAmountRange() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Khoảng tiền', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: TextField(keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Tối thiểu', border: OutlineInputBorder()), onChanged: (v) => _localFilter = _localFilter.copyWith(minAmount: double.tryParse(v)))),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Tối đa', border: OutlineInputBorder()), onChanged: (v) => _localFilter = _localFilter.copyWith(maxAmount: double.tryParse(v)))),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentMethodFilter() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Phương thức thanh toán', style: TextStyle(fontWeight: FontWeight.w600)),
+        Wrap(
+          spacing: 8,
+          children: PaymentMethod.values.map((method) {
+            final isSelected = _localFilter.paymentMethods.contains(method);
+            return FilterChip(
+              label: Text(method.displayName),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  final newMethods = Set<PaymentMethod>.from(_localFilter.paymentMethods);
+                  if (selected) {
+                    newMethods.add(method);
+                  } else {
+                    newMethods.remove(method);
+                  }
+                  _localFilter = _localFilter.copyWith(paymentMethods: newMethods);
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDebtStatusFilter() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Trạng thái ghi nợ', style: TextStyle(fontWeight: FontWeight.w600)),
+        Wrap(
+          spacing: 8,
+          children: ['unpaid', 'paid'].map((status) {
+            final isSelected = _localFilter.debtStatus == status;
+            return FilterChip(
+              label: Text(status == 'unpaid' ? 'Còn nợ' : 'Đã trả'),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() => _localFilter = _localFilter.copyWith(debtStatus: selected ? status : null));
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomerFilter() {
+    return Consumer<CustomerProvider>(
+      builder: (context, customerProvider, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Khách hàng', style: TextStyle(fontWeight: FontWeight.w600)),
+            Wrap(
+              spacing: 8,
+              children: customerProvider.customers.map((customer) {
+                final isSelected = _localFilter.customerIds.contains(customer.id);
+                return FilterChip(
+                  label: Text(customer.name),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      final newIds = Set<String>.from(_localFilter.customerIds);
+                      if (selected) {
+                        newIds.add(customer.id);
+                      } else {
+                        newIds.remove(customer.id);
+                      }
+                      _localFilter = _localFilter.copyWith(customerIds: newIds);
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            child: const Text('Reset'),
+            onPressed: () {
+              context.read<TransactionProvider>().updateFilter(const TransactionFilter());
+              Navigator.pop(context);
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: ElevatedButton(
+            child: const Text('Áp dụng'),
+            onPressed: () {
+              context.read<TransactionProvider>().updateFilter(_localFilter);
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      ],
     );
   }
 }

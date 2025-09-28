@@ -47,4 +47,15 @@ class AppFormatter {
     }
     return DateFormat('dd/MM/yyyy').format(date);
   }
+
+  /// Định dạng DateTime thành chuỗi ngày và giờ (dd/MM/yyyy HH:mm).
+  ///
+  /// Ví dụ: formatDateTime(DateTime(2024, 07, 28, 14, 30)) => "28/07/2024 14:30"
+  /// Nếu date là null, trả về chuỗi rỗng.
+  static String formatDateTime(DateTime? date) {
+    if (date == null) {
+      return '';
+    }
+    return DateFormat('dd/MM/yyyy HH:mm').format(date);
+  }
 }

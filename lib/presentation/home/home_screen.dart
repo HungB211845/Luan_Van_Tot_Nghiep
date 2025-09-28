@@ -1,30 +1,25 @@
 import 'package:flutter/material.dart';
 import '../../core/routing/route_names.dart';
 import '../../shared/widgets/connectivity_banner.dart';
-import '../../shared/layout/responsive_layout_wrapper.dart';
-import '../../shared/layout/models/layout_config.dart';
+import '../main_navigation/main_navigation_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return AppLayouts.home.wrapChildResponsive(
-      Container(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cửa Hàng Nông Nghiệp'),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+        automaticallyImplyLeading: false, // Remove back button since this is a tab
+      ),
+      body: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            const Text(
-              'Cửa Hàng Nông Nghiệp',
-              style: TextStyle(
-                fontSize: 28, 
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
-              ),
-            ),
-            const SizedBox(height: 20),
-            
             // Connectivity status
             const ConnectivityBanner(),
             const SizedBox(height: 30),
@@ -124,7 +119,7 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
-        onTap: () => Navigator.pushNamed(context, route),
+        onTap: () => MainNavigationHelper.navigateToTab(context, route),
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(16),

@@ -24,6 +24,7 @@ import '../../features/auth/screens/biometric_setup_screen.dart';
 import '../../features/auth/screens/biometric_login_screen.dart';
 import '../../features/auth/screens/store_setup_screen.dart';
 import '../../presentation/home/home_screen.dart';
+import '../../presentation/main_navigation/main_navigation_screen.dart';
 import 'route_names.dart';
 import '../../features/products/screens/purchase_order/po_receive_success_screen.dart';
 import '../../features/auth/screens/account_screen.dart';
@@ -49,9 +50,9 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const StoreSetupScreen());
       // Removed onboarding route (screen not implemented)
       case RouteNames.home:
-        return MaterialPageRoute(builder: (_) => const HomeScreen());
+        return MaterialPageRoute(builder: (_) => MainNavigationScreen(key: mainNavigationKey));
       case RouteNames.homeAlias:
-        return MaterialPageRoute(builder: (_) => const HomeScreen());
+        return MaterialPageRoute(builder: (_) => MainNavigationScreen(key: mainNavigationKey));
       case RouteNames.profile:
         return MaterialPageRoute(builder: (_) => const AccountScreen());
         

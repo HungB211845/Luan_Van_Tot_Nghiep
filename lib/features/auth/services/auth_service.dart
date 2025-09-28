@@ -28,36 +28,14 @@ class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
   final SecureStorageService _secure = SecureStorageService();
 
+  /// Legacy login method - DEPRECATED for security  
+  @Deprecated('Use signInWithEmailAndStore() instead for multi-tenant security')
   Future<AuthResult> signInWithEmail(String email, String password) async {
-    try {
-      final res = await _supabase.auth.signInWithPassword(email: email, password: password);
-      final user = res.user;
-      if (user == null) return AuthResult.failure('Đăng nhập thất bại');
-
-      await _createOrUpdateSession(user);
-      final profile = await getUserProfile(user.id);
-
-      // Set store_id in user metadata for RLS policies
-      if (profile?.storeId != null) {
-        await _updateUserMetadata(user.id, profile!.storeId!);
-      }
-
-      return AuthResult.success(user: user, profile: profile);
-    } on AuthException catch (e) {
-      // Handle common auth errors more friendly
-      if (e.statusCode == 429) {
-        // Try to extract seconds from message
-        final match = RegExp(r"after (\d+) seconds").firstMatch(e.message);
-        final seconds = match != null ? match.group(1) : null;
-        final msg = seconds != null
-            ? 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ${seconds}s.'
-            : 'Bạn thao tác quá nhanh. Vui lòng thử lại sau khoảng 1 phút.';
-        return AuthResult.failure(msg);
-      }
-      return AuthResult.failure(e.message);
-    } catch (e) {
-      return AuthResult.failure(e.toString());
-    }
+    // Force users to use store-aware login
+    throw UnsupportedError(
+      'Direct email/password login is not allowed. '
+      'Use signInWithEmailAndStore(email, password, storeCode) instead for security.'
+    );
   }
 
   /// NEW: Store-aware authentication method
