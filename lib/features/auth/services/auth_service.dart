@@ -55,7 +55,75 @@ class AuthService {
         return AuthResult.failure(msg);
       }
       return AuthResult.failure(e.message);
+    } catch (e) {
+      return AuthResult.failure(e.toString());
+    }
+  }
+
+  /// NEW: Store-aware authentication method
+  Future<AuthResult> signInWithEmailAndStore({
+    required String email, 
+    required String password, 
+    required String storeCode
+  }) async {
+    try {
+      print('🔍 DEBUG: Starting store-aware login for store: $storeCode');
+      
+      // Step 1: Validate store exists and is active
+      // Use RPC function to bypass RLS for store validation
+      final storeValidation = await _supabase.rpc('validate_store_for_login', params: {
+        'store_code_param': storeCode
+      });
+      
+      print('🔍 DEBUG: Store validation response: $storeValidation');
+      
+      if (storeValidation == null || storeValidation['valid'] != true) {
+        return AuthResult.failure('Mã cửa hàng không tồn tại hoặc đã bị vô hiệu hóa');
+      }
+      
+      final storeData = storeValidation['store_data'] as Map<String, dynamic>;
+      print('🔍 DEBUG: Creating Store object from response...');
+      final store = Store.fromJson(storeData);
+      print('🔍 DEBUG: Store created: ${store.storeName}');
+      
+      // Step 2: Authenticate user
+      print('🔍 DEBUG: Authenticating user with email: $email');
+      final res = await _supabase.auth.signInWithPassword(email: email, password: password);
+      final user = res.user;
+      if (user == null) return AuthResult.failure('Email hoặc mật khẩu không đúng');
+      
+      print('🔍 DEBUG: User authenticated: ${user.id}');
+
+      // Step 3: Verify user belongs to the specified store
+      print('🔍 DEBUG: Checking user store membership...');
+      final profileResponse = await _supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .eq('store_id', store.id)
+          .eq('is_active', true)
+          .maybeSingle();
+      
+      print('🔍 DEBUG: Profile query response: $profileResponse');
+      
+      if (profileResponse == null) {
+        // User exists but doesn't belong to this store or is inactive
+        await _supabase.auth.signOut(); // Sign out the authenticated user
+        return AuthResult.failure('Tài khoản này không thuộc cửa hàng "${store.storeName}" hoặc đã bị vô hiệu hóa');
+      }
+
+      print('🔍 DEBUG: Creating UserProfile object from response...');
+      final profile = UserProfile.fromJson(profileResponse);
+      print('🔍 DEBUG: Profile created: ${profile.fullName}');
+
+      // Step 4: Create session and set metadata
+      await _createOrUpdateSession(user);
+      await _updateUserMetadata(user.id, store.id);
+
+      print('🔍 DEBUG: Login successful!');
+      return AuthResult.success(user: user, profile: profile, store: store);
     } on AuthException catch (e) {
+      print('🚨 DEBUG: AuthException: ${e.message}');
       if (e.statusCode == 429) {
         final match = RegExp(r"after (\d+) seconds").firstMatch(e.message);
         final seconds = match != null ? match.group(1) : null;
@@ -64,40 +132,78 @@ class AuthService {
             : 'Bạn thao tác quá nhanh. Vui lòng thử lại sau khoảng 1 phút.';
         return AuthResult.failure(msg);
       } else if (e.statusCode == 400 &&
-          (e.message.toLowerCase().contains('email address') ||
-           e.message.toLowerCase().contains('email_address_invalid'))) {
-        return AuthResult.failure('Email không hợp lệ. Vui lòng kiểm tra định dạng và thử lại.');
-      }
-      // Email provider disabled
-      if (e.statusCode == 400 &&
-          (e.message.toLowerCase().contains('email signups are disabled') ||
-           e.message.toLowerCase().contains('email_provider_disabled'))) {
-        return AuthResult.failure('Đăng ký/đăng nhập bằng Email đang bị tắt trong Supabase. Vui lòng bật Email provider trong Authentication → Sign In/Providers.');
-      }
-      return AuthResult.failure(e.message);
-    } on AuthException catch (e) {
-      if (e.statusCode == 429) {
-        final match = RegExp(r"after (\d+) seconds").firstMatch(e.message);
-        final seconds = match != null ? match.group(1) : null;
-        final msg = seconds != null
-            ? 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ${seconds}s.'
-            : 'Bạn thao tác quá nhanh. Vui lòng thử lại sau khoảng 1 phút.';
-        return AuthResult.failure(msg);
-      } else if (e.statusCode == 400 &&
-          (e.message.toLowerCase().contains('email address') ||
-           e.message.toLowerCase().contains('email_address_invalid'))) {
-        return AuthResult.failure('Email không hợp lệ. Vui lòng kiểm tra định dạng và thử lại.');
-      } else if (e.statusCode == 400 &&
-          (e.message.toLowerCase().contains('email signups are disabled') ||
-           e.message.toLowerCase().contains('email_provider_disabled'))) {
-        return AuthResult.failure('Đăng ký/đăng nhập bằng Email đang bị tắt trong Supabase. Vui lòng bật Email provider trong Authentication → Sign In/Providers.');
-      } else if (e.statusCode == 422 &&
-          e.message.toLowerCase().contains('user already registered')) {
-        return AuthResult.failure('Email đã được đăng ký. Vui lòng đăng nhập hoặc dùng chức năng Quên mật khẩu.');
+          (e.message.toLowerCase().contains('invalid_credentials') ||
+           e.message.toLowerCase().contains('invalid login'))) {
+        return AuthResult.failure('Email hoặc mật khẩu không đúng');
       }
       return AuthResult.failure(e.message);
     } catch (e) {
-      return AuthResult.failure(e.toString());
+      print('🚨 DEBUG: General Exception: $e');
+      print('🚨 DEBUG: Exception type: ${e.runtimeType}');
+      
+      // If store validation fails due to RLS, try direct approach
+      if (e.toString().contains('permission denied') || e.toString().contains('RLS')) {
+        print('🔍 DEBUG: RLS issue detected, trying fallback approach...');
+        return _signInWithEmailAndStoreFallback(email, password, storeCode);
+      }
+      
+      return AuthResult.failure('Lỗi đăng nhập: ${e.toString()}');
+    }
+  }
+
+  /// Fallback method for when RLS blocks store validation
+  Future<AuthResult> _signInWithEmailAndStoreFallback(
+    String email, 
+    String password, 
+    String storeCode
+  ) async {
+    try {
+      print('🔍 DEBUG: Using fallback authentication method');
+      
+      // Step 1: Authenticate user first
+      final res = await _supabase.auth.signInWithPassword(email: email, password: password);
+      final user = res.user;
+      if (user == null) return AuthResult.failure('Email hoặc mật khẩu không đúng');
+      
+      print('🔍 DEBUG: User authenticated: ${user.id}');
+
+      // Step 2: Get user profile (now we have RLS context)
+      final profileResponse = await _supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .eq('is_active', true)
+          .single();
+      
+      print('🔍 DEBUG: Profile found: ${profileResponse}');
+      final profile = UserProfile.fromJson(profileResponse);
+
+      // Step 3: Get store info and validate store code
+      final storeResponse = await _supabase
+          .from('stores')
+          .select('*')
+          .eq('id', profile.storeId)
+          .eq('is_active', true)
+          .single();
+      
+      print('🔍 DEBUG: Store found: ${storeResponse}');
+      final store = Store.fromJson(storeResponse);
+      
+      // Step 4: Validate store code matches
+      if (store.storeCode.toLowerCase() != storeCode.toLowerCase()) {
+        await _supabase.auth.signOut(); // Sign out the authenticated user
+        return AuthResult.failure('Mã cửa hàng không khớp với tài khoản này');
+      }
+
+      // Step 5: Create session and set metadata
+      await _createOrUpdateSession(user);
+      await _updateUserMetadata(user.id, store.id);
+
+      print('🔍 DEBUG: Fallback login successful!');
+      return AuthResult.success(user: user, profile: profile, store: store);
+    } catch (e) {
+      print('🚨 DEBUG: Fallback method also failed: $e');
+      return AuthResult.failure('Không thể xác thực với cửa hàng này: ${e.toString()}');
     }
   }
 

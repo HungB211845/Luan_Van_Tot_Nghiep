@@ -27,8 +27,8 @@ void _setupAuthStateListener() {
 
     if (user != null) {
       // User logged in - get store_id from metadata
-      String? storeId = user.appMetadata?['store_id'] as String?;
-      storeId ??= user.userMetadata?['store_id'] as String?;
+      String? storeId = user.appMetadata?['store_id']?.toString();
+      storeId ??= user.userMetadata?['store_id']?.toString();
 
       if (storeId != null) {
         BaseService.setCurrentUserStoreId(storeId);

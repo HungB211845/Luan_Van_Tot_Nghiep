@@ -14,6 +14,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _storeCodeController = TextEditingController(); // ADD: Store code field
   final _formKey = GlobalKey<FormState>();
   bool _obscure = true;
   bool _rememberMe = false;
@@ -70,8 +71,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final ok = await context.read<AuthProvider>()
-        .signIn(_emailController.text.trim(), _passwordController.text);
+    final ok = await context.read<AuthProvider>().signInWithStore(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      storeCode: _storeCodeController.text.trim(), // ADD: Store code validation
+    );
     if (!mounted) return;
     if (ok) {
       // handle remember me
@@ -146,6 +150,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 28),
+
+                // Store Code
+                _RoundedField(
+                  controller: _storeCodeController,
+                  hint: 'Mã cửa hàng (ví dụ: ABC123)',
+                  keyboardType: TextInputType.text,
+                  prefixIcon: Icons.store_outlined,
+                  validator: (v) => (v==null||v.isEmpty||v.length<3) ? 'Mã cửa hàng không hợp lệ' : null,
+                ),
+                const SizedBox(height: 14),
 
                 // Email
                 _RoundedField(

@@ -52,20 +52,20 @@ class UserProfile {
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
-      id: json['id'] as String,
-      storeId: json['store_id'] as String,
-      fullName: json['full_name'] as String? ?? '',
-      phone: json['phone'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
-      role: _roleFromString(json['role'] as String?),
+      id: json['id']?.toString() ?? '',
+      storeId: json['store_id']?.toString() ?? '',
+      fullName: json['full_name']?.toString() ?? '',
+      phone: json['phone']?.toString(),
+      avatarUrl: json['avatar_url']?.toString(),
+      role: _roleFromString(json['role']?.toString()),
       permissions: (json['permissions'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{},
-      googleId: json['google_id'] as String?,
-      facebookId: json['facebook_id'] as String?,
-      zaloId: json['zalo_id'] as String?,
+      googleId: json['google_id']?.toString(),
+      facebookId: json['facebook_id']?.toString(),
+      zaloId: json['zalo_id']?.toString(),
       isActive: (json['is_active'] as bool?) ?? true,
       lastLoginAt: json['last_login_at'] != null ? DateTime.parse(json['last_login_at']) : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : DateTime.now(),
     );
   }
 

@@ -40,20 +40,20 @@ class Store {
 
   factory Store.fromJson(Map<String, dynamic> json) {
     return Store(
-      id: json['id'] as String,
-      storeCode: json['store_code'] as String,
-      storeName: json['store_name'] as String,
-      ownerName: json['owner_name'] as String,
-      phone: json['phone'] as String?,
-      email: json['email'] as String?,
-      address: json['address'] as String?,
-      businessLicense: json['business_license'] as String?,
-      taxCode: json['tax_code'] as String?,
-      subscriptionType: _subscriptionTypeFromString(json['subscription_type'] as String?),
+      id: json['id']?.toString() ?? '',
+      storeCode: json['store_code']?.toString() ?? '',
+      storeName: json['store_name']?.toString() ?? '',
+      ownerName: json['owner_name']?.toString() ?? '',
+      phone: json['phone']?.toString(),
+      email: json['email']?.toString(),
+      address: json['address']?.toString(),
+      businessLicense: json['business_license']?.toString(),
+      taxCode: json['tax_code']?.toString(),
+      subscriptionType: _subscriptionTypeFromString(json['subscription_type']?.toString()),
       subscriptionExpiresAt: json['subscription_expires_at'] != null ? DateTime.parse(json['subscription_expires_at']) : null,
       isActive: (json['is_active'] as bool?) ?? true,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : DateTime.now(),
     );
   }
 

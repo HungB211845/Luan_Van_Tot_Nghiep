@@ -456,11 +456,13 @@ class ProductService extends BaseService {
   /// Check if active ingredient is banned
   Future<bool> checkBannedSubstance(String activeIngredient) async {
     try {
-      // Direct check since we only have ingredient name
-      final bannedList = await _supabase
+      // FIXED: Use addStoreFilter for proper store isolation
+      final bannedList = await addStoreFilter(
+        _supabase
           .from('banned_substances')
           .select('active_ingredient_name')
-          .eq('is_active', true);
+          .eq('is_active', true)
+      );
 
       return bannedList.any((item) =>
           item['active_ingredient_name'].toString().toLowerCase() ==
@@ -792,10 +794,13 @@ class ProductService extends BaseService {
   /// Lấy danh sách banned substances
   Future<List<BannedSubstance>> getBannedSubstances() async {
     try {
-      final response = await _supabase
+      // FIXED: Use addStoreFilter for proper store isolation
+      final response = await addStoreFilter(
+        _supabase
           .from('banned_substances')
           .select('*')
           .eq('is_active', true)
+      )
           .order('banned_date', ascending: false);
 
       return (response as List)
@@ -809,9 +814,11 @@ class ProductService extends BaseService {
   /// Thêm banned substance mới
   Future<BannedSubstance> addBannedSubstance(BannedSubstance substance) async {
     try {
+      ensureAuthenticated();
+      // FIXED: Use addStoreId for proper store context
       final response = await _supabase
           .from('banned_substances')
-          .insert(substance.toJson())
+          .insert(addStoreId(substance.toJson()))
           .select()
           .single();
 
