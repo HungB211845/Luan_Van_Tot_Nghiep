@@ -1,0 +1,466 @@
+\documentclass[13pt, a4paper]{report}
+
+% --- PREAMBLE (PHẦN KHAI BÁO KỸ THUẬT) ---
+\usepackage[a4paper, top=2cm, bottom=2cm, left=3cm, right=2cm, headheight=1.27cm, footskip=1.27cm]{geometry}
+\usepackage[utf8]{vietnam}
+\usepackage{times}
+\usepackage{setspace}
+\setstretch{1.2}
+\setlength{\parskip}{6pt}
+\usepackage{indentfirst}
+\setlength{\parindent}{1.25cm}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage[hidelinks]{hyperref}
+\usepackage{tocloft}
+\usepackage{fancyhdr}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usepackage{forloop}
+\usepackage{dashrule}
+\usepackage{tabularx}
+\usepackage[table]{xcolor}
+
+% --- ĐỊNH DẠNG HEADER/FOOTER ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\fontsize{13}{15}\selectfont\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% --- ĐỊNH DẠNG TIÊU ĐỀ & MỤC LỤC ---
+\usepackage{titlesec}
+\setcounter{tocdepth}{2}
+
+% Định dạng cho CHƯƠNG, SECTION, SUBSECTION
+\titleformat{\chapter}[display]
+  {\normalfont\fontsize{14}{16}\bfseries\centering}{\chaptertitlename\ \thechapter}{10pt}{\MakeUppercase}
+\titleformat{name=\chapter,numberless}[display]
+  {\normalfont\fontsize{14}{16}\bfseries\centering}{}{0pt}{\MakeUppercase}
+\titleformat{\section}
+  {\normalfont\fontsize{13}{15}\bfseries}{\thesection}{1em}{\MakeUppercase}
+\titleformat{\subsection}
+  {\normalfont\fontsize{13}{15}\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalfont\fontsize{13}{15}\itshape}{\thesubsubsection}{1em}{}
+  
+\titlespacing*{\chapter}{0pt}{0pt}{20pt}
+
+% TÙY CHỈNH MỤC LỤC
+\renewcommand{\cftchapfont}{\normalfont\bfseries}
+\renewcommand{\cftsecfont}{\normalfont}
+\renewcommand{\cftsubsecfont}{\normalfont}
+\renewcommand{\cftchappagefont}{\normalfont\bfseries}
+
+% --- LỆNH TỰ TẠO (ĐÃ SỬA LỖI CHƯƠNG 0) ---
+\newcommand{\newpartchapter}[2]{
+    \clearpage
+    \refstepcounter{chapter} % TĂNG BỘ ĐẾM LÊN TRƯỚC KHI IN
+    \phantomsection
+    \addcontentsline{toc}{chapter}{\bfseries\MakeUppercase{#1}}
+    \addcontentsline{toc}{chapter}{\hspace{1.5em}\chaptername\ \thechapter: #2}
+    \begin{center}
+        \normalfont\fontsize{14}{16}\bfseries\MakeUppercase{#1}\par
+        \vspace{1.5cm}
+        \normalfont\fontsize{14}{16}\bfseries\MakeUppercase{\chaptername\ \thechapter: #2}\par
+    \end{center}
+    \vspace{1cm}
+}
+
+
+\begin{document}
+
+% --- TRANG BÌA VÀ CÁC TRANG THỦ TỤC ---
+
+
+
+% --- TRANG BÌA CHÍNH (KHÔNG KHUNG) ---
+\begin{titlepage}
+    \thispagestyle{empty}
+    \centering
+    {\fontsize{13}{15}\selectfont BỘ GIÁO DỤC VÀ ĐÀO TẠO\par}
+    {\fontsize{13}{15}\selectfont ĐẠI HỌC CẦN THƠ\par}
+    \vspace{0.2cm}
+    {\fontsize{14}{16}\bfseries TRƯỜNG CÔNG NGHỆ THÔNG TIN \& TRUYỀN THÔNG\par}
+    
+    \vspace{1.5cm}
+    \includegraphics[width=4cm]{ctu.png} % Đảm bảo có file ctu.png trong thư mục
+    \vspace{1.5cm}
+    
+    {\fontsize{14}{16}\bfseries LUẬN VĂN TỐT NGHIỆP ĐẠI HỌC\par}
+    \vspace{0.5cm}
+    {\fontsize{13}{15}\selectfont NGÀNH CÔNG NGHỆ THÔNG TIN\par}
+    
+    \vspace{2.5cm}
+    {\fontsize{13}{15}\selectfont ĐỀ TÀI:\par}
+    \vspace{0.5cm}
+    {\fontsize{18}{22}\bfseries\MakeUppercase{Xây dựng nền tảng SaaS quản lý bán hàng vật tư nông nghiệp (AgriPOS)}\par}
+    
+    \vspace{3cm}
+    
+    \begin{minipage}[t]{0.45\textwidth}
+        \raggedright
+        \fontsize{13}{15}\selectfont \textbf{Giảng viên hướng dẫn:} \\
+        TS. Trần Công Án
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.45\textwidth}
+        \raggedleft
+        \fontsize{13}{15}\selectfont \textbf{Sinh viên thực hiện:} \\
+        Phạm Gia Hưng \\
+        MSSV: B2111845 \\
+        Khóa: 47
+    \end{minipage}
+
+    \vfill
+    {\fontsize{13}{15}\selectfont Cần Thơ - 12/2025\par}
+\end{titlepage}
+
+
+
+% --- TRANG PHỤ BÌA (CÓ KHUNG, PHIÊN BẢN SỬA LỖI CUỐI CÙNG) ---
+\clearpage
+\begin{titlepage}
+    \thispagestyle{empty}
+    % BẮT BUỘC PHẢI CÓ 2 GÓI NÀY Ở ĐẦU FILE .TEX CỦA MÀY
+    % \usepackage{tikz}
+    % \usetikzlibrary{calc}
+    \begin{tikzpicture}[remember picture, overlay]
+        \draw[line width=1.5pt] ($(current page.north west)+(1.5cm,-1.5cm)$) rectangle ($(current page.south east)+(-1.5cm,1.5cm)$);
+    \end{tikzpicture}
+    
+    \centering
+    {\fontsize{13}{15}\selectfont BỘ GIÁO DỤC VÀ ĐÀO TẠO\par}
+    {\fontsize{13}{15}\selectfont ĐẠI HỌC CẦN THƠ\par}
+    \vspace{0.2cm}
+    {\fontsize{14}{16}\bfseries TRƯỜNG CÔNG NGHỆ THÔNG TIN \& TRUYỀN THÔNG\par}
+    {\fontsize{14}{16}\bfseries KHOA CÔNG NGHỆ THÔNG TIN\par}
+    
+    \vfill % Tự động căn chỉnh khoảng trống
+    
+    \includegraphics[width=4cm]{ctu.png}
+    
+    \vfill % Tự động căn chỉnh khoảng trống
+    
+    {\fontsize{14}{16}\bfseries LUẬN VĂN TỐT NGHIỆP ĐẠI HỌC\par}
+    \vspace{0.5cm}
+    {\fontsize{13}{15}\selectfont NGÀNH CÔNG NGHỆ THÔNG TIN\par}
+    
+    \vspace{1cm}
+    {\fontsize{13}{15}\selectfont ĐỀ TÀI:\par}
+    \vspace{0.5cm}
+    {\fontsize{18}{22}\bfseries\MakeUppercase{Xây dựng nền tảng SaaS quản lý bán hàng vật tư nông nghiệp (AgriPOS)}\par}
+    \vspace{0.5cm}
+    {\fontsize{13}{15}\selectfont (Building a SaaS platform for agricultural supply management (AgriPOS))\par}
+    
+    \vfill % Tự động căn chỉnh khoảng trống
+    
+    % Dùng minipage để không bị lỗi và căn chỉnh tốt hơn
+    \noindent
+    \begin{minipage}{\textwidth}
+        \begin{tabular}{p{0.5\textwidth} p{0.5\textwidth}}
+            \fontsize{13}{15}\selectfont \raggedright \textbf{Giáo viên hướng dẫn:} \par TS. Trần Công Án 
+            & 
+            \fontsize{13}{15}\selectfont \raggedright \textbf{Sinh viên thực hiện:} \par Tên: Phạm Gia Hưng \par MSSV: B2111845 \par Khóa: 47 \\
+        \end{tabular}
+    \end{minipage}
+
+    \vfill % Đẩy Cần Thơ xuống cuối
+    
+    {\fontsize{13}{15}\selectfont Cần Thơ - 04/2025\par}
+    \vspace{1cm} % Thêm một khoảng trống nhỏ ở dưới cùng
+\end{titlepage}
+
+
+% trang xác nhận chỉnh sửa của hội đồng
+
+% --- TRANG XÁC NHẬN CỦA HỘI ĐỒNG (PHIÊN BẢN SỬA LỖI CUỐI CÙNG) ---
+\clearpage
+\thispagestyle{empty}
+
+\begin{center}
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \fontsize{13}{15}\selectfont TRƯỜNG ĐẠI HỌC CẦN THƠ \\
+        \textbf{TRƯỜNG CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG} \\
+        \rule{0.8\textwidth}{0.4pt}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \fontsize{13}{15}\selectfont \textbf{CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM} \\
+        \textbf{Độc lập – Tự do – Hạnh phúc} \\
+        \rule{0.8\textwidth}{0.4pt}
+    \end{minipage}
+\end{center}
+
+\vfill % Tự động căn chỉnh khoảng trống
+
+\begin{center}
+    {\fontsize{14}{16}\bfseries XÁC NHẬN CHỈNH SỬA LUẬN VĂN \\ THEO YÊU CẦU CỦA HỘI ĐỒNG}
+\end{center}
+
+\vfill % Tự động căn chỉnh khoảng trống
+
+\fontsize{13}{15}\selectfont
+\setlength{\parindent}{0pt} % Tắt thụt lề cho các đoạn văn bản dưới đây
+
+\noindent Tên luận văn (tiếng Việt): \textbf{XÂY DỰNG NỀN TẢNG SAAS QUẢN LÝ BÁN HÀNG VẬT TƯ NÔNG NGHIỆP (AGRIPOS)}
+\par\vspace{0.5cm}
+\noindent (tiếng Anh): \textbf{Building a SaaS platform for agricultural supply management (AgriPOS)}
+\par\vspace{1cm}
+\noindent Họ tên sinh viên: \textbf{PHẠM GIA HƯNG}
+\par
+\noindent MASV: \textbf{B2111845} \hspace{3cm} Mã lớp: \textbf{DI21V7A2}
+\par\vspace{1cm}
+\noindent Đã báo cáo tại hội đồng ngành: \textbf{Công nghệ Thông tin}
+\par
+\noindent Ngày báo cáo: \textbf{.../.../2025}
+\par\vspace{1cm}
+\noindent Luận văn đã được chỉnh sửa theo góp ý của hội đồng.
+
+\vfill % Tự động căn chỉnh khoảng trống
+
+\noindent\hfill % Đẩy khối chữ ký sang phải
+\begin{minipage}{0.6\textwidth}
+    \centering
+    Cần Thơ, ngày \hspace{0.7cm} tháng \hspace{0.7cm} năm 2025 \\[1cm]
+    \textbf{Giáo viên hướng dẫn} \\[3cm]
+    (ký và ghi rõ họ tên)
+\end{minipage}
+\hspace{1.5cm} % Giữ một khoảng cách nhỏ với lề phải
+
+\vfill % Dùng vfill ở cuối để cân đối
+
+% Lời cảm ơn
+\chapter*{LỜI CẢM ƠN}
+\addcontentsline{toc}{chapter}{LỜI CẢM ƠN}
+    Nội dung lời cảm ơn...
+
+
+% --- CÁC TRANG NHẬN XÉT ---
+
+% --- CÁC TRANG NHẬN XÉT (PHIÊN BẢN SỬA LỖI TRÀN TRANG CUỐI CÙNG) ---
+\clearpage
+\begin{center}
+    \vspace*{1cm} % Khoảng cách từ lề trên xuống
+    {\fontsize{14}{16}\bfseries\MakeUppercase{Nhận xét của Giảng viên hướng dẫn}}
+    \par\vspace{1.5cm}
+\end{center}
+
+% Lệnh leaders kết hợp với \hdashrule để vừa đẹp vừa không tràn trang
+% Yêu cầu gói: \usepackage{dashrule}
+\begingroup
+\offinterlineskip % Tắt dãn dòng tự động để kiểm soát khoảng cách chính xác
+\par
+% Lệnh này sẽ lặp lại một vbox (chứa 1 dòng chấm và khoảng cách) để lấp đầy trang
+\cleaders\vbox{\hbox to \linewidth{\hdashrule{\linewidth}{0.5pt}{2pt 2pt}}\kern 10pt}\vfill
+\par
+\endgroup
+
+% Khối chữ ký (sẽ nằm ở cuối trang)
+\noindent\hfill
+\begin{minipage}{0.6\textwidth}
+    \centering
+    \fontsize{13}{15}\selectfont
+    Cần Thơ, ngày \hspace{0.7cm} tháng \hspace{0.7cm} năm 2025 \\[1.5cm]
+    (Chữ ký của Giảng Viên)
+\end{minipage}
+\hspace{1cm} % Khoảng cách nhỏ với lề phải
+\vspace*{1cm} % Khoảng cách tới lề dưới
+
+
+% --- TRANG NHẬN XÉT CỦA GIẢNG VIÊN PHẢN BIỆN ---
+\clearpage
+\begin{center}
+    \vspace*{1cm}
+    {\fontsize{14}{16}\bfseries\MakeUppercase{Nhận xét của Giảng viên phản biện}}
+    \par\vspace{1.5cm}
+\end{center}
+
+% Dùng lại lệnh leaders đã được sửa lỗi
+\begingroup
+\offinterlineskip
+\par
+\cleaders\vbox{\hbox to \linewidth{\hdashrule{\linewidth}{0.5pt}{2pt 2pt}}\kern 10pt}\vfill
+\par
+\endgroup
+
+% Khối chữ ký
+\noindent\hfill
+\begin{minipage}{0.6\textwidth}
+    \centering
+    \fontsize{13}{15}\selectfont
+    Cần Thơ, ngày \hspace{0.7cm} tháng \hspace{0.7cm} năm 2025 \\[1.5cm]
+    (Chữ ký của Giảng Viên)
+\end{minipage}
+\hspace{1cm}
+\vspace*{1cm}
+% --- CÁC TRANG NHẬN XÉT ---
+
+
+
+% --- PHẦN ĐẦU LUẬN VĂN (SỐ LA MÃ) ---
+\clearpage
+\pagenumbering{roman}
+
+
+
+
+
+% ... (Các trang khác như ABSTRACT, DANH MỤC...)
+
+% Mục lục
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{MỤC LỤC}
+\tableofcontents
+% Mục lục
+
+
+
+% DANH MỤC HÌNH ẢNH 
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{DANH MỤC HÌNH }
+\listoffigures % << LỆNH NÀY SẼ TỰ VẼ RA DANH MỤC HÌNH
+ 
+% DANH MỤC HÌNH ẢNH 
+
+
+% DANH MỤC BẢNG
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{DANH MỤC BẢNG}
+\listoftables % << LỆNH NÀY SẼ TỰ VẼ RA DANH MỤC BẢNG
+
+% DANH MỤC BẢNG
+ 
+
+
+% tóm tắt
+
+\clearpage
+\chapter*{TÓM TẮT}
+\addcontentsline{toc}{chapter}{TÓM TẮT}
+Luận văn này trình bày quá trình phân tích, thiết kế và triển khai AgriPOS, một nền tảng Phần mềm như một dịch vụ (SaaS) đa người thuê được xây dựng chuyên biệt cho ngành vật tư nông nghiệp. Đối mặt với những thách thức trong công tác quản lý thủ công tại các doanh nghiệp và hộ kinh doanh vừa và nhỏ, hệ thống được phát triển nhằm mục tiêu số hóa toàn diện các quy trình nghiệp vụ, từ quản lý chuỗi cung ứng, kiểm soát tồn kho, đến các giao dịch tại điểm bán hàng.
+
+Về mặt kỹ thuật, dự án được xây dựng trên nền tảng Flutter cho ứng dụng client và Supabase (PostgreSQL) cho backend, tuân thủ nghiêm ngặt theo các nguyên tắc của Feature-Driven Clean Architecture và mô hình MVVM-C. Trọng tâm của luận văn là việc thiết kế và hiện thực hóa một kiến trúc đa người thuê (Multi-Tenant Architecture) vững chắc, đảm bảo sự cách ly dữ liệu tuyệt đối giữa các cửa hàng thông qua chính sách Bảo mật cấp độ hàng (Row Level Security - RLS) ở tầng cơ sở dữ liệu.
+
+Các chức năng chính đã được triển khai bao gồm: hệ thống quản lý Đơn Nhập Hàng (Purchase Order) end-to-end; quản lý tồn kho chi tiết theo từng lô hàng (Product Batches) với nguyên tắc Nhập trước, xuất trước (FIFO) và theo dõi hạn sử dụng; cơ chế định giá linh hoạt theo mùa vụ (Seasonal Prices); và một hệ thống Bán hàng tại quầy (POS) tích hợp đầy đủ. Cấu trúc dữ liệu sản phẩm tận dụng kiểu dữ liệu JSONB của PostgreSQL để đạt được sự linh hoạt trong việc mở rộng thuộc tính mà không cần thay đổi lược đồ. Hiệu năng hệ thống được tối ưu hóa thông qua các chiến lược đánh chỉ mục (Database Indexing), phân trang (Pagination), và sử dụng các thủ tục gọi từ xa (RPC) để xử lý các tác vụ phức tạp ở phía server.
+
+Kết quả của đề tài là một nền tảng ERP chuyên ngành (Vertical ERP) sẵn sàng cho vận hành thực tế, không chỉ đáp ứng các yêu cầu nghiệp vụ đặc thù mà còn đảm bảo các tiêu chí về tính bảo mật, khả năng mở rộng và dễ dàng bảo trì trong tương lai.
+
+% tóm tắt
+
+
+% ABSTRACT
+\clearpage
+\chapter*{ABSTRACT}
+\addcontentsline{toc}{chapter}{ABSTRACT}
+This thesis details the analysis, design, and implementation of AgriPOS, a multi-tenant Software as a Service (SaaS) platform architected specifically for the agricultural supply industry. Addressing the challenges inherent in the manual management practices of small and medium-sized enterprises, the system aims to comprehensively digitize core business processes, from supply chain management and inventory control to point-of-sale transactions.
+
+Technically, the project is built upon a Flutter-based client and a Supabase (PostgreSQL) backend, strictly adhering to the principles of Feature-Driven Clean Architecture and the Model-View-ViewModel-Coordinator (MVVM-C) pattern. A central focus of this thesis is the design and realization of a robust multi-tenant architecture that guarantees complete data isolation between stores via database-level Row Level Security (RLS) policies.
+
+Key implemented functionalities include: an end-to-end Purchase Order management system; granular, batch-based inventory control enforcing First-In, First-Out (FIFO) principles and expiration date tracking; a dynamic seasonal pricing mechanism; and a fully integrated Point of Sale (POS) system. The product data structure leverages PostgreSQL's JSONB data type to achieve schema flexibility for attribute extension without modification. System performance is optimized through strategic database indexing, pagination, and the use of server-side Remote Procedure Calls (RPCs) for complex operations.
+
+The outcome of this project is a production-ready Vertical Enterprise Resource Planning (ERP) platform that not only meets specific domain requirements but also fulfills critical criteria for security, scalability, and future maintainability.
+
+% ABSTRACT
+
+\clearpage
+\chapter*{DANH MỤC CÁC TỪ VIẾT TẮT}
+\addcontentsline{toc}{chapter}{DANH MỤC CÁC TỪ VIẾT TẮT}
+
+% Định nghĩa màu xám cho header của bảng
+\definecolor{tablegray}{gray}{0.9}
+
+% Dùng tabularx để bảng tự động căn chỉnh theo chiều rộng trang
+\begin{tabularx}{\textwidth}{|c|l|X|}
+    \hline
+    % Dòng tiêu đề với nền xám và chữ đậm
+    \rowcolor{tablegray}
+    \textbf{STT} & \textbf{Ký hiệu} & \textbf{Nguyên nghĩa} \\
+    \hline
+    
+    % --- Các dòng cũ ---
+    1 & AI & Artificial Intelligence (Trí tuệ nhân tạo) \\ \hline
+    2 & API & Application Programming Interface (Giao diện lập trình ứng dụng) \\ \hline
+    3 & UI & User Interface (Giao diện người dùng) \\ \hline
+    4 & UX & User Experience (Trải nghiệm người dùng) \\ \hline
+    5 & DB & Database (Cơ sở dữ liệu) \\ \hline
+    6 & RLS & Row Level Security (Bảo mật cấp độ hàng) \\ \hline
+    7 & SaaS & Software as a Service (Phần mềm như một dịch vụ) \\ \hline
+    8 & ERP & Enterprise Resource Planning (Hoạch định nguồn lực doanh nghiệp) \\ \hline
+    9 & POS & Point of Sale (Điểm bán hàng) \\ \hline
+    10 & MVVM-C & Model-View-ViewModel-Coordinator \\ \hline
+    11 & CRUD & Create, Read, Update, Delete (Các thao tác cơ bản với dữ liệu) \\ \hline
+    12 & CDM & Conceptual Data Model (Mô hình dữ liệu mức quan niệm) \\ \hline
+    13 & PDM & Physical Data Model (Mô hình dữ liệu mức vật lý) \\ \hline
+    14 & JSONB & JSON Binary (Định dạng JSON nhị phân) \\ \hline
+    15 & RPC & Remote Procedure Call (Gọi thủ tục từ xa) \\ \hline
+    16 & JWT & JSON Web Token (Một chuẩn mở để tạo token truy cập) \\ \hline
+    17 & FIFO & First-In, First-Out (Nhập trước, xuất trước) \\ \hline
+    18 & SKU & Stock Keeping Unit (Đơn vị lưu kho) \\ \hline
+    19 & FTS & Full-Text Search (Tìm kiếm toàn văn) \\ \hline
+    20 & SQL & Structured Query Language (Ngôn ngữ truy vấn có cấu trúc) \\ \hline
+    21 & SDK & Software Development Kit (Bộ công cụ phát triển phần mềm) \\ \hline
+    22 & CI/CD & Continuous Integration/Continuous Deployment (Tích hợp và triển khai liên tục) \\ \hline
+
+    % --- PHẦN BỔ SUNG MỚI ---
+    23 & REST & Representational State Transfer (Giao thức chuyển giao trạng thái đại diện) \\ \hline
+    24 & UML & Unified Modeling Language (Ngôn ngữ mô hình hóa thống nhất) \\ \hline
+    25 & MVP & Minimum Viable Product (Sản phẩm khả thi tối thiểu) \\ \hline
+    26 & VSCODE & Visual Studio Code (Trình soạn thảo mã nguồn) \\ \hline
+    
+\end{tabularx}
+%Để thêm một hàng mới, mày chỉ việc copy một dòng cũ, ví dụ dòng số 15, dán nó xuống dưới và sửa lại nội dung. Cấu trúc của một dòng rất đơn giản:
+%Số thứ tự & Ký hiệu & Nguyên nghĩa \\ \hline
+%Trong đó, dấu & dùng để ngăn cách giữa các cột, còn \\ \hline là để xuống dòng và kẻ một đường gạch ngang. Cứ thế mà thêm vào thôi.
+
+% --- PHẦN NỘI DUNG CHÍNH (SỐ Ả RẬP) ---
+\clearpage
+\pagenumbering{arabic}
+%\setcounter{chapter}{1} % Reset bộ đếm chương về 0 trước khi bắt đầu
+ 
+% --- CÁCH DÙNG MỚI, CỰC KỲ ĐƠN GIẢN ---
+
+% Bắt đầu Phần 1 và Chương 1
+\newpartchapter{PHẦN 1: GIỚI THIỆU}{GIỚI THIỆU TỔNG QUAN}
+    \section{ĐẶT VẤN ĐỀ}
+        \subsection{Bài toán, vấn đề đặt ra đối với đề tài}
+        Nội dung...
+        \subsection{Nguyên nhân làm đề tài}
+        Nội dung...
+    \section{LỊCH SỬ GIẢI QUYẾT VẤN ĐỀ}
+    Nội dung...
+    % ... Các section khác của chương 1
+
+% Bắt đầu Phần 2 và Chương 2
+\newpartchapter{PHẦN 2: NỘI DUNG}{ĐẶC TẢ YÊU CẦU}
+    \section{MÔ TẢ ĐỀ BÀI}
+    Nội dung...
+    % ... Các section khác của chương 2
+
+% Bắt đầu Chương 3 (vẫn thuộc Phần 2)
+% LƯU Ý: vì nó cùng một phần, mày chỉ cần dùng \chapter thôi
+\chapter{THIẾT KẾ GIẢI PHÁP}
+    \section{CƠ SỞ LÝ THUYẾT}
+    Nội dung...
+    % ...
+
+% Bắt đầu Phần 3 và Chương 4
+\newpartchapter{PHẦN 3: KẾT LUẬN}{KẾT QUẢ VÀ ĐÁNH GIÁ}
+    \section{KẾT QUẢ ĐẠT ĐƯỢC}
+    Nội dung...
+    \section{HƯỚNG PHÁT TRIỂN}
+    Nội dung...
+
+% --- TÀI LIỆU THAM KHÁO ---
+\clearpage
+\addcontentsline{toc}{chapter}{TÀI LIỆU THAM KHẢO}
+\begin{thebibliography}{99}
+    \bibitem{flutter} Flutter Documentation...
+\end{thebibliography}
+
+\end{document}

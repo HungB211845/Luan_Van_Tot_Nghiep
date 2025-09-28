@@ -1,0 +1,41 @@
+{
+  "latex-workshop.latex.recipes": [
+    {
+      "name": "latexmk 🔄",
+      "tools": ["latexmk"]
+    },
+    {
+      "name": "latexmk Watch 👀",
+      "tools": ["latexmk-watch"]
+    }
+  ],
+  "latex-workshop.latex.tools": [
+    {
+      "name": "latexmk",
+      "command": "latexmk",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-pdf",
+        "%DOC%"
+      ]
+    },
+    {
+      "name": "latexmk-watch",
+      "command": "latexmk",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-pdf",
+        "-pvc",
+        "%DOC%"
+      ]
+    }
+  ],
+  "latex-workshop.view.pdf.viewer": "tab",
+  "latex-workshop.view.pdf.split": "right",
+  "latex-workshop.view.pdf.hand": true,
+  "latex-workshop.latex.autoBuild.run": "onSave"
+}
