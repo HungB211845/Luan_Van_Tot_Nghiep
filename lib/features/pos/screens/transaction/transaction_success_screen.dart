@@ -23,7 +23,9 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProductProvider>().loadTransactionDetails(widget.transactionId);
+      if (mounted) {
+        context.read<ProductProvider>().loadTransactionDetails(widget.transactionId);
+      }
     });
   }
 
@@ -136,10 +138,19 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
                     textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
+                    if (!mounted) return;
+
                     // Ra lệnh làm mới dữ liệu ở background
                     context.read<ProductProvider>().refresh();
-                    // Quay về màn hình đầu tiên trong stack (HomePage)
-                    Navigator.of(context).popUntil((route) => route.isFirst);
+
+                    // Quay về POS screen: pop 2 lần (TransactionSuccess -> Cart -> POS)
+                    final navigator = Navigator.of(context);
+                    if (navigator.canPop()) {
+                      navigator.pop(); // Close TransactionSuccess
+                      if (navigator.canPop()) {
+                        navigator.pop(); // Close Cart, return to POS
+                      }
+                    }
                   },
                   child: const Text('Tạo Giao Dịch Mới'),
                 ),
@@ -155,8 +166,20 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(fontSize: 16, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Expanded(
+          flex: 2,
+          child: Text(label, style: const TextStyle(fontSize: 16, color: Colors.grey)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }

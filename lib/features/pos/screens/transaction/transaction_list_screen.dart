@@ -71,6 +71,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lịch Sử Giao Dịch'),
+        automaticallyImplyLeading: false, // Ẩn nút trở về
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),

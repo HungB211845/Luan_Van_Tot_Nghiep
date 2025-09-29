@@ -53,10 +53,7 @@ class _POSScreenState extends State<POSScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        automaticallyImplyLeading: false, // Ẩn nút trở về vì đã có bottom navigation
         title: const Text('Bán Hàng (POS)'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,

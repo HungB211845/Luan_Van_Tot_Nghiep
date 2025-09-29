@@ -50,9 +50,9 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const StoreSetupScreen());
       // Removed onboarding route (screen not implemented)
       case RouteNames.home:
-        return MaterialPageRoute(builder: (_) => MainNavigationScreen(key: mainNavigationKey));
+        return MaterialPageRoute(builder: (_) => const MainNavigationScreen());
       case RouteNames.homeAlias:
-        return MaterialPageRoute(builder: (_) => MainNavigationScreen(key: mainNavigationKey));
+        return MaterialPageRoute(builder: (_) => const MainNavigationScreen());
       case RouteNames.profile:
         return MaterialPageRoute(builder: (_) => const AccountScreen());
         

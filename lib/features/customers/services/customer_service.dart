@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/base_service.dart';
 import '../models/customer.dart';
@@ -106,6 +107,57 @@ class CustomerService extends BaseService {
           .toList();
     } catch (e) {
       throw Exception('Lỗi sắp xếp danh sách: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getCustomerStatistics(String customerId) async {
+    try {
+      ensureAuthenticated();
+      print('🔍 DEBUG: Getting customer statistics for customer: $customerId, store: $currentStoreId');
+
+      final response = await _supabase.rpc(
+        'get_customer_statistics',
+        params: {
+          'p_customer_id': customerId,
+          'p_store_id': currentStoreId,
+        },
+      );
+
+      print('📊 DEBUG: RPC response: $response');
+      print('📊 DEBUG: Response type: ${response.runtimeType}');
+
+      if (response == null) {
+        print('⚠️ DEBUG: Null response, returning default values');
+        return {
+          'transaction_count': 0,
+          'total_revenue': 0.0,
+          'outstanding_debt': 0.0,
+        };
+      }
+
+      // Handle both JSON object response and Map response
+      Map<String, dynamic> data;
+      if (response is Map<String, dynamic>) {
+        data = response;
+      } else if (response is String) {
+        // If response is JSON string, parse it
+        data = json.decode(response);
+      } else {
+        print('⚠️ DEBUG: Unexpected response format: $response');
+        data = {};
+      }
+
+      final result = {
+        'transaction_count': data['transaction_count'] ?? 0,
+        'total_revenue': (data['total_revenue'] ?? 0.0).toDouble(),
+        'outstanding_debt': (data['outstanding_debt'] ?? 0.0).toDouble(),
+      };
+
+      print('✅ DEBUG: Returning result: $result');
+      return result;
+    } catch (e) {
+      print('❌ DEBUG: Error getting customer statistics: $e');
+      throw Exception('Lỗi lấy thống kê khách hàng: $e');
     }
   }
 }

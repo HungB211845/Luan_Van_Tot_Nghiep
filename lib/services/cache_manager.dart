@@ -41,8 +41,13 @@ class CacheManager {
   factory CacheManager() => _instance;
   CacheManager._internal();
 
-  // In-memory cache (nhanh nhất)
+  // In-memory cache with LRU eviction (nhanh nhất)
   final Map<String, CacheEntry> _memoryCache = {};
+  final Map<String, DateTime> _accessTimes = {};  // Track access times for LRU
+
+  // Cache size limits
+  static const int _maxMemoryCacheSize = 100;  // Max 100 entries
+  static const int _maxMemorySizeBytes = 5 * 1024 * 1024;  // Max 5MB
   
   // Persistent cache với SharedPreferences
   SharedPreferences? _prefs;
@@ -56,21 +61,31 @@ class CacheManager {
     _prefs ??= await SharedPreferences.getInstance();
   }
 
-  // MEMORY CACHE OPERATIONS
+  // MEMORY CACHE OPERATIONS WITH LRU EVICTION
   void setMemory<T>(String key, T data, {Duration? expiry}) {
+    final now = DateTime.now();
+
+    // Check if we need to evict before adding
+    _evictIfNeeded();
+
     _memoryCache[key] = CacheEntry(
       data: data,
-      timestamp: DateTime.now(),
+      timestamp: now,
       expiry: expiry ?? _defaultExpiry,
     );
+    _accessTimes[key] = now;
   }
 
   T? getMemory<T>(String key) {
     final entry = _memoryCache[key];
     if (entry == null || entry.isExpired) {
       _memoryCache.remove(key);
+      _accessTimes.remove(key);
       return null;
     }
+
+    // Update access time for LRU
+    _accessTimes[key] = DateTime.now();
     return entry.data as T?;
   }
 
@@ -146,7 +161,10 @@ class CacheManager {
   ) async {
     // Thử memory cache trước (nhanh nhất)
     final memoryData = getMemory<T>(key);
-    if (memoryData != null) return memoryData;
+    if (memoryData != null) {
+      _recordCacheHit();
+      return memoryData;
+    }
 
     // Initialize if needed
     await initialize();
@@ -161,6 +179,7 @@ class CacheManager {
         if (!entry.isExpired) {
           // Đưa data từ persistent lên memory cho lần sau
           setMemory(key, entry.data);
+          _recordCacheHit();
           return entry.data;
         } else {
           await _prefs!.remove(key);
@@ -170,12 +189,71 @@ class CacheManager {
       }
     }
 
+    _recordCacheMiss();
     return null;
+  }
+
+  // LRU EVICTION LOGIC
+  void _evictIfNeeded() {
+    // Remove expired entries first
+    _cleanupExpired();
+
+    // If still over limit, remove least recently used
+    if (_memoryCache.length >= _maxMemoryCacheSize) {
+      _evictLRU();
+    }
+
+    // Check memory size (approximate)
+    if (_getApproximateMemorySize() > _maxMemorySizeBytes) {
+      _evictLRU();
+    }
+  }
+
+  void _cleanupExpired() {
+    final now = DateTime.now();
+    final expiredKeys = <String>[];
+
+    _memoryCache.forEach((key, entry) {
+      if (entry.isExpired) {
+        expiredKeys.add(key);
+      }
+    });
+
+    for (final key in expiredKeys) {
+      _memoryCache.remove(key);
+      _accessTimes.remove(key);
+    }
+  }
+
+  void _evictLRU() {
+    if (_accessTimes.isEmpty) return;
+
+    // Find least recently used entry
+    String? lruKey;
+    DateTime? oldestAccess;
+
+    _accessTimes.forEach((key, accessTime) {
+      if (oldestAccess == null || accessTime.isBefore(oldestAccess!)) {
+        oldestAccess = accessTime;
+        lruKey = key;
+      }
+    });
+
+    if (lruKey != null) {
+      _memoryCache.remove(lruKey!);
+      _accessTimes.remove(lruKey!);
+    }
+  }
+
+  int _getApproximateMemorySize() {
+    // Rough estimation: each entry ~1KB average
+    return _memoryCache.length * 1024;
   }
 
   // CACHE INVALIDATION
   void invalidateMemory(String key) {
     _memoryCache.remove(key);
+    _accessTimes.remove(key);
   }
 
   Future<void> invalidatePersistent(String key) async {
@@ -191,6 +269,7 @@ class CacheManager {
   // CLEAR ALL CACHE
   void clearMemory() {
     _memoryCache.clear();
+    _accessTimes.clear();
   }
 
   Future<void> clearPersistent() async {
@@ -211,19 +290,44 @@ class CacheManager {
     final keysToRemove = _memoryCache.keys
         .where((key) => key.contains(pattern))
         .toList();
-    
+
     for (final key in keysToRemove) {
       _memoryCache.remove(key);
+      _accessTimes.remove(key);
     }
   }
 
-  // DEBUG INFO
+  // DEBUG INFO WITH LRU STATS
   Map<String, dynamic> getStats() {
+    final expiredCount = _memoryCache.values.where((entry) => entry.isExpired).length;
+    final approximateSize = _getApproximateMemorySize();
+
     return {
       'memory_cache_size': _memoryCache.length,
       'memory_cache_keys': _memoryCache.keys.toList(),
-      'expired_entries': _memoryCache.values.where((entry) => entry.isExpired).length,
+      'expired_entries': expiredCount,
+      'max_cache_size': _maxMemoryCacheSize,
+      'approximate_memory_usage_kb': (approximateSize / 1024).round(),
+      'max_memory_size_mb': (_maxMemorySizeBytes / (1024 * 1024)).round(),
+      'cache_hit_efficiency': _calculateHitRate(),
     };
+  }
+
+  // Cache performance tracking
+  int _cacheHits = 0;
+  int _cacheMisses = 0;
+
+  double _calculateHitRate() {
+    final total = _cacheHits + _cacheMisses;
+    return total > 0 ? (_cacheHits / total * 100) : 0.0;
+  }
+
+  void _recordCacheHit() {
+    _cacheHits++;
+  }
+
+  void _recordCacheMiss() {
+    _cacheMisses++;
   }
 
   // PRELOAD CACHE CHO APP STARTUP

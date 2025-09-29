@@ -3,13 +3,29 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/customer_provider.dart';
 import '../../models/customer.dart';
+import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../shared/utils/formatter.dart';
 
 import 'edit_customer_screen.dart';
+import 'customer_transaction_history_screen.dart';
 
-class CustomerDetailScreen extends StatelessWidget {
+class CustomerDetailScreen extends StatefulWidget {
   final Customer customer;
 
   const CustomerDetailScreen({Key? key, required this.customer}) : super(key: key);
+
+  @override
+  State<CustomerDetailScreen> createState() => _CustomerDetailScreenState();
+}
+
+class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CustomerProvider>().loadCustomerStatistics(widget.customer.id);
+    });
+  }
 
   void _showDeleteDialog(BuildContext context) {
     showDialog(
@@ -25,7 +41,7 @@ class CustomerDetailScreen extends StatelessWidget {
             ],
           ),
           content: Text(
-            'Bạn có chắc chắn muốn xóa khách hàng "${customer.name}"?\n\nHành động này không thể hoàn tác.',
+            'Bạn có chắc chắn muốn xóa khách hàng "${widget.customer.name}"?\n\nHành động này không thể hoàn tác.',
             style: TextStyle(fontSize: 16),
           ),
           actions: [
@@ -38,12 +54,12 @@ class CustomerDetailScreen extends StatelessWidget {
                 Navigator.of(dialogContext).pop(); // Đóng dialog trước
 
                 final success = await Provider.of<CustomerProvider>(context, listen: false)
-                    .deleteCustomer(customer.id);
+                    .deleteCustomer(widget.customer.id);
 
                 if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('✅ Đã xóa khách hàng "${customer.name}"'),
+                      content: Text('✅ Đã xóa khách hàng "${widget.customer.name}"'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -68,7 +84,7 @@ class CustomerDetailScreen extends StatelessWidget {
   }
 
   Future<void> _callCustomer(BuildContext context) async {
-    if (customer.phone == null) {
+    if (widget.customer.phone == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Khách hàng chưa có số điện thoại'),
@@ -78,7 +94,7 @@ class CustomerDetailScreen extends StatelessWidget {
       return;
     }
 
-    final phoneUrl = Uri.parse('tel:${customer.phone}');
+    final phoneUrl = Uri.parse('tel:${widget.customer.phone}');
 
     try {
       if (await canLaunchUrl(phoneUrl)) {
@@ -102,7 +118,7 @@ class CustomerDetailScreen extends StatelessWidget {
   }
 
   Future<void> _sendMessage(BuildContext context) async {
-    if (customer.phone == null) {
+    if (widget.customer.phone == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Khách hàng chưa có số điện thoại')),
       );
@@ -111,17 +127,17 @@ class CustomerDetailScreen extends StatelessWidget {
 
     // Thử cách này trước
     final message = Uri.encodeComponent(
-      'Xin chào ${customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
+      'Xin chào ${widget.customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
     );
 
-    final smsUrl = Uri.parse('sms:${customer.phone}?body=$message');
+    final smsUrl = Uri.parse('sms:${widget.customer.phone}?body=$message');
 
     try {
       if (await canLaunchUrl(smsUrl)) {
         await launchUrl(smsUrl);
       } else {
         // Fallback: chỉ mở SMS app
-        final basicSmsUrl = Uri.parse('sms:${customer.phone}');
+        final basicSmsUrl = Uri.parse('sms:${widget.customer.phone}');
         await launchUrl(basicSmsUrl);
       }
     } catch (e) {
@@ -132,13 +148,13 @@ class CustomerDetailScreen extends StatelessWidget {
   }
 
   Future<void> _sendDebtReminder(BuildContext context) async {
-    if (customer.phone == null) return;
+    if (widget.customer.phone == null) return;
 
     final message = Uri.encodeComponent(
-      'Xin chào ${customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
+      'Xin chào ${widget.customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
     );
 
-    final smsUrl = Uri.parse('sms:${customer.phone}?body=$message');
+    final smsUrl = Uri.parse('sms:${widget.customer.phone}?body=$message');
 
     try {
       if (await canLaunchUrl(smsUrl)) {
@@ -161,13 +177,24 @@ class CustomerDetailScreen extends StatelessWidget {
     }
   }
 
+  void _navigateToTransactionHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CustomerTransactionHistoryScreen(
+          customer: widget.customer,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: Text(
-          customer.name,
+          widget.customer.name,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.green,
@@ -178,7 +205,7 @@ class CustomerDetailScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => EditCustomerScreen(customer: customer),
+                  builder: (context) => EditCustomerScreen(customer: widget.customer),
                 ),
               );
             },
@@ -245,7 +272,7 @@ class CustomerDetailScreen extends StatelessWidget {
                     ),
                     SizedBox(height: 12),
                     Text(
-                      customer.name,
+                      widget.customer.name,
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -253,10 +280,10 @@ class CustomerDetailScreen extends StatelessWidget {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (customer.note != null) ...[
+                    if (widget.customer.note != null) ...[
                       SizedBox(height: 4),
                       Text(
-                        customer.note!,
+                        widget.customer.note!,
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.white.withOpacity(0.9),
@@ -273,7 +300,7 @@ class CustomerDetailScreen extends StatelessWidget {
             SizedBox(height: 16),
 
             // Quick actions
-            if (customer.phone != null)
+            if (widget.customer.phone != null)
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -351,21 +378,21 @@ class CustomerDetailScreen extends StatelessWidget {
                     SizedBox(height: 16),
 
                     // Số điện thoại
-                    if (customer.phone != null)
+                    if (widget.customer.phone != null)
                       _buildInfoRow(
                         icon: Icons.phone,
                         iconColor: Colors.blue,
                         label: 'Số Điện Thoại',
-                        value: customer.phone!,
+                        value: widget.customer.phone!,
                       ),
 
                     // Địa chỉ
-                    if (customer.address != null)
+                    if (widget.customer.address != null)
                       _buildInfoRow(
                         icon: Icons.location_on,
                         iconColor: Colors.red,
                         label: 'Địa Chỉ',
-                        value: customer.address!,
+                        value: widget.customer.address!,
                         isMultiLine: true,
                       ),
 
@@ -374,7 +401,7 @@ class CustomerDetailScreen extends StatelessWidget {
                       icon: Icons.money,
                       iconColor: Colors.orange,
                       label: 'Hạn Mức Nợ',
-                      value: '${customer.debtLimit.toStringAsFixed(0)} VNĐ',
+                      value: AppFormatter.formatCurrency(widget.customer.debtLimit),
                     ),
 
                     // Lãi suất
@@ -382,7 +409,7 @@ class CustomerDetailScreen extends StatelessWidget {
                       icon: Icons.percent,
                       iconColor: Colors.purple,
                       label: 'Lãi Suất',
-                      value: '${customer.interestRate}% / tháng',
+                      value: '${widget.customer.interestRate}% / tháng',
                     ),
 
                     // Ngày tạo
@@ -390,7 +417,7 @@ class CustomerDetailScreen extends StatelessWidget {
                       icon: Icons.calendar_today,
                       iconColor: Colors.green,
                       label: 'Ngày Tạo',
-                      value: '${customer.createdAt.day}/${customer.createdAt.month}/${customer.createdAt.year}',
+                      value: AppFormatter.formatDate(widget.customer.createdAt),
                     ),
 
                     // Cập nhật cuối
@@ -398,7 +425,7 @@ class CustomerDetailScreen extends StatelessWidget {
                       icon: Icons.update,
                       iconColor: Colors.grey,
                       label: 'Cập Nhật Cuối',
-                      value: '${customer.updatedAt.day}/${customer.updatedAt.month}/${customer.updatedAt.year}',
+                      value: AppFormatter.formatDate(widget.customer.updatedAt),
                       isLast: true,
                     ),
                   ],
@@ -408,77 +435,96 @@ class CustomerDetailScreen extends StatelessWidget {
 
             SizedBox(height: 16),
 
-            // Thống kê (placeholder for future features)
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Thống Kê',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                    SizedBox(height: 16),
+            // Thống kê
+            Consumer<CustomerProvider>(
+              builder: (context, customerProvider, child) {
+                final stats = customerProvider.customerStatistics;
+                final isLoading = customerProvider.loadingStatistics;
 
-                    Row(
+                return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.shopping_cart,
-                            iconColor: Colors.blue,
-                            title: 'Giao Dịch',
-                            value: '0', // TODO: Load from database
-                            subtitle: 'Tổng số lần mua',
+                        Text(
+                          'Thống Kê',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
                           ),
                         ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.money_off,
-                            iconColor: Colors.red,
-                            title: 'Công Nợ',
-                            value: '0 VNĐ', // TODO: Load from database
-                            subtitle: 'Hiện tại',
+                        SizedBox(height: 16),
+
+                        if (isLoading)
+                          Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: LoadingWidget(),
+                            ),
+                          )
+                        else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildStatCard(
+                                  icon: Icons.shopping_cart,
+                                  iconColor: Colors.blue,
+                                  title: 'Giao Dịch',
+                                  value: '${stats?['transaction_count'] ?? 0}',
+                                  subtitle: 'Tổng số lần mua',
+                                  onTap: stats != null && (stats['transaction_count'] ?? 0) > 0
+                                      ? () => _navigateToTransactionHistory()
+                                      : null,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: _buildStatCard(
+                                  icon: Icons.money_off,
+                                  iconColor: Colors.red,
+                                  title: 'Công Nợ',
+                                  value: AppFormatter.formatCurrency(stats?['outstanding_debt']?.toDouble() ?? 0.0),
+                                  subtitle: 'Hiện tại',
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
+
+                          SizedBox(height: 12),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildStatCard(
+                                  icon: Icons.account_balance_wallet,
+                                  iconColor: Colors.green,
+                                  title: 'Doanh Thu',
+                                  value: AppFormatter.formatCurrency(stats?['total_revenue']?.toDouble() ?? 0.0),
+                                  subtitle: 'Tổng mua hàng',
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: _buildStatCard(
+                                  icon: Icons.star,
+                                  iconColor: Colors.orange,
+                                  title: 'Mức Độ',
+                                  value: widget.customer.debtLimit > 3000000 ? 'VIP' : 'Thường',
+                                  subtitle: 'Phân loại',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
-
-                    SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.account_balance_wallet,
-                            iconColor: Colors.green,
-                            title: 'Doanh Thu',
-                            value: '0 VNĐ', // TODO: Load from database
-                            subtitle: 'Tổng mua hàng',
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.star,
-                            iconColor: Colors.orange,
-                            title: 'Mức Độ',
-                            value: customer.debtLimit > 3000000 ? 'VIP' : 'Thường',
-                            subtitle: 'Phân loại',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -543,8 +589,9 @@ class CustomerDetailScreen extends StatelessWidget {
     required String title,
     required String value,
     required String subtitle,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final child = Container(
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey[50],
@@ -581,5 +628,15 @@ class CustomerDetailScreen extends StatelessWidget {
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: child,
+      );
+    }
+
+    return child;
   }
 }

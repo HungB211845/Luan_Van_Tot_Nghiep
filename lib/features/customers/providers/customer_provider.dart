@@ -13,6 +13,8 @@ class CustomerProvider extends ChangeNotifier {
   CustomerStatus _status = CustomerStatus.idle;
   String _errorMessage = '';
   String _searchQuery = '';
+  Map<String, dynamic>? _customerStatistics;
+  bool _loadingStatistics = false;
 
   List<Customer> get customers => _filteredCustomers.isEmpty && _searchQuery.isEmpty
       ? _customers
@@ -22,6 +24,8 @@ class CustomerProvider extends ChangeNotifier {
   String get errorMessage => _errorMessage;
   bool get isLoading => _status == CustomerStatus.loading;
   bool get hasError => _status == CustomerStatus.error;
+  Map<String, dynamic>? get customerStatistics => _customerStatistics;
+  bool get loadingStatistics => _loadingStatistics;
 
   Future<void> loadCustomers() async {
     _setStatus(CustomerStatus.loading);
@@ -154,6 +158,25 @@ class CustomerProvider extends ChangeNotifier {
       _clearError();
     } catch (e) {
       _setError(e.toString());
+    }
+  }
+
+  Future<void> loadCustomerStatistics(String customerId) async {
+    print('🚀 DEBUG: Loading customer statistics for ID: $customerId');
+    _loadingStatistics = true;
+    _customerStatistics = null;
+    notifyListeners();
+
+    try {
+      _customerStatistics = await _customerService.getCustomerStatistics(customerId);
+      print('✅ DEBUG: Statistics loaded successfully: $_customerStatistics');
+      _clearError();
+    } catch (e) {
+      print('❌ DEBUG: Error loading statistics: $e');
+      _setError(e.toString());
+    } finally {
+      _loadingStatistics = false;
+      notifyListeners();
     }
   }
 }

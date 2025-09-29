@@ -62,10 +62,8 @@ class TransactionService extends BaseService {
           .from('transaction_items')
           .insert(itemsData);
 
-      // Update inventory (trừ stock theo FIFO)
-      for (final item in items) {
-        await _reduceInventoryFIFO(item.productId, item.quantity);
-      }
+      // Update inventory using optimized batch FIFO function
+      await _updateInventoryBatchFIFO(items);
 
       // Nếu là giao dịch ghi nợ, tạo bản ghi nợ (sẽ được xử lý sau khi DebtService hoàn thiện)
       // if (paymentMethod == PaymentMethod.DEBT && customer != null) {
@@ -81,56 +79,53 @@ class TransactionService extends BaseService {
     }
   }
 
-  /// Reduce inventory theo FIFO (First In First Out)
-  Future<void> _reduceInventoryFIFO(String productId, int quantityToReduce) async {
-    try {
-      // Lấy batches theo FIFO order
-      final batches = await addStoreFilter(_supabase
-          .from('product_batches')
-          .select('*'))
-          .eq('product_id', productId)
-          .eq('is_available', true)
-          .gt('quantity', 0)
-          .or('expiry_date.is.null,expiry_date.gt.${DateTime.now().toIso8601String().split('T')[0]}')
-          .order('received_date', ascending: true);
-
-      int remainingToReduce = quantityToReduce;
-
-      for (final batchData in batches) {
-        if (remainingToReduce <= 0) break;
-
-        final batch = ProductBatch.fromJson(batchData);
-
-        if (batch.quantity <= remainingToReduce) {
-          // Use up entire batch
-          remainingToReduce -= batch.quantity;
-          await _updateBatchQuantity(batch.id, 0); // Gọi hàm private
-        } else {
-          // Partial use of batch
-          await _updateBatchQuantity(batch.id, batch.quantity - remainingToReduce); // Gọi hàm private
-          remainingToReduce = 0;
-        }
-      }
-
-      if (remainingToReduce > 0) {
-        throw Exception('Không đủ hàng tồn kho (thiếu $remainingToReduce)');
-      }
-    } catch (e) {
-      throw Exception('Lỗi cập nhật tồn kho: $e');
-    }
-  }
-
-  /// Update batch quantity (khi bán hàng) - Di chuyển từ ProductService
-  Future<void> _updateBatchQuantity(String batchId, int newQuantity) async {
+  /// Update inventory using optimized batch FIFO function
+  Future<void> _updateInventoryBatchFIFO(List<TransactionItem> items) async {
     try {
       ensureAuthenticated();
-      await _supabase
-          .from('product_batches')
-          .update({'quantity': newQuantity})
-          .eq('id', batchId)
-          .eq('store_id', currentStoreId!);
+
+      // Start performance tracking
+      final stopwatch = Stopwatch()..start();
+
+      // Prepare items for batch processing
+      final itemsJson = items.map((item) => {
+        'product_id': item.productId,
+        'quantity': item.quantity,
+      }).toList();
+
+      final response = await _supabase.rpc(
+        'update_inventory_fifo_batch',
+        params: {'items_json': itemsJson},
+      );
+
+      stopwatch.stop();
+
+      // Log slow queries for performance monitoring
+      if (stopwatch.elapsedMilliseconds > 100) {
+        await _logSlowQuery(
+          'update_inventory_fifo_batch',
+          stopwatch.elapsedMilliseconds,
+          {'items_count': items.length},
+        );
+      }
+
+      final result = response as Map<String, dynamic>;
+
+      if (result['success'] != true) {
+        throw Exception('Lỗi cập nhật tồn kho: ${result['error']}');
+      }
+
+      // Check for insufficient stock
+      final insufficientStock = result['insufficient_stock'] as List<dynamic>;
+      if (insufficientStock.isNotEmpty) {
+        final shortages = insufficientStock.map((item) {
+          return 'Sản phẩm ${item['product_id']}: thiếu ${item['shortage']} từ ${item['requested_quantity']}';
+        }).join(', ');
+        throw Exception('Không đủ hàng tồn kho: $shortages');
+      }
+
     } catch (e) {
-      throw Exception('Lỗi cập nhật số lượng lô hàng: $e');
+      throw Exception('Lỗi cập nhật tồn kho: $e');
     }
   }
 
@@ -142,12 +137,33 @@ class TransactionService extends BaseService {
     return 'INV$dateStr$timeStr';
   }
 
+  /// Log slow queries for performance monitoring
+  Future<void> _logSlowQuery(
+    String queryType,
+    int executionTimeMs,
+    Map<String, dynamic> queryParams,
+  ) async {
+    try {
+      await _supabase.rpc(
+        'log_slow_query',
+        params: {
+          'p_query_type': queryType,
+          'p_execution_time_ms': executionTimeMs,
+          'p_query_params': queryParams,
+        },
+      );
+    } catch (e) {
+      // Don't throw on logging errors, just print them
+      print('Failed to log slow query: $e');
+    }
+  }
+
   // =====================================================
   // CORE TRANSACTION SEARCH METHOD (NEW)
   // =====================================================
 
-  /// Performs a comprehensive, paginated search for transactions using the `search_transactions` RPC function.
-  /// This is the primary method for fetching transactions.
+  /// Performs a comprehensive, paginated search for transactions using the optimized `search_transactions_with_items` RPC function.
+  /// This is the primary method for fetching transactions with optional transaction items included.
   Future<PaginatedResult<Transaction>> searchTransactions({
     String? searchText,
     DateTime? startDate,
@@ -157,11 +173,15 @@ class TransactionService extends BaseService {
     List<PaymentMethod>? paymentMethods,
     List<String>? customerIds,
     String? debtStatus, // 'paid', 'unpaid', or 'all'
+    bool includeItems = false, // New parameter to include transaction items
     int page = 1,
     int pageSize = 20,
   }) async {
     try {
       ensureAuthenticated();
+
+      // Start performance tracking
+      final stopwatch = Stopwatch()..start();
 
       final params = {
         'p_search_text': searchText,
@@ -172,6 +192,7 @@ class TransactionService extends BaseService {
         'p_payment_methods': paymentMethods?.map((e) => e.value).toList(),
         'p_customer_ids': customerIds,
         'p_debt_status': debtStatus,
+        'p_include_items': includeItems,
         'p_page': page,
         'p_page_size': pageSize,
       };
@@ -180,9 +201,20 @@ class TransactionService extends BaseService {
       params.removeWhere((key, value) => value == null);
 
       final response = await _supabase.rpc(
-        'search_transactions',
+        'search_transactions_with_items',
         params: params,
       );
+
+      stopwatch.stop();
+
+      // Log slow queries for performance monitoring
+      if (stopwatch.elapsedMilliseconds > 100) {
+        await _logSlowQuery(
+          'search_transactions_with_items',
+          stopwatch.elapsedMilliseconds,
+          params,
+        );
+      }
 
       final List<dynamic> data = response as List<dynamic>;
       if (data.isEmpty) {
@@ -314,35 +346,143 @@ class TransactionService extends BaseService {
     }
   }
 
-  /// Lấy transaction items của một transaction
+  /// Lấy transaction items của một transaction (DEPRECATED - use getTransactionWithItems)
+  @deprecated
   Future<List<TransactionItem>> getTransactionItems(String transactionId) async {
+    // Use the legacy method for backward compatibility
     try {
-      final response = await addStoreFilter(_supabase
-          .from('transaction_items')
-          .select('*'))
-          .eq('transaction_id', transactionId);
+      ensureAuthenticated();
 
-      return (response as List)
-          .map((json) => TransactionItem.fromJson(json))
-          .toList();
+      final response = await _supabase
+          .from('transaction_items')
+          .select()
+          .eq('transaction_id', transactionId)
+          .eq('store_id', BaseService.getDefaultStoreId());
+
+      return response.map<TransactionItem>((data) => TransactionItem(
+        id: data['id'],
+        transactionId: data['transaction_id'],
+        productId: data['product_id'],
+        batchId: data['batch_id'],
+        quantity: data['quantity'],
+        priceAtSale: (data['price_at_sale'] as num).toDouble(),
+        subTotal: (data['sub_total'] as num).toDouble(),
+        discountAmount: (data['discount_amount'] as num?)?.toDouble() ?? 0.0,
+        storeId: data['store_id'],
+        createdAt: DateTime.parse(data['created_at']),
+      )).toList();
     } catch (e) {
-      throw Exception('Lỗi lấy chi tiết giao dịch: $e');
+      throw Exception('Lỗi lấy transaction items: $e');
     }
   }
 
-  /// Lấy thông tin một giao dịch theo ID
-Future<Transaction?> getTransactionById(String transactionId) async {
-  try {
-    final response = await addStoreFilter(_supabase
-        .from('transactions')
-        .select())
-        .eq('id', transactionId)
-        .maybeSingle();
-    return response == null ? null : Transaction.fromJson(response);
-  } catch (e) {
-    throw Exception('Lỗi lấy thông tin giao dịch: $e');
+  /// Lấy transaction với items (1 query thay vì 2) - OPTIMIZED
+  Future<Transaction?> getTransactionWithItems(String transactionId) async {
+    try {
+      ensureAuthenticated();
+
+      // Start performance tracking
+      final stopwatch = Stopwatch()..start();
+
+      // Use direct JOIN query for specific transaction ID (most efficient)
+      final response = await addStoreFilter(_supabase
+          .from('transactions')
+          .select('''
+            id, created_at, store_id, customer_id, total_amount,
+            payment_method, is_debt, transaction_date, notes, invoice_number,
+            customers(name),
+            transaction_items(
+              id, product_id, quantity, unit_price, sub_total,
+              products(name, sku)
+            )
+          '''))
+          .eq('id', transactionId)
+          .maybeSingle();
+
+      stopwatch.stop();
+
+      // Log slow queries
+      if (stopwatch.elapsedMilliseconds > 100) {
+        await _logSlowQuery(
+          'get_transaction_with_items',
+          stopwatch.elapsedMilliseconds,
+          {'transaction_id': transactionId},
+        );
+      }
+
+      if (response == null) {
+        return null;
+      }
+
+      // Convert the nested response to Transaction with items
+      return _convertNestedTransactionResponse(response);
+    } catch (e) {
+      throw Exception('Lỗi lấy giao dịch với items: $e');
+    }
   }
-}
+
+  /// Convert nested Supabase response to Transaction with items
+  Transaction _convertNestedTransactionResponse(Map<String, dynamic> response) {
+    // Extract transaction items from nested response
+    final List<TransactionItem> items = [];
+    final transactionItemsData = response['transaction_items'] as List<dynamic>? ?? [];
+
+    for (final itemData in transactionItemsData) {
+      final productData = itemData['products'] as Map<String, dynamic>? ?? {};
+
+      // Create TransactionItem with product info
+      final item = TransactionItem(
+        id: itemData['id'] as String,
+        transactionId: response['id'] as String,
+        productId: itemData['product_id'] as String,
+        batchId: itemData['batch_id'] as String?,
+        quantity: itemData['quantity'] as int,
+        priceAtSale: (itemData['price_at_sale'] as num).toDouble(),
+        subTotal: (itemData['sub_total'] as num).toDouble(),
+        discountAmount: (itemData['discount_amount'] as num?)?.toDouble() ?? 0.0,
+        storeId: response['store_id'] as String,
+        createdAt: DateTime.parse(itemData['created_at'] as String),
+      );
+
+      items.add(item);
+    }
+
+    // Extract customer info
+    final customerData = response['customers'] as Map<String, dynamic>?;
+    final customerName = customerData?['name'] as String?;
+
+    // Create Transaction
+    final transaction = Transaction(
+      id: response['id'] as String,
+      storeId: response['store_id'] as String,
+      customerId: response['customer_id'] as String?,
+      totalAmount: (response['total_amount'] as num).toDouble(),
+      paymentMethod: PaymentMethod.fromString(response['payment_method'] as String),
+      isDebt: response['is_debt'] as bool,
+      transactionDate: DateTime.parse(response['transaction_date'] as String),
+      notes: response['notes'] as String?,
+      invoiceNumber: response['invoice_number'] as String?,
+      createdAt: DateTime.parse(response['created_at'] as String),
+      customerName: customerName,
+    );
+
+    return transaction;
+  }
+
+  /// Lấy thông tin một giao dịch theo ID (DEPRECATED - use getTransactionWithItems for better performance)
+  @deprecated
+  Future<Transaction?> getTransactionById(String transactionId) async {
+    try {
+      final response = await addStoreFilter(_supabase
+          .from('transactions')
+          .select())
+          .eq('id', transactionId)
+          .maybeSingle();
+      return response == null ? null : Transaction.fromJson(response);
+    } catch (e) {
+      throw Exception('Lỗi lấy thông tin giao dịch: $e');
+    }
+  }
 
   @deprecated
   /// Lấy transactions với debt flag

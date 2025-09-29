@@ -19,8 +19,7 @@ import '../../features/pos/providers/transaction_provider.dart';
 import '../../features/customers/providers/customer_provider.dart';
 import '../../core/routing/route_names.dart';
 
-// Global key to control navigation from outside
-final GlobalKey<_MainNavigationScreenState> mainNavigationKey = GlobalKey<_MainNavigationScreenState>();
+// NOTE: Removed global key to fix duplicate GlobalKey issues
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -105,13 +104,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   // Static method to navigate from anywhere in the app
   static void navigateToTab(BuildContext context, String route) {
-    final mainNav = mainNavigationKey.currentState;
-    if (mainNav != null) {
-      mainNav.navigateToFeature(route);
-    } else {
-      // Fallback to normal navigation
-      Navigator.pushNamed(context, route);
-    }
+    // Fallback to normal navigation since we removed global key
+    Navigator.pushNamed(context, route);
   }
   @override
   Widget build(BuildContext context) {
@@ -157,12 +151,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 // Static helper class for navigation
 class MainNavigationHelper {
   static void navigateToTab(BuildContext context, String route) {
-    final mainNav = mainNavigationKey.currentState;
-    if (mainNav != null) {
-      mainNav.navigateToFeature(route);
-    } else {
-      // Fallback to normal navigation
-      Navigator.pushNamed(context, route);
-    }
+    // Fallback to normal navigation since we removed global key
+    Navigator.pushNamed(context, route);
   }
 }

@@ -12,11 +12,12 @@ import '../models/company.dart';
 import '../services/product_service.dart';
 import '../../../shared/models/paginated_result.dart';
 import '../../../shared/services/base_service.dart';
+import '../../../shared/providers/memory_managed_provider.dart';
 
 
 enum ProductStatus { idle, loading, success, error }
 
-class ProductProvider extends ChangeNotifier {
+class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   final ProductService _productService = ProductService();
   final TransactionService _transactionService = TransactionService();
 
@@ -24,12 +25,17 @@ class ProductProvider extends ChangeNotifier {
   // STATE VARIABLES
   // =====================================================
 
-  // Products
+  // Products with memory management
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
   Product? _selectedProduct;
   ProductCategory? _selectedCategory;
   String _searchQuery = '';
+
+  // Constructor
+  ProductProvider() {
+    initializeMemoryManagement();
+  }
 
   // Pagination state
   PaginatedResult<Product>? _paginatedProducts;
@@ -1110,6 +1116,96 @@ class ProductProvider extends ChangeNotifier {
     } catch (e) {
       _setError(e.toString());
     }
+  }
+
+  // =====================================================
+  // MEMORY MANAGEMENT OVERRIDES
+  // =====================================================
+
+  @override
+  void clearNonEssentialData() {
+    // Clear filtered/cached data that can be regenerated
+    _filteredProducts.clear();
+    _searchQuery = '';
+
+    // Clear maps that can be refetched
+    _stockMap = managedMap(_stockMap, maxSize: 100);
+    _currentPrices = managedMap(_currentPrices, maxSize: 100);
+
+    // Clear expired analytics data
+    if (isDataExpired('dashboard_stats')) {
+      _dashboardStats.clear();
+    }
+    if (isDataExpired('expiring_batches')) {
+      _expiringBatches.clear();
+    }
+    if (isDataExpired('low_stock')) {
+      _lowStockProducts.clear();
+    }
+
+    updateItemCount(_calculateTotalItems());
+    notifyListeners();
+  }
+
+  @override
+  void performMemoryOptimization() {
+    // Aggressive memory cleanup
+
+    // Keep only essential products (limit to 500 most recent)
+    _products = managedList(_products, maxSize: 500);
+
+    // Clear all non-essential lists
+    _productBatches = managedList(_productBatches, maxSize: 200);
+    _seasonalPrices = managedList(_seasonalPrices, maxSize: 100);
+    _bannedSubstances = managedList(_bannedSubstances, maxSize: 50);
+
+    // Clear cart if not actively being used
+    // Note: This check is done in the auto-clear timer, so we skip it here
+
+    // Clear transaction data if old
+    if (isDataExpired('active_transaction')) {
+      _activeTransaction = null;
+      _activeTransactionItems.clear();
+    }
+
+    // Force garbage collection hint
+    updateItemCount(_calculateTotalItems());
+
+    if (kDebugMode) {
+      print('ProductProvider: Memory optimization completed. Total items: ${_calculateTotalItems()}');
+    }
+
+    notifyListeners();
+  }
+
+  int _calculateTotalItems() {
+    return _products.length +
+           _filteredProducts.length +
+           _productBatches.length +
+           _seasonalPrices.length +
+           _bannedSubstances.length +
+           _cartItems.length +
+           _stockMap.length +
+           _currentPrices.length +
+           _expiringBatches.length +
+           _lowStockProducts.length;
+  }
+
+  /// Get comprehensive memory statistics
+  Map<String, dynamic> getProviderMemoryStats() {
+    final baseStats = getMemoryStats();
+    return {
+      ...baseStats,
+      'products_count': _products.length,
+      'filtered_products_count': _filteredProducts.length,
+      'batches_count': _productBatches.length,
+      'cart_items_count': _cartItems.length,
+      'stock_map_size': _stockMap.length,
+      'prices_map_size': _currentPrices.length,
+      'expiring_batches_count': _expiringBatches.length,
+      'low_stock_count': _lowStockProducts.length,
+      'total_calculated_items': _calculateTotalItems(),
+    };
   }
 }
 

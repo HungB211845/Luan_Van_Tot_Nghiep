@@ -48,16 +48,11 @@ class ProductService extends BaseService {
           .order(orderField, ascending: ascending)
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
-      // Get total count
-      var countQuery = addStoreFilter(
-        _supabase.from('products_with_details').select('id'),
+      // Get total count using optimized estimated count function
+      final totalCount = await _getEstimatedCount(
+        'products',
+        category: category,
       );
-      if (category != null) {
-        countQuery = countQuery.eq('category', category.toString().split('.').last);
-      }
-      countQuery = countQuery.eq('is_active', true);
-      final countResponse = await countQuery;
-      final totalCount = countResponse.length;
 
       final products = (response as List)
           .map((json) => Product.fromJson(json))
@@ -71,6 +66,88 @@ class ProductService extends BaseService {
       );
     } catch (e) {
       throw Exception('Lỗi lấy danh sách sản phẩm: $e');
+    }
+  }
+
+  /// Get estimated count for better performance on large datasets
+  Future<int> _getEstimatedCount(
+    String tableName, {
+    ProductCategory? category,
+  }) async {
+    try {
+      ensureAuthenticated();
+
+      // Start performance tracking
+      final stopwatch = Stopwatch()..start();
+
+      final result = await _supabase.rpc(
+        'get_estimated_count',
+        params: {
+          'table_name': tableName,
+          'store_id_param': currentStoreId,
+        },
+      );
+
+      stopwatch.stop();
+
+      // Log slow queries for performance monitoring
+      if (stopwatch.elapsedMilliseconds > 50) {
+        await _logSlowQuery(
+          'get_estimated_count',
+          stopwatch.elapsedMilliseconds,
+          {'table_name': tableName, 'category': category?.toString()},
+        );
+      }
+
+      return result as int;
+    } catch (e) {
+      // Fallback to regular count if estimated count fails
+      print('Estimated count failed, using fallback: $e');
+      return await _getFallbackCount(tableName, category: category);
+    }
+  }
+
+  /// Fallback count method when estimated count is not available
+  Future<int> _getFallbackCount(
+    String tableName, {
+    ProductCategory? category,
+  }) async {
+    try {
+      var countQuery = addStoreFilter(
+        _supabase.from('${tableName}_with_details').select('id'),
+      );
+
+      if (category != null) {
+        countQuery = countQuery.eq('category', category.toString().split('.').last);
+      }
+
+      countQuery = countQuery.eq('is_active', true);
+      final countResponse = await countQuery;
+      return countResponse.length;
+    } catch (e) {
+      print('Fallback count failed: $e');
+      return 0;
+    }
+  }
+
+  /// Log slow queries for performance monitoring
+  Future<void> _logSlowQuery(
+    String queryType,
+    int executionTimeMs,
+    Map<String, dynamic> queryParams,
+  ) async {
+    try {
+      await _supabase.rpc(
+        'log_slow_query',
+        params: {
+          'p_query_type': queryType,
+          'p_execution_time_ms': executionTimeMs,
+          'p_query_params': queryParams,
+        },
+      );
+    } catch (e) {
+      // Don't throw on logging errors, just print them
+      print('Failed to log slow query: $e');
     }
   }
 
@@ -163,28 +240,11 @@ class ProductService extends BaseService {
           .order('name', ascending: true)
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
-      // Get total count cho pagination
-      var countQuery = addStoreFilter(_supabase
-          .from('products_with_details')
-          .select('id')
-          .textSearch('search_vector', query, config: 'vietnamese')
-          .eq('is_active', true));
-
-      if (category != null) {
-        countQuery = countQuery.eq('category', category.toString().split('.').last);
-      }
-      if (minPrice != null) {
-        countQuery = countQuery.gte('current_price', minPrice);
-      }
-      if (maxPrice != null) {
-        countQuery = countQuery.lte('current_price', maxPrice);
-      }
-      if (inStock == true) {
-        countQuery = countQuery.gt('available_stock', 0);
-      }
-
-      final countResponse = await countQuery;
-      final totalCount = countResponse.length;
+      // Use estimated count for better performance on large datasets
+      final totalCount = await _getEstimatedCount(
+        'products',
+        category: category,
+      );
 
       final products = (response as List)
           .map((json) => Product.fromJson(json))
@@ -225,16 +285,8 @@ class ProductService extends BaseService {
           .order('name', ascending: true)
           .range(paginationParams.offset, paginationParams.offset + paginationParams.pageSize - 1);
 
-      // Get total count
-      final countResponse = await addStoreFilter(
-        _supabase
-            .from('products_with_details')
-            .select('id')
-            .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
-            .eq('is_active', true),
-      );
-
-      final totalCount = countResponse.length;
+      // Use estimated count for better performance
+      final totalCount = await _getEstimatedCount('products');
 
       final products = (response as List)
           .map((json) => Product.fromJson(json))

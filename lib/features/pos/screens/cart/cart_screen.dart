@@ -18,6 +18,10 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   late POSViewModel _viewModel;
+  final TextEditingController _customerSearchController = TextEditingController();
+  final FocusNode _customerSearchFocus = FocusNode();
+  List<dynamic> _filteredCustomers = [];
+  bool _showCustomerDropdown = false;
 
   @override
   void initState() {
@@ -27,6 +31,22 @@ class _CartScreenState extends State<CartScreen> {
       customerProvider: context.read<CustomerProvider>(),
       transactionProvider: context.read<TransactionProvider>(),
     );
+
+    // Khởi tạo danh sách khách hàng đã lọc
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CustomerProvider>().loadCustomers().then((_) {
+        setState(() {
+          _filteredCustomers = context.read<CustomerProvider>().customers;
+        });
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _customerSearchController.dispose();
+    _customerSearchFocus.dispose();
+    super.dispose();
   }
 
   @override
@@ -49,64 +69,140 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Phần 1: Widget chọn khách hàng
-          _buildCustomerSelector(),
-          const Divider(height: 1),
-          // Phần 2: Danh sách sản phẩm trong giỏ hàng
-          Expanded(
-            child: _buildCartList(),
-          ),
-          // Phần 3: Container cố định - Tổng tiền và nút thanh toán
-          _buildCartSummaryAndCheckout(),
-        ],
+      body: GestureDetector(
+        onTap: _hideCustomerDropdown,
+        child: Column(
+          children: [
+            // Phần 1: Widget chọn khách hàng
+            _buildCustomerSelector(),
+            const Divider(height: 1),
+            // Phần 2: Danh sách sản phẩm trong giỏ hàng
+            Expanded(
+              child: _buildCartList(),
+            ),
+            // Phần 3: Container cố định - Tổng tiền và nút thanh toán
+            _buildCartSummaryAndCheckout(),
+          ],
+        ),
       ),
     );
   }
 
-  // Widget để chọn khách hàng (chuyển từ POSScreen)
+  // Widget tìm kiếm khách hàng thông minh
   Widget _buildCustomerSelector() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
-      child: InkWell(
-        onTap: () => _showCustomerSelectionDialog(),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Search field
+          TextField(
+            controller: _customerSearchController,
+            focusNode: _customerSearchFocus,
+            decoration: InputDecoration(
+              hintText: _viewModel.selectedCustomer != null
+                  ? '${_viewModel.selectedCustomer!.name} - ${_viewModel.selectedCustomer!.phone ?? ""}'
+                  : 'Tìm khách hàng (tên, SĐT, địa chỉ)...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _viewModel.selectedCustomer != null
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        setState(() {
+                          _viewModel.clearCustomerSelection();
+                          _customerSearchController.clear();
+                          _showCustomerDropdown = false;
+                        });
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              filled: _viewModel.selectedCustomer != null,
+              fillColor: _viewModel.selectedCustomer != null
+                  ? Colors.green.withOpacity(0.1)
+                  : null,
+            ),
+            onChanged: _onCustomerSearchChanged,
+            onTap: () {
+              if (_viewModel.selectedCustomer == null) {
+                setState(() {
+                  _showCustomerDropdown = true;
+                });
+              }
+            },
+            readOnly: _viewModel.selectedCustomer != null,
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.person_add, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _viewModel.selectedCustomer?.name ?? '+ Thêm khách hàng',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _viewModel.selectedCustomer != null
-                        ? Colors.black
-                        : Colors.grey[600],
+
+          // Dropdown danh sách khách hàng
+          if (_showCustomerDropdown && _viewModel.selectedCustomer == null)
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
                   ),
-                ),
+                ],
               ),
-              if (_viewModel.selectedCustomer != null)
-                IconButton(
-                  icon: const Icon(Icons.clear, size: 16),
-                  onPressed: () {
-                    setState(() {
-                      _viewModel.clearCustomerSelection();
-                    });
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-            ],
-          ),
-        ),
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: _filteredCustomers.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text('Không tìm thấy khách hàng nào'),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _filteredCustomers.length,
+                      itemBuilder: (context, index) {
+                        final customer = _filteredCustomers[index];
+                        return ListTile(
+                          dense: true,
+                          leading: CircleAvatar(
+                            radius: 16,
+                            child: Text(
+                              customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          title: Text(
+                            customer.name,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (customer.phone != null && customer.phone!.isNotEmpty)
+                                Text(
+                                  customer.phone!,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              if (customer.address != null && customer.address!.isNotEmpty)
+                                Text(
+                                  customer.address!,
+                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                          onTap: () {
+                            setState(() {
+                              _viewModel.selectCustomer(customer);
+                              _customerSearchController.text = '${customer.name} - ${customer.phone ?? ""}';
+                              _showCustomerDropdown = false;
+                            });
+                            _customerSearchFocus.unfocus();
+                          },
+                        );
+                      },
+                    ),
+            ),
+        ],
       ),
     );
   }
@@ -421,55 +517,33 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  // Dialog chọn khách hàng (chuyển từ POSScreen)
-  void _showCustomerSelectionDialog() {
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Chọn khách hàng'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 400,
-            child: Consumer<CustomerProvider>(
-              builder: (context, customerProvider, child) {
-                if (customerProvider.customers.isEmpty) {
-                  return const Center(
-                    child: Text('Không có khách hàng nào'),
-                  );
-                }
+  // Tìm kiếm khách hàng thông minh
+  void _onCustomerSearchChanged(String query) {
+    final customerProvider = context.read<CustomerProvider>();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredCustomers = customerProvider.customers;
+        _showCustomerDropdown = false;
+      } else {
+        _showCustomerDropdown = true;
+        // Tìm kiếm theo tên, số điện thoại và địa chỉ
+        _filteredCustomers = customerProvider.customers.where((customer) {
+          final searchLower = query.toLowerCase();
+          final nameMatch = customer.name.toLowerCase().contains(searchLower);
+          final phoneMatch = customer.phone?.toLowerCase().contains(searchLower) ?? false;
+          final addressMatch = customer.address?.toLowerCase().contains(searchLower) ?? false;
 
-                return ListView.builder(
-                  itemCount: customerProvider.customers.length,
-                  itemBuilder: (context, index) {
-                    final customer = customerProvider.customers[index];
-                    return ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.person),
-                      ),
-                      title: Text(customer.name),
-                      subtitle: Text(customer.phone ?? ''),
-                      onTap: () {
-                        setState(() {
-                          _viewModel.selectCustomer(customer);
-                        });
-                        Navigator.pop(dialogContext);
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Hủy'),
-            ),
-          ],
-        );
-      },
-    );
+          return nameMatch || phoneMatch || addressMatch;
+        }).toList();
+      }
+    });
+  }
+
+  // Ẩn dropdown khi tap ra ngoài
+  void _hideCustomerDropdown() {
+    setState(() {
+      _showCustomerDropdown = false;
+    });
   }
 
   // Hiển thị hộp thoại xác nhận thanh toán
@@ -540,10 +614,13 @@ class _CartScreenState extends State<CartScreen> {
                     );
 
                     if (transactionId != null) {
-                      // Dùng các biến đã ghi lại, rất an toàn
-                      navigator.pushReplacement(
+                      // Dùng push thay vì pushReplacement để có thể quay lại POS
+                      navigator.push(
                         MaterialPageRoute(
-                          builder: (context) => TransactionSuccessScreen(transactionId: transactionId),
+                          builder: (context) => TransactionSuccessScreen(
+                            key: ValueKey('transaction_success_$transactionId'),
+                            transactionId: transactionId,
+                          ),
                         ),
                       );
                     } else {
