@@ -491,7 +491,7 @@ class _ProductPickerDialogState extends State<ProductPickerDialog> {
       _filteredProducts = poProvider.filteredProducts
           .where((product) =>
               product.name.toLowerCase().contains(query.toLowerCase()) ||
-              product.sku.toLowerCase().contains(query.toLowerCase()))
+              (product.sku?.toLowerCase().contains(query.toLowerCase()) ?? false))
           .toList();
     }
     setState(() {});
@@ -576,7 +576,7 @@ class _ProductPickerDialogState extends State<ProductPickerDialog> {
                     final product = products[index];
                     return ListTile(
                       title: Text(product.name),
-                      subtitle: Text(product.sku),
+                      subtitle: Text(product.sku ?? 'Chưa có SKU'),
                       onTap: () {
                         // Set default unit based on category
                         String? defaultUnit;

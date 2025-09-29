@@ -35,11 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
       await _secure.setRememberFlag(true);
     }
     final email = await _secure.getRememberedEmail();
+    final storeCode = await _secure.getRememberedStoreCode();
     if (!mounted) return;
     setState(() {
       _rememberMe = remember;
       if (remember && (email ?? '').isNotEmpty) {
         _emailController.text = email!;
+      }
+      if (remember && (storeCode ?? '').isNotEmpty) {
+        _storeCodeController.text = storeCode!;
       }
     });
   }
@@ -49,23 +53,28 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _rememberMe = newVal);
     await _secure.setRememberFlag(newVal);
     if (newVal) {
-      // Immediately persist current email if any and notify user
+      // Immediately persist current email and store code if any and notify user
       final email = _emailController.text.trim();
+      final storeCode = _storeCodeController.text.trim();
       if (email.isNotEmpty) {
         await _secure.storeRememberedEmail(email);
       }
+      if (storeCode.isNotEmpty) {
+        await _secure.storeRememberedStoreCode(storeCode);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã lưu email đăng nhập')),
+        const SnackBar(content: Text('Đã lưu thông tin đăng nhập')),
       );
     }
   }
 
-  Future<void> _clearRememberedEmail() async {
+  Future<void> _clearRememberedData() async {
     await _secure.delete('remember_email');
+    await _secure.delete('remember_store_code');
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Đã xóa email đã lưu')),
+      const SnackBar(content: Text('Đã xóa thông tin đã lưu')),
     );
   }
 
@@ -82,22 +91,23 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_rememberMe) {
         await _secure.setRememberFlag(true);
         await _secure.storeRememberedEmail(_emailController.text.trim());
+        await _secure.storeRememberedStoreCode(_storeCodeController.text.trim());
       } else {
         await _secure.setRememberFlag(false);
         await _secure.delete('remember_email');
+        await _secure.delete('remember_store_code');
       }
       Navigator.of(context).pushReplacementNamed(RouteNames.homeAlias);
     }
   }
 
   Future<void> _handleBiometricLogin() async {
-    // SECURITY: Disable biometric until store-aware implementation
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đăng nhập sinh trắc học tạm thời không khả dụng. Vui lòng sử dụng email/password với mã cửa hàng.'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+    final ok = await context.read<AuthProvider>().signInWithBiometric();
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).pushReplacementNamed(RouteNames.homeAlias);
+    }
+    // Error message is already handled by AuthProvider state
   }
 
   Future<void> _handleGoogle() async {
@@ -209,8 +219,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       TextButton(
-                        onPressed: _clearRememberedEmail,
-                        child: const Text('Xóa email đã lưu'),
+                        onPressed: _clearRememberedData,
+                        child: const Text('Xóa thông tin đã lưu'),
                       ),
                     ],
                   ),

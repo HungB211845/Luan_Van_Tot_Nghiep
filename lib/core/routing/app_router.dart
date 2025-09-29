@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../features/customers/screens/customers/customer_list_screen.dart';
 import '../../features/products/models/company.dart';
 import '../../features/products/models/purchase_order.dart';
+import '../../features/products/models/product.dart';
 import '../../features/products/screens/products/product_list_screen.dart';
+import '../../features/products/screens/products/product_detail_screen.dart';
 import '../../features/products/screens/company/company_list_screen.dart';
 import '../../features/products/screens/company/add_edit_company_screen.dart';
 import '../../features/products/screens/company/company_detail_screen.dart';
@@ -28,6 +30,7 @@ import '../../presentation/main_navigation/main_navigation_screen.dart';
 import 'route_names.dart';
 import '../../features/products/screens/purchase_order/po_receive_success_screen.dart';
 import '../../features/auth/screens/account_screen.dart';
+import '../../shared/transitions/ios_page_route.dart';
 
 class AppRouter {
   static const String home = RouteNames.home;
@@ -35,82 +38,86 @@ class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case RouteNames.splash:
-        return MaterialPageRoute(builder: (_) => const SplashScreen());
+        return IOSPageRoute(child: const SplashScreen(), settings: settings);
       case RouteNames.login:
-        return MaterialPageRoute(builder: (_) => const LoginScreen());
+        return IOSPageRoute(child: const LoginScreen(), settings: settings);
       case RouteNames.register:
-        return MaterialPageRoute(builder: (_) => const RegisterScreen());
+        return IOSPageRoute(child: const RegisterScreen(), settings: settings);
       case RouteNames.forgotPassword:
-        return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+        return IOSPageRoute(child: const ForgotPasswordScreen(), settings: settings);
       case RouteNames.otp:
-        return MaterialPageRoute(builder: (_) => const OtpVerificationScreen());
+        return IOSPageRoute(child: const OtpVerificationScreen(), settings: settings);
       case RouteNames.biometricLogin:
-        return MaterialPageRoute(builder: (_) => const BiometricLoginScreen());
+        return IOSPageRoute(child: const BiometricLoginScreen(), settings: settings);
       case RouteNames.storeSetup:
-        return MaterialPageRoute(builder: (_) => const StoreSetupScreen());
+        return IOSPageRoute(child: const StoreSetupScreen(), settings: settings);
       // Removed onboarding route (screen not implemented)
       case RouteNames.home:
-        return MaterialPageRoute(builder: (_) => const MainNavigationScreen());
+        return IOSPageRoute(child: const MainNavigationScreen(), settings: settings);
       case RouteNames.homeAlias:
-        return MaterialPageRoute(builder: (_) => const MainNavigationScreen());
+        return IOSPageRoute(child: const MainNavigationScreen(), settings: settings);
       case RouteNames.profile:
-        return MaterialPageRoute(builder: (_) => const AccountScreen());
+        return IOSPageRoute(child: const AccountScreen(), settings: settings);
         
       case RouteNames.customers:
-        return MaterialPageRoute(builder: (_) => CustomerListScreen());
+        return IOSPageRoute(child: CustomerListScreen(), settings: settings);
         
       case RouteNames.products:
-        return MaterialPageRoute(builder: (_) => const ProductListScreen());
+        return IOSPageRoute(child: const ProductListScreen(), settings: settings);
+
+      case RouteNames.productDetail:
+        return IOSPageRoute(child: const ProductDetailScreen(), settings: settings);
 
       case RouteNames.companies:
-        return MaterialPageRoute(builder: (_) => const CompanyListScreen());
+        return IOSPageRoute(child: const CompanyListScreen(), settings: settings);
 
       case RouteNames.addCompany:
-        return MaterialPageRoute(builder: (_) => const AddEditCompanyScreen());
+        return IOSPageRoute(child: const AddEditCompanyScreen(), settings: settings);
 
       case RouteNames.editCompany:
         final company = settings.arguments as Company;
-        return MaterialPageRoute(builder: (_) => AddEditCompanyScreen(company: company));
+        return IOSPageRoute(child: AddEditCompanyScreen(company: company), settings: settings);
 
       case RouteNames.companyDetail:
         final company = settings.arguments as Company;
-        return MaterialPageRoute(builder: (_) => CompanyDetailScreen(company: company));
+        return IOSPageRoute(child: CompanyDetailScreen(company: company), settings: settings);
 
       case RouteNames.purchaseOrders:
-        return MaterialPageRoute(builder: (_) => const PurchaseOrderListScreen());
+        return IOSPageRoute(child: const PurchaseOrderListScreen(), settings: settings);
 
       case RouteNames.purchaseOrderDetail:
         final po = settings.arguments as PurchaseOrder;
-        return MaterialPageRoute(builder: (_) => PurchaseOrderDetailScreen(purchaseOrder: po));
+        return IOSPageRoute(child: PurchaseOrderDetailScreen(purchaseOrder: po), settings: settings);
 
       case RouteNames.createPurchaseOrder:
-        return MaterialPageRoute(builder: (_) => const CreatePurchaseOrderScreen());
+        return IOSPageRoute(child: const CreatePurchaseOrderScreen(), settings: settings);
       
       case RouteNames.purchaseOrderReceiveSuccess:
         final poNumber = settings.arguments as String?;
-        return MaterialPageRoute(builder: (_) => POReceiveSuccessScreen(poNumber: poNumber));
+        return IOSPageRoute(child: POReceiveSuccessScreen(poNumber: poNumber), settings: settings);
         
       case RouteNames.pos:
-        return MaterialPageRoute(builder: (_) => const POSScreen());
+        return IOSPageRoute(child: const POSScreen(), settings: settings);
 
       case RouteNames.cart: // Thêm route cho CartScreen
-        return MaterialPageRoute(builder: (_) => const CartScreen());
+        return IOSPageRoute(child: const CartScreen(), settings: settings);
 
       case RouteNames.transactionSuccess: // Thêm route cho TransactionSuccessScreen
         final args = settings.arguments as String?;
-        return MaterialPageRoute(builder: (_) => TransactionSuccessScreen(transactionId: args!));
+        return IOSPageRoute(child: TransactionSuccessScreen(transactionId: args!), settings: settings);
 
       case RouteNames.transactionList: // Transaction history screen
-        return MaterialPageRoute(builder: (_) => const TransactionListScreen());
+        return IOSPageRoute(child: const TransactionListScreen(), settings: settings);
 
       case RouteNames.reports:
-        return MaterialPageRoute(builder: (_) => const ReportsScreen());
+        return IOSPageRoute(child: const ReportsScreen(), settings: settings);
         
       default:
-        return MaterialPageRoute(
-          builder: (_) => Scaffold(
+        return IOSPageRoute(
+          child: Scaffold(
             body: Center(child: Text('Route not found: ${settings.name}')),
           ),
+          settings: settings,
         );
     }
   }

@@ -1216,7 +1216,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 class CartItem {
   final String productId;
   final String productName;
-  final String productSku;
+  final String? productSku;
   final int quantity;
   final double priceAtSale;
   final double subTotal;
@@ -1225,7 +1225,7 @@ class CartItem {
   CartItem({
     required this.productId,
     required this.productName,
-    required this.productSku,
+    this.productSku,
     required this.quantity,
     required this.priceAtSale,
     required this.subTotal,

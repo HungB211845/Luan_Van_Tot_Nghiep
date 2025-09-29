@@ -22,15 +22,14 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
       _error = null;
     });
     try {
-      final ok = await BiometricService.authenticate(
-        reason: 'Xác thực bằng Face/Touch ID để đăng nhập nhanh',
-      );
+      // Use store-aware biometric login (includes biometric authentication)
+      final success = await context.read<AuthProvider>().signInWithBiometric();
       if (!mounted) return;
-      if (ok) {
-        await context.read<AuthProvider>().initialize();
+      if (success) {
         Navigator.of(context).pushReplacementNamed(RouteNames.homeAlias);
       } else {
-        setState(() => _error = 'Không thể xác thực sinh trắc học.');
+        final authProvider = context.read<AuthProvider>();
+        setState(() => _error = authProvider.state.errorMessage ?? 'Không thể đăng nhập với sinh trắc học.');
       }
     } catch (e) {
       setState(() => _error = e.toString());

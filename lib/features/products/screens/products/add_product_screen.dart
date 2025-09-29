@@ -167,15 +167,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
         TextFormField(
           controller: _skuController,
           decoration: _buildInputDecoration(
-            label: 'Mã SKU/Barcode',
-            hint: 'Ví dụ: NPK-001, PEST-002',
+            label: 'Mã SKU/Barcode (Tùy chọn)',
+            hint: 'Để trống nếu chưa có - có thể cập nhật sau',
             icon: Icons.qr_code,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập mã SKU';
-            }
-            if (value.trim().length < 3) {
+            // SKU is now optional - only validate if provided
+            if (value != null && value.trim().isNotEmpty && value.trim().length < 3) {
               return 'Mã SKU phải có ít nhất 3 ký tự';
             }
             return null;
@@ -301,14 +299,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
         TextFormField(
           controller: _npkRatioController,
           decoration: _buildInputDecoration(
-            label: 'Tỷ lệ NPK',
-            hint: 'Ví dụ: 16-16-8',
+            label: 'Tỷ lệ NPK (Tùy chọn)',
+            hint: 'Để trống nếu chưa có - Ví dụ: 16-16-8',
             icon: Icons.science,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập tỷ lệ NPK';
-            }
+            // NPK ratio is now optional
             return null;
           },
         ),
@@ -319,8 +315,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
         DropdownButtonFormField<String>(
           value: _fertilizerTypeController.text.isEmpty ? null : _fertilizerTypeController.text,
           decoration: _buildInputDecoration(
-            label: 'Loại',
-            hint: 'Chọn loại',
+            label: 'Loại (Tùy chọn)',
+            hint: 'Chọn loại phân bón',
             icon: Icons.type_specimen,
           ),
           items: ['vô cơ', 'hữu cơ', 'hỗn hợp'].map((type) {
@@ -333,9 +329,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             _fertilizerTypeController.text = value ?? '';
           },
           validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Vui lòng chọn loại';
-            }
+            // Fertilizer type is now optional
             return null;
           },
         ),
@@ -349,15 +343,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
               child: TextFormField(
                 controller: _weightController,
                 decoration: _buildInputDecoration(
-                  label: 'Khối lượng',
-                  hint: '50',
+                  label: 'Khối lượng (Tùy chọn)',
+                  hint: 'Để trống nếu chưa có',
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập khối lượng';
-                  }
-                  if (double.tryParse(value) == null) {
+                  // Weight is now optional - only validate if provided
+                  if (value != null && value.trim().isNotEmpty && double.tryParse(value) == null) {
                     return 'Khối lượng phải là số';
                   }
                   return null;
@@ -412,14 +404,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
         TextFormField(
           controller: _activeIngredientController,
           decoration: _buildInputDecoration(
-            label: 'Hoạt chất chính',
-            hint: 'Ví dụ: Imidacloprid',
+            label: 'Hoạt chất chính (Tùy chọn)',
+            hint: 'Để trống nếu chưa có - Ví dụ: Imidacloprid',
             icon: Icons.biotech,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập hoạt chất chính';
-            }
+            // Active ingredient is now optional
             return null;
           },
         ),
@@ -430,13 +420,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         TextFormField(
           controller: _concentrationController,
           decoration: _buildInputDecoration(
-            label: 'Nồng độ',
-            hint: '4SC, 25EC',
+            label: 'Nồng độ (Tùy chọn)',
+            hint: 'Để trống nếu chưa có - Ví dụ: 4SC, 25EC',
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập nồng độ';
-            }
+            // Concentration is now optional
             return null;
           },
         ),
@@ -449,15 +437,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
               child: TextFormField(
                 controller: _volumeController,
                 decoration: _buildInputDecoration(
-                  label: 'Thể tích',
-                  hint: '100',
+                  label: 'Thể tích (Tùy chọn)',
+                  hint: 'Để trống nếu chưa có',
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập thể tích';
-                  }
-                  if (double.tryParse(value) == null) {
+                  // Volume is now optional - only validate if provided
+                  if (value != null && value.trim().isNotEmpty && double.tryParse(value) == null) {
                     return 'Thể tích phải là số';
                   }
                   return null;
@@ -512,14 +498,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
         TextFormField(
           controller: _strainController,
           decoration: _buildInputDecoration(
-            label: 'Tên giống',
-            hint: 'OM18, ST24',
+            label: 'Tên giống (Tùy chọn)',
+            hint: 'Để trống nếu chưa có - Ví dụ: OM18, ST24',
             icon: Icons.grass,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập tên giống';
-            }
+            // Seed strain is now optional
             return null;
           },
         ),
@@ -530,14 +514,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
         TextFormField(
           controller: _originController,
           decoration: _buildInputDecoration(
-            label: 'Nguồn gốc',
-            hint: 'Việt Nam, Nhật Bản',
+            label: 'Nguồn gốc (Tùy chọn)',
+            hint: 'Để trống nếu chưa có - Ví dụ: Việt Nam, Nhật Bản',
             icon: Icons.place,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Vui lòng nhập nguồn gốc';
-            }
+            // Origin is now optional
             return null;
           },
         ),
@@ -551,17 +533,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
               child: TextFormField(
                 controller: _germinationRateController,
                 decoration: _buildInputDecoration(
-                  label: 'Tỷ lệ nảy mầm (%)',
-                  hint: '95',
+                  label: 'Tỷ lệ nảy mầm (%) - Tùy chọn',
+                  hint: 'Để trống nếu chưa có',
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập tỷ lệ nảy mầm';
-                  }
-                  final rate = double.tryParse(value);
-                  if (rate == null || rate < 0 || rate > 100) {
-                    return 'Tỷ lệ phải từ 0-100%';
+                  // Germination rate is now optional - only validate if provided
+                  if (value != null && value.trim().isNotEmpty) {
+                    final rate = double.tryParse(value);
+                    if (rate == null || rate < 0 || rate > 100) {
+                      return 'Tỷ lệ phải từ 0-100%';
+                    }
                   }
                   return null;
                 },
@@ -572,17 +554,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
               child: TextFormField(
                 controller: _purityController,
                 decoration: _buildInputDecoration(
-                  label: 'Độ thuần chủng (%)',
-                  hint: '99',
+                  label: 'Độ thuần chủng (%) - Tùy chọn',
+                  hint: 'Để trống nếu chưa có',
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Vui lòng nhập độ thuần chủng';
-                  }
-                  final purity = double.tryParse(value);
-                  if (purity == null || purity < 0 || purity > 100) {
-                    return 'Độ thuần chủng phải từ 0-100%';
+                  // Purity is now optional - only validate if provided
+                  if (value != null && value.trim().isNotEmpty) {
+                    final purity = double.tryParse(value);
+                    if (purity == null || purity < 0 || purity > 100) {
+                      return 'Độ thuần chủng phải từ 0-100%';
+                    }
                   }
                   return null;
                 },

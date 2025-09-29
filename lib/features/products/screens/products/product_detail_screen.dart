@@ -819,7 +819,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                     title: 'Thông Tin Cơ Bản',
                   ),
                   const SizedBox(height: 16),
-                  _buildInfoRow('Mã SKU', product.sku),
+                  _buildInfoRow('Mã SKU', product.sku ?? 'Chưa có SKU'),
                   _buildInfoRow('Tên sản phẩm', product.name),
                   _buildInfoRow('Danh mục', product.categoryDisplayName),
                   _buildInfoRow('Trạng thái', product.isActive ? 'Hoạt động' : 'Không hoạt động'),

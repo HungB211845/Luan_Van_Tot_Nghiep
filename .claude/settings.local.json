@@ -13,7 +13,10 @@
       "Bash(docker exec:*)",
       "Bash(xargs -r docker stop)",
       "Bash(curl:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(r)",
+      "Bash(nc localhost 3000)"
     ],
     "deny": [],
     "ask": []

@@ -130,6 +130,20 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  /// NEW: Store-aware biometric authentication
+  Future<bool> signInWithBiometric() async {
+    _setState(_state.copyWith(isLoading: true, errorMessage: null));
+    final result = await _authService.signInWithBiometric();
+    if (result.isSuccess && result.profile != null) {
+      BaseService.setCurrentUserProfile(result.profile);
+      BaseService.setCurrentUserStoreId(result.profile!.storeId);
+      _setState(auth.AuthState(status: auth.AuthStatus.authenticated, userProfile: result.profile, store: result.store, isLoading: false));
+      return true;
+    }
+    _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
+    return false;
+  }
+
   Future<void> signOut() async {
     await _authService.signOut();
     _setState(const auth.AuthState(status: auth.AuthStatus.unauthenticated, isLoading: false));

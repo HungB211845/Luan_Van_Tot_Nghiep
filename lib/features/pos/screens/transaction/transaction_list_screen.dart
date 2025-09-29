@@ -10,6 +10,8 @@ import '../../models/transaction.dart';
 import '../../providers/transaction_provider.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../shared/widgets/agri_bottom_nav_wrapper.dart';
+import '../../../../core/routing/route_names.dart';
 import 'transaction_detail_screen.dart';
 
 class TransactionListScreen extends StatefulWidget {
@@ -68,46 +70,63 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lịch Sử Giao Dịch'),
-        automaticallyImplyLeading: false, // Ẩn nút trở về
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () => _showFilterSheet(context),
+    return GestureDetector(
+      // Add swipe gesture for iOS-style back navigation
+      onHorizontalDragEnd: (DragEndDetails details) {
+        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+          // Swipe right detected, navigate back
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Lịch Sử Giao Dịch'),
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).pop(),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => context.read<TransactionProvider>().refresh(),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          _buildQuickChips(),
-          Expanded(child: _buildTransactionList()),
-        ],
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.filter_list),
+              onPressed: () => _showFilterSheet(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => context.read<TransactionProvider>().refresh(),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            _buildSearchBar(),
+            _buildQuickChips(),
+            Expanded(child: _buildTransactionList()),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Tìm theo mã HĐ hoặc tên khách hàng...',
-          prefixIcon: const Icon(Icons.search, size: 20),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.0),
-            borderSide: BorderSide.none,
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Tìm theo mã HĐ hoặc tên khách hàng...',
+            prefixIcon: const Icon(Icons.search, size: 20),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12.0),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Colors.grey[200],
+            contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
           ),
-          filled: true,
-          fillColor: Colors.grey[200],
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
         ),
       ),
     );
@@ -117,30 +136,33 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     final provider = context.read<TransactionProvider>();
     final currentFilter = provider.filter;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Row(
-        children: [
-          ActionChip(label: const Text('Hôm nay'), onPressed: () {
-            final now = DateTime.now();
-            provider.updateFilter(currentFilter.copyWith(startDate: DateTime(now.year, now.month, now.day), endDate: now));
-          }),
-          const SizedBox(width: 8),
-          ActionChip(label: const Text('7 ngày'), onPressed: () {
-             final now = DateTime.now();
-            provider.updateFilter(currentFilter.copyWith(startDate: now.subtract(const Duration(days: 6)), endDate: now));
-          }),
-          const SizedBox(width: 8),
-          ActionChip(label: const Text('30 ngày'), onPressed: () {
-             final now = DateTime.now();
-            provider.updateFilter(currentFilter.copyWith(startDate: now.subtract(const Duration(days: 29)), endDate: now));
-          }),
-          const Spacer(),
-          if (currentFilter.startDate != null || currentFilter.endDate != null)
-            ActionChip(avatar: const Icon(Icons.clear, size: 16), label: const Text('Xóa ngày'), onPressed: () {
-              provider.updateFilter(currentFilter.copyWith(clearStartDate: true, clearEndDate: true));
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Row(
+          children: [
+            ActionChip(label: const Text('Hôm nay'), onPressed: () {
+              final now = DateTime.now();
+              provider.updateFilter(currentFilter.copyWith(startDate: DateTime(now.year, now.month, now.day), endDate: now));
             }),
-        ],
+            const SizedBox(width: 8),
+            ActionChip(label: const Text('7 ngày'), onPressed: () {
+               final now = DateTime.now();
+              provider.updateFilter(currentFilter.copyWith(startDate: now.subtract(const Duration(days: 6)), endDate: now));
+            }),
+            const SizedBox(width: 8),
+            ActionChip(label: const Text('30 ngày'), onPressed: () {
+               final now = DateTime.now();
+              provider.updateFilter(currentFilter.copyWith(startDate: now.subtract(const Duration(days: 29)), endDate: now));
+            }),
+            const Spacer(),
+            if (currentFilter.startDate != null || currentFilter.endDate != null)
+              ActionChip(avatar: const Icon(Icons.clear, size: 16), label: const Text('Xóa ngày'), onPressed: () {
+                provider.updateFilter(currentFilter.copyWith(clearStartDate: true, clearEndDate: true));
+              }),
+          ],
+        ),
       ),
     );
   }
@@ -336,32 +358,34 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.8,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Bộ lọc nâng cao', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const Divider(height: 24),
-          Expanded(
-            child: ListView(
-              children: [
-                _buildDateRangePicker(),
-                const SizedBox(height: 16),
-                _buildAmountRange(),
-                const SizedBox(height: 16),
-                _buildPaymentMethodFilter(),
-                const SizedBox(height: 16),
-                _buildDebtStatusFilter(),
-                const SizedBox(height: 16),
-                _buildCustomerFilter(),
-              ],
+    return Material(
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Bộ lọc nâng cao', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Divider(height: 24),
+            Expanded(
+              child: ListView(
+                children: [
+                  _buildDateRangePicker(),
+                  const SizedBox(height: 16),
+                  _buildAmountRange(),
+                  const SizedBox(height: 16),
+                  _buildPaymentMethodFilter(),
+                  const SizedBox(height: 16),
+                  _buildDebtStatusFilter(),
+                  const SizedBox(height: 16),
+                  _buildCustomerFilter(),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 24),
-          _buildActionButtons(),
-        ],
+            const Divider(height: 24),
+            _buildActionButtons(),
+          ],
+        ),
       ),
     );
   }

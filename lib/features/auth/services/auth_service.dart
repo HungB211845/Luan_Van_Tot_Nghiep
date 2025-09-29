@@ -5,6 +5,9 @@ import 'package:uuid/uuid.dart';
 import '../../auth/models/store.dart';
 import '../../auth/models/user_profile.dart';
 import 'secure_storage_service.dart';
+import 'biometric_service.dart';
+import 'store_service.dart';
+import 'session_service.dart';
 
 class AuthResult {
   final bool isSuccess;
@@ -98,6 +101,18 @@ class AuthService {
       await _createOrUpdateSession(user);
       await _updateUserMetadata(user.id, store.id);
 
+      // Step 5: Store context for biometric login
+      await _secure.storeLastStoreCode(storeCode);
+      await _secure.storeLastStoreId(store.id);
+      print('🔍 DEBUG: Stored store context - code: $storeCode, id: ${store.id}');
+
+      // Step 6: Store refresh token for biometric session restoration
+      final currentSession = _supabase.auth.currentSession;
+      if (currentSession?.refreshToken != null) {
+        await _secure.storeRefreshToken(currentSession!.refreshToken!);
+        print('🔍 DEBUG: Stored refresh token for biometric login');
+      }
+
       print('🔍 DEBUG: Login successful!');
       return AuthResult.success(user: user, profile: profile, store: store);
     } on AuthException catch (e) {
@@ -177,11 +192,118 @@ class AuthService {
       await _createOrUpdateSession(user);
       await _updateUserMetadata(user.id, store.id);
 
+      // Step 6: Store context for biometric login
+      await _secure.storeLastStoreCode(storeCode);
+      await _secure.storeLastStoreId(store.id);
+      print('🔍 DEBUG: Stored store context (fallback) - code: $storeCode, id: ${store.id}');
+
+      // Step 7: Store refresh token for biometric session restoration
+      final currentSession = _supabase.auth.currentSession;
+      if (currentSession?.refreshToken != null) {
+        await _secure.storeRefreshToken(currentSession!.refreshToken!);
+        print('🔍 DEBUG: Stored refresh token for biometric login (fallback)');
+      }
+
       print('🔍 DEBUG: Fallback login successful!');
       return AuthResult.success(user: user, profile: profile, store: store);
     } catch (e) {
       print('🚨 DEBUG: Fallback method also failed: $e');
       return AuthResult.failure('Không thể xác thực với cửa hàng này: ${e.toString()}');
+    }
+  }
+
+  /// NEW: Store-aware biometric authentication
+  Future<AuthResult> signInWithBiometric() async {
+    try {
+      print('🔍 DEBUG: Starting biometric authentication');
+
+      // Step 1: Check if biometric is available
+      final isAvailable = await BiometricService.isAvailable();
+      if (!isAvailable) {
+        return AuthResult.failure('Thiết bị không hỗ trợ xác thực sinh trắc học');
+      }
+
+      // Step 2: Get last stored store context
+      final lastStoreCode = await _secure.getLastStoreCode();
+      print('🔍 DEBUG: Retrieved stored store code: $lastStoreCode');
+      if (lastStoreCode == null) {
+        return AuthResult.failure('Chưa có thông tin cửa hàng. Vui lòng đăng nhập bằng email/password trước.');
+      }
+
+      print('🔍 DEBUG: Found stored store code: $lastStoreCode');
+
+      // Step 3: Validate store still exists and is active (simplified for biometric)
+      // Skip RPC validation to avoid RLS issues, just get basic store info
+      print('🔍 DEBUG: Skipping RPC validation for biometric flow');
+
+      // We'll validate store access after authentication
+
+      // Step 4: Perform biometric authentication
+      final biometricOk = await BiometricService.authenticate(
+        reason: 'Xác thực bằng Face/Touch ID để đăng nhập vào cửa hàng $lastStoreCode',
+      );
+
+      if (!biometricOk) {
+        return AuthResult.failure('Xác thực sinh trắc học không thành công');
+      }
+
+      print('🔍 DEBUG: Biometric authentication successful');
+
+      // Step 5: Check if we have an existing session
+      final session = _supabase.auth.currentSession;
+      if (session != null) {
+        print('🔍 DEBUG: Found existing session, validating...');
+        // Validate existing session
+        final sessionService = SessionService();
+        final valid = await sessionService.validateSession();
+        if (valid) {
+          print('🔍 DEBUG: Session is valid, getting user profile...');
+          // Get user profile and store info
+          final profile = await getUserProfile(session.user.id);
+          if (profile != null) {
+            // Get store info
+            try {
+              final storeResponse = await _supabase
+                  .from('stores')
+                  .select('*')
+                  .eq('id', profile.storeId)
+                  .eq('store_code', lastStoreCode)
+                  .eq('is_active', true)
+                  .single();
+
+              final store = Store.fromJson(storeResponse);
+              print('🔍 DEBUG: Using existing valid session with store: ${store.storeName}');
+              return AuthResult.success(user: session.user, profile: profile, store: store);
+            } catch (e) {
+              print('🔍 DEBUG: Store validation failed: $e');
+              // Store doesn't match, clear stored data
+              await _secure.delete('last_store_code');
+              await _secure.delete('last_store_id');
+              await _supabase.auth.signOut();
+              return AuthResult.failure('Cửa hàng không còn tồn tại hoặc không khớp với tài khoản.');
+            }
+          }
+        }
+        print('🔍 DEBUG: Session invalid, signing out...');
+        // Invalid session, sign out
+        await _supabase.auth.signOut();
+      }
+
+      print('🔍 DEBUG: No existing session found');
+
+      // Step 6: For biometric login to work, user needs an active session
+      // Guide user to login via email/password/store_code which will auto-fill from "remember me"
+      return AuthResult.failure(
+        'Chưa có phiên đăng nhập hoạt động.\n\n'
+        'Để sử dụng sinh trắc học, vui lòng:\n'
+        '• Đăng nhập bằng Email/Mật khẩu/Mã cửa hàng\n'
+        '• Bật "Ghi nhớ tôi" để tự điền thông tin\n'
+        '• Sau đó có thể dùng sinh trắc học trong phiên hiện tại'
+      );
+
+    } catch (e) {
+      print('🚨 DEBUG: Biometric login error: $e');
+      return AuthResult.failure('Lỗi xác thực sinh trắc học: ${e.toString()}');
     }
   }
 
@@ -272,7 +394,11 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _supabase.auth.signOut();
-      await _secure.clearAll();
+      // Clear sensitive data but keep store context AND refresh token for biometric login
+      await _secure.delete('remember_email');
+      await _secure.setRememberFlag(false);
+      // Keep refresh_token, last_store_code and last_store_id for biometric login
+      print('🔍 DEBUG: Sign out complete, preserved refresh token and store context for biometric');
     } catch (_) {}
   }
 

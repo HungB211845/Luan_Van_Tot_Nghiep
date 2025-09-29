@@ -24,7 +24,7 @@ extension ProductCategoryExtension on ProductCategory {
 
 class Product {
   final String id;
-  final String sku;
+  final String? sku;
   final String name;
   final ProductCategory category;
   final String? companyId;
@@ -45,11 +45,11 @@ class Product {
 
   Product({
     required this.id,
-    required this.sku,
+    this.sku,
     required this.name,
     required this.category,
     this.companyId,
-    required this.attributes,
+    this.attributes = const {},
     this.isActive = true,
     this.isBanned = false,
     this.imageUrl,
@@ -96,7 +96,7 @@ class Product {
   Map<String, dynamic> toJson() {
     return {
       'id': id.isEmpty ? null : id,
-      'sku': sku,
+      'sku': sku?.isEmpty == true ? null : sku,
       'name': name,
       'category': category.toString().split('.').last,
       'company_id': companyId?.isEmpty == true ? null : companyId,

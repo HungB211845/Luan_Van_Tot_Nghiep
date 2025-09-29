@@ -426,15 +426,17 @@ class ProductService extends BaseService {
   /// Tạo product mới
   Future<Product> createProduct(Product product) async {
     try {
-      // Check SKU duplicate
-      final existingSku = await addStoreFilter(_supabase
-          .from('products')
-          .select('id')
-          .eq('sku', product.sku))
-          .maybeSingle();
+      // Check SKU duplicate only if SKU is provided
+      if (product.sku != null && product.sku!.trim().isNotEmpty) {
+        final existingSku = await addStoreFilter(_supabase
+            .from('products')
+            .select('id')
+            .eq('sku', product.sku!))
+            .maybeSingle();
 
-      if (existingSku != null) {
-        throw Exception('SKU "${product.sku}" đã tồn tại');
+        if (existingSku != null) {
+          throw Exception('SKU "${product.sku}" đã tồn tại');
+        }
       }
 
       // Check banned substances for pesticides

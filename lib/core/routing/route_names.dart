@@ -13,6 +13,7 @@ class RouteNames {
   static const String onboarding = '/onboarding';
   static const String customers = '/customers';
   static const String products = '/products';
+  static const String productDetail = '/product-detail';
   static const String companies = '/companies';
   static const String addCompany = '/companies/add';
   static const String editCompany = '/companies/edit';

@@ -7,6 +7,8 @@ import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/widgets/custom_button.dart';
 import 'product_detail_screen.dart';
 import 'add_product_screen.dart';
+import 'package:flutter/cupertino.dart';
+import '../../../../shared/transitions/cupertino_page_route.dart';
 
 class ProductListScreen extends StatefulWidget {
   const ProductListScreen({Key? key}) : super(key: key);
@@ -71,22 +73,29 @@ class _ProductListScreenState extends State<ProductListScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GestureDetector(
+      // Add swipe gesture for iOS-style back navigation
+      onHorizontalDragEnd: (DragEndDetails details) {
+        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+          // Swipe right detected, navigate back to home
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Quản Lý Sản Phẩm',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        backgroundColor: Theme.of(context).primaryColor,
+        title: const Text('Quản Lý Sản Phẩm'),
+        backgroundColor: Colors.green,
         foregroundColor: Colors.white,
-        elevation: 2,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, size: 28),
+            icon: const Icon(Icons.refresh),
             onPressed: () {
               context.read<ProductProvider>().refresh();
             },
-            tooltip: 'Làm mới',
           ),
         ],
         bottom: TabBar(
@@ -110,10 +119,11 @@ class _ProductListScreenState extends State<ProductListScreen>
       body: Column(
         children: [
           // Search bar
-          Container(
-            padding: const EdgeInsets.all(16),
+          Material(
             color: Colors.grey[50],
-            child: TextField(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
@@ -156,6 +166,7 @@ class _ProductListScreenState extends State<ProductListScreen>
                 ),
               ),
               style: const TextStyle(fontSize: 16),
+              ),
             ),
           ),
 
@@ -182,7 +193,7 @@ class _ProductListScreenState extends State<ProductListScreen>
                     await provider.refresh();
                   },
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80), // Bottom padding for FAB
                     itemCount: products.length,
                     itemBuilder: (context, index) {
                       final product = products[index];
@@ -197,18 +208,16 @@ class _ProductListScreenState extends State<ProductListScreen>
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddProductScreen()),
-          );
+          context.pushiOS(const AddProductScreen());
         },
         icon: const Icon(Icons.add, size: 24),
         label: const Text(
           'Thêm Sản Phẩm',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: Colors.green,
         foregroundColor: Colors.white,
+      ),
       ),
     );
   }
@@ -252,7 +261,7 @@ class _ProductListScreenState extends State<ProductListScreen>
                     decoration: BoxDecoration(
                       color: _getCategoryColor(
                         product.category,
-                      ).withOpacity(0.1),
+                      ).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -341,7 +350,7 @@ class _ProductListScreenState extends State<ProductListScreen>
                     icon: Icon(
                       Icons.add_shopping_cart,
                       color: (!isBanned && stock > 0)
-                          ? Theme.of(context).primaryColor
+                          ? Colors.green
                           : Colors.grey[400],
                     ),
                     tooltip: 'Thêm vào giỏ',
@@ -585,4 +594,5 @@ class _ProductListScreenState extends State<ProductListScreen>
   String _formatCurrency(double amount) {
     return '${amount.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}đ';
   }
+
 }

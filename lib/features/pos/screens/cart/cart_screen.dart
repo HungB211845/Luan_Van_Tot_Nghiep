@@ -417,14 +417,17 @@ class _CartScreenState extends State<CartScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Tổng cộng (${productProvider.cartItemsCount} sản phẩm):',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      'Tổng cộng (${productProvider.cartItemsCount} sản phẩm):',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     AppFormatter.formatCurrency(productProvider.cartTotal),
                     style: const TextStyle(

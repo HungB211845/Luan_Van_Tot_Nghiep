@@ -3,7 +3,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class SecureStorageService {
   static const _keyRefreshToken = 'refresh_token';
   static const _keyRememberEmail = 'remember_email';
+  static const _keyRememberStoreCode = 'remember_store_code';
   static const _keyRememberFlag = 'remember_flag';
+  static const _keyLastStoreCode = 'last_store_code';
+  static const _keyLastStoreId = 'last_store_id';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
@@ -17,11 +20,19 @@ class SecureStorageService {
   Future<void> storeRefreshToken(String token) async => write(_keyRefreshToken, token);
   Future<String?> getRefreshToken() async => read(_keyRefreshToken);
 
-  // Remember email
+  // Remember email and store code
   Future<void> storeRememberedEmail(String email) async => write(_keyRememberEmail, email);
   Future<String?> getRememberedEmail() async => read(_keyRememberEmail);
+  Future<void> storeRememberedStoreCode(String storeCode) async => write(_keyRememberStoreCode, storeCode);
+  Future<String?> getRememberedStoreCode() async => read(_keyRememberStoreCode);
   Future<void> setRememberFlag(bool remember) async => write(_keyRememberFlag, remember ? '1' : '0');
   Future<bool> getRememberFlag() async => (await read(_keyRememberFlag)) == '1';
+
+  // Store context for biometric login
+  Future<void> storeLastStoreCode(String storeCode) async => write(_keyLastStoreCode, storeCode);
+  Future<String?> getLastStoreCode() async => read(_keyLastStoreCode);
+  Future<void> storeLastStoreId(String storeId) async => write(_keyLastStoreId, storeId);
+  Future<String?> getLastStoreId() async => read(_keyLastStoreId);
 
   // Biometric payload per user (if needed later)
   Future<void> storeBiometricData(String userId, String encryptedData) async => write('bio_$userId', encryptedData);

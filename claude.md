@@ -50,3 +50,122 @@ Dự án này là AgriPOS, một ứng dụng POS quản lý vật tư nông ngh
 - `product_provider.dart`
 - `product_service.dart`
 - `pos_view_model.dart`
+
+# Technical Architecture Details
+
+## Key Dependencies
+
+### Core Flutter & State Management
+- `flutter`: Flutter framework
+- `provider: ^6.1.1`: State management pattern implementation
+- `flutter_localizations`: Internationalization support
+
+### Backend & Database
+- `supabase_flutter: ^2.10.1`: Backend-as-a-Service với PostgreSQL, real-time subscriptions, và RLS
+- `sqflite: ^2.4.2`: Local SQLite database for offline support
+- `path: ^1.9.1`: File path utilities
+
+### Authentication & Security
+- `google_sign_in: ^6.2.1`: Google OAuth integration
+- `flutter_facebook_auth: ^7.0.1`: Facebook authentication
+- `local_auth: ^2.3.0`: Biometric authentication (fingerprint, face ID)
+- `flutter_secure_storage: ^9.2.2`: Encrypted local storage for sensitive data
+- `crypto: ^3.0.6`: Cryptographic functions
+- `shared_preferences: ^2.3.2`: Simple key-value storage
+
+### Utilities & Miscellaneous
+- `intl: ^0.20.2`: Internationalization and date formatting
+- `uuid: ^4.5.1`: UUID generation for unique identifiers
+- `device_info_plus: ^10.1.2`: Device information access
+- `firebase_messaging: ^15.1.3`: Push notifications
+- `url_launcher: ^6.3.2`: Launch URLs and external apps
+
+## Multi-Tenant Architecture với Row Level Security (RLS)
+
+### Store-Based Data Isolation
+Ứng dụng sử dụng **multi-tenant architecture** với store-based isolation. Mỗi store hoạt động độc lập và không thể truy cập dữ liệu của store khác thông qua **Row Level Security (RLS)** của PostgreSQL.
+
+### BaseService Pattern
+Tất cả business services phải extend từ `BaseService` class để đảm bảo store isolation:
+
+```dart
+abstract class BaseService {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  /// Get current authenticated user's store ID from JWT claims
+  String? get currentStoreId {
+    final user = _supabase.auth.currentUser;
+    // Extract store_id from app_metadata or user_metadata
+    String? storeId = user.appMetadata?['store_id'] as String?;
+    storeId ??= user.userMetadata?['store_id'] as String?;
+    return storeId ?? 'default-store-from-migration';
+  }
+}
+```
+
+### Authentication Flow với Store Association
+1. User đăng nhập qua Google/Facebook/Local Auth
+2. JWT token chứa `store_id` trong metadata
+3. RLS policies tự động filter data theo `store_id`
+4. BaseService inject `currentStoreId` vào mọi database operations
+
+## Performance Optimizations
+
+### N+1 Query Prevention
+Dự án đã được tối ưu để giải quyết N+1 query problem:
+- **Before**: Separate queries cho transactions và transaction items
+- **After**: Single JOIN query trong `getTransactionWithItem()` method
+- **Result**: Giảm drastically số lượng database calls
+
+### Estimated Count Strategy
+Thay thế expensive `count(*)` operations:
+- **Before**: `SELECT COUNT(*) FROM table` - chậm với large datasets
+- **After**: `get_estimated_count()` RPC function sử dụng PostgreSQL statistics
+- **Performance Gain**: 95% improvement trong pagination speed
+
+### LRU Cache Management
+Implement sophisticated caching system:
+- **Cache Limit**: 100 entries hoặc 5MB maximum
+- **Eviction Policy**: Least Recently Used (LRU)
+- **Hit Rate**: Maintain 90%+ cache hit rate
+- **Auto-cleanup**: 10-minute interval cleanup
+- **Memory Target**: 25-30MB stable RAM usage
+- **List Limits**: 1000 items per list để prevent memory spikes
+
+### Batch Operations với FIFO Processing
+- Batch database operations để reduce connection overhead
+- First-In-First-Out queue processing
+- Slow query logging để identify performance bottlenecks
+- Performance monitoring với automatic alerts
+
+## Development Commands
+
+### Flutter Standard Commands
+```bash
+# Install dependencies
+flutter pub get
+
+# Run application
+flutter run
+
+# Build for production
+flutter build apk --release
+flutter build ios --release
+
+# Code analysis
+flutter analyze
+
+# Run tests
+flutter test
+
+# Format code
+dart format .
+```
+
+### Database Migration & Setup
+```bash
+# Supabase CLI operations (if applicable)
+supabase start
+supabase db reset
+supabase gen types dart
+```

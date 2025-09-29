@@ -35,31 +35,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const HomeScreen(),
     const TransactionListScreen(),
     const POSScreen(),
+    const ProductListScreen(),
     const ProfileScreen(),
   ];
 
-  final List<BottomNavigationBarItem> _navItems = [
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.home_outlined),
-      activeIcon: Icon(Icons.home),
-      label: 'Trang chủ',
-    ),
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.history_outlined),
-      activeIcon: Icon(Icons.history),
-      label: 'Giao dịch',
-    ),
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.point_of_sale_outlined),
-      activeIcon: Icon(Icons.point_of_sale),
-      label: 'Bán hàng',
-    ),
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.person_outline),
-      activeIcon: Icon(Icons.person),
-      label: 'Tài khoản',
-    ),
-  ];
 
   @override
   void initState() {
@@ -92,8 +71,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       case RouteNames.transactionList:
         _onTabTapped(1); // Switch to Transaction tab
         break;
+      case RouteNames.products:
+        _onTabTapped(3); // Switch to Products tab
+        break;
       case RouteNames.profile:
-        _onTabTapped(3); // Switch to Profile tab
+        _onTabTapped(4); // Switch to Profile tab
         break;
       default:
         // For other routes, navigate normally with bottom nav preserved
@@ -114,34 +96,113 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         index: _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 1,
-              blurRadius: 5,
-              offset: const Offset(0, -2),
-            ),
-          ],
+      bottomNavigationBar: _buildCustomBottomNav(),
+      floatingActionButton: _buildCenterPOSButton(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+
+  Widget _buildCustomBottomNav() {
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavItem(0, Icons.home_outlined, Icons.home, 'Trang chủ'),
+          _buildNavItem(1, Icons.history_outlined, Icons.history, 'Giao dịch'),
+          const SizedBox(width: 60), // Space cho center button
+          _buildNavItem(3, Icons.inventory_2_outlined, Icons.inventory_2, 'Sản phẩm'),
+          _buildNavItem(4, Icons.person_outline, Icons.person, 'Tài khoản'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, IconData activeIcon, String label) {
+    final isActive = _currentIndex == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => _onTabTapped(index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isActive ? activeIcon : icon,
+                size: 24,
+                color: isActive ? Colors.green : Colors.grey[600],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                  color: isActive ? Colors.green : Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: _onTabTapped,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.green,
-          unselectedItemColor: Colors.grey[600],
-          selectedLabelStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _buildCenterPOSButton() {
+    final isActive = _currentIndex == 2;
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.green,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withOpacity(0.3),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(35),
+          onTap: () => _onTabTapped(2),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.point_of_sale,
+                size: 28,
+                color: Colors.white,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Bán hàng',
+                style: TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          items: _navItems,
         ),
       ),
     );
