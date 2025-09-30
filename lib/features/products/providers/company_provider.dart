@@ -7,6 +7,13 @@ import '../../../shared/services/base_service.dart';
 
 enum CompanyStatus { idle, loading, success, error }
 
+enum CompanyFilterType {
+  hasProducts,    // Có sản phẩm
+  hasOrders,      // Có đơn hàng
+  hasPhone,       // Có SĐT
+  hasAddress,     // Có địa chỉ
+}
+
 class CompanyProvider extends ChangeNotifier {
   final CompanyService _companyService = CompanyService();
   List<Company> _companies = [];
@@ -14,6 +21,10 @@ class CompanyProvider extends ChangeNotifier {
   List<Product> _companyProducts = []; // State cho sản phẩm của công ty
   CompanyStatus _status = CompanyStatus.idle;
   String _errorMessage = '';
+
+  // Search & Filter state
+  String _searchQuery = '';
+  Set<CompanyFilterType> _activeFilters = {};
 
   // Getters
   List<Company> get companies => _companies;
@@ -23,13 +34,54 @@ class CompanyProvider extends ChangeNotifier {
   String get errorMessage => _errorMessage;
   bool get isLoading => _status == CompanyStatus.loading;
   bool get hasError => _status == CompanyStatus.error;
+  String get searchQuery => _searchQuery;
+  Set<CompanyFilterType> get activeFilters => _activeFilters;
 
-  // Load tất cả companies
-  Future<void> loadCompanies() async {
+  // Filtered & grouped companies
+  Map<String, List<Company>> get groupedCompanies {
+    // 1. Apply search filter
+    List<Company> filtered = _companies.where((company) {
+      if (_searchQuery.isEmpty) return true;
+
+      final query = _searchQuery.toLowerCase();
+      final matchName = company.name.toLowerCase().contains(query);
+      final matchPhone = company.phone?.toLowerCase().contains(query) ?? false;
+      final matchContact = company.contactPerson?.toLowerCase().contains(query) ?? false;
+
+      return matchName || matchPhone || matchContact;
+    }).toList();
+
+    // 2. Apply additional filters
+    if (_activeFilters.isNotEmpty) {
+      filtered = filtered.where((company) {
+        return _activeFilters.every((filter) => _matchesFilter(company, filter));
+      }).toList();
+    }
+
+    // 3. Sort alphabetically
+    filtered.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    // 4. Group by first character
+    Map<String, List<Company>> grouped = {};
+    for (var company in filtered) {
+      String firstChar = _getFirstChar(company.name);
+      grouped.putIfAbsent(firstChar, () => []).add(company);
+    }
+
+    return grouped;
+  }
+
+  List<String> get availableSections {
+    return groupedCompanies.keys.toList()..sort();
+  }
+
+  // Load tất cả companies (load basic trước, metadata on-demand)
+  Future<void> loadCompanies({bool forceReload = false}) async {
     _status = CompanyStatus.loading;
     notifyListeners();
 
     try {
+      // Load basic companies (fast)
       _companies = await _companyService.getCompanies();
       _status = CompanyStatus.success;
       _errorMessage = '';
@@ -38,6 +90,21 @@ class CompanyProvider extends ChangeNotifier {
       _errorMessage = e.toString();
     }
     notifyListeners();
+  }
+
+  // Load metadata khi cần thiết (khi user toggle hasProducts/hasOrders filters)
+  Future<void> loadMetadata() async {
+    if (_companies.isEmpty) return;
+
+    try {
+      final companiesData = await _companyService.getCompaniesWithMetadata();
+      _companies = companiesData
+          .map((json) => Company.fromJson(json))
+          .toList();
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Lỗi load metadata: $e';
+    }
   }
 
   // Load sản phẩm của một company
@@ -141,5 +208,53 @@ class CompanyProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = '';
     notifyListeners();
+  }
+
+  // Search & filter actions
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
+
+  void toggleFilter(CompanyFilterType filter) async {
+    if (_activeFilters.contains(filter)) {
+      _activeFilters.remove(filter);
+    } else {
+      _activeFilters.add(filter);
+
+      // Load metadata nếu filter cần metadata và chưa có
+      if ((filter == CompanyFilterType.hasProducts || filter == CompanyFilterType.hasOrders) &&
+          _companies.isNotEmpty &&
+          _companies.first.productsCount == null) {
+        await loadMetadata();
+      }
+    }
+    notifyListeners();
+  }
+
+  void clearFilters() {
+    _activeFilters.clear();
+    _searchQuery = '';
+    notifyListeners();
+  }
+
+  // Helper methods
+  String _getFirstChar(String name) {
+    if (name.isEmpty) return '#';
+    String first = name[0].toUpperCase();
+    return RegExp(r'^[A-Z]$').hasMatch(first) ? first : '#';
+  }
+
+  bool _matchesFilter(Company company, CompanyFilterType filter) {
+    switch (filter) {
+      case CompanyFilterType.hasProducts:
+        return company.hasProducts;
+      case CompanyFilterType.hasOrders:
+        return company.hasOrders;
+      case CompanyFilterType.hasPhone:
+        return company.phone != null && company.phone!.isNotEmpty;
+      case CompanyFilterType.hasAddress:
+        return company.address != null && company.address!.isNotEmpty;
+    }
   }
 }

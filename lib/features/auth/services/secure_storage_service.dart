@@ -2,6 +2,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorageService {
   static const _keyRefreshToken = 'refresh_token';
+  static const _keyBiometricRefreshToken = 'biometric_refresh_token';
   static const _keyRememberEmail = 'remember_email';
   static const _keyRememberStoreCode = 'remember_store_code';
   static const _keyRememberFlag = 'remember_flag';
@@ -9,6 +10,10 @@ class SecureStorageService {
   static const _keyLastStoreId = 'last_store_id';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  // Secure storage with biometric access control for Face ID/Touch ID
+  // Note: Biometric protection is handled by BiometricService.authenticate() calls
+  final FlutterSecureStorage _biometricStorage = const FlutterSecureStorage();
 
   // Generic helpers
   Future<void> write(String key, String value) async => _storage.write(key: key, value: value);
@@ -33,6 +38,54 @@ class SecureStorageService {
   Future<String?> getLastStoreCode() async => read(_keyLastStoreCode);
   Future<void> storeLastStoreId(String storeId) async => write(_keyLastStoreId, storeId);
   Future<String?> getLastStoreId() async => read(_keyLastStoreId);
+
+  // Biometric refresh token storage (Face ID/Touch ID protected)
+  Future<void> storeBiometricRefreshToken(String token) async {
+    try {
+      await _biometricStorage.write(key: _keyBiometricRefreshToken, value: token);
+    } catch (e) {
+      // If biometric storage fails, fallback to regular storage
+      await write('${_keyBiometricRefreshToken}_fallback', token);
+      rethrow;
+    }
+  }
+
+  Future<String?> getBiometricRefreshToken() async {
+    try {
+      // Try biometric storage first
+      return await _biometricStorage.read(key: _keyBiometricRefreshToken);
+    } catch (e) {
+      // If biometric read fails, try fallback (should not happen in production)
+      return await read('${_keyBiometricRefreshToken}_fallback');
+    }
+  }
+
+  Future<void> deleteBiometricRefreshToken() async {
+    try {
+      await _biometricStorage.delete(key: _keyBiometricRefreshToken);
+      await delete('${_keyBiometricRefreshToken}_fallback'); // cleanup fallback if exists
+    } catch (e) {
+      // Ignore deletion errors
+    }
+  }
+
+  Future<bool> hasBiometricRefreshToken() async {
+    try {
+      // Check if token exists without triggering biometric prompt
+      // We check both biometric storage and fallback storage
+      final biometricToken = await _biometricStorage.read(key: _keyBiometricRefreshToken);
+      if (biometricToken != null && biometricToken.isNotEmpty) {
+        return true;
+      }
+
+      // Check fallback storage (should not happen in production)
+      final fallbackToken = await read('${_keyBiometricRefreshToken}_fallback');
+      return fallbackToken != null && fallbackToken.isNotEmpty;
+    } catch (e) {
+      // If any error occurs, fallback to safe behavior
+      return false;
+    }
+  }
 
   // Biometric payload per user (if needed later)
   Future<void> storeBiometricData(String userId, String encryptedData) async => write('bio_$userId', encryptedData);

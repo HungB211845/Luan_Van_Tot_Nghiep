@@ -14,7 +14,7 @@ import '../../../../shared/utils/formatter.dart'; // Thêm import
 import '../../../../core/routing/route_names.dart'; // Thêm import
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/services/base_service.dart';
-import 'add_batch_screen.dart';
+import 'select_batch_method_screen.dart';
 import 'add_seasonal_price_screen.dart';
 import 'edit_product_screen.dart';
 import 'seasonal_price_list_widget.dart';
@@ -396,7 +396,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           IconButton(
             icon: const Icon(Icons.edit, size: 24),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => EditProductScreen(product: product)));
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => EditProductScreen(product: product)));
             },
             tooltip: 'Chỉnh sửa',
           ),
@@ -442,7 +442,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       case 1:
         return FloatingActionButton.extended(
           onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => AddBatchScreen()));
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const SelectBatchMethodScreen(),
+              ),
+            );
           },
           icon: const Icon(Icons.add),
           label: const Text('Thêm Lô Hàng'),
@@ -451,7 +455,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         case 2:
         return FloatingActionButton.extended(
           onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => AddSeasonalPriceScreen()));
+            Navigator.of(context).push(MaterialPageRoute(builder: (context) => AddSeasonalPriceScreen()));
           },
           icon: const Icon(Icons.add),
           label: const Text('Thêm Giá'),
@@ -994,7 +998,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 IconButton(
                   icon: Icon(Icons.edit, color: Colors.blue[700]),
                   onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => EditBatchScreen(batch: batch)));
+                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => EditBatchScreen(batch: batch)));
                   },
                 ),
               ],

@@ -24,6 +24,7 @@ class UserProfile {
   final String? zaloId;
 
   final bool isActive;
+  final bool biometricEnabled;
   final DateTime? lastLoginAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -40,6 +41,7 @@ class UserProfile {
     this.facebookId,
     this.zaloId,
     this.isActive = true,
+    this.biometricEnabled = false,
     this.lastLoginAt,
     required this.createdAt,
     required this.updatedAt,
@@ -63,6 +65,7 @@ class UserProfile {
       facebookId: json['facebook_id']?.toString(),
       zaloId: json['zalo_id']?.toString(),
       isActive: (json['is_active'] as bool?) ?? true,
+      biometricEnabled: (json['biometric_enabled'] as bool?) ?? false,
       lastLoginAt: json['last_login_at'] != null ? DateTime.parse(json['last_login_at']) : null,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : DateTime.now(),
@@ -81,6 +84,7 @@ class UserProfile {
         'facebook_id': facebookId,
         'zalo_id': zaloId,
         'is_active': isActive,
+        'biometric_enabled': biometricEnabled,
         'last_login_at': lastLoginAt?.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),

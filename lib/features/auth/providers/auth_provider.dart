@@ -144,6 +144,51 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  /// Enable biometric authentication for current user
+  Future<bool> enableBiometric() async {
+    _setState(_state.copyWith(isLoading: true, errorMessage: null));
+    final result = await _authService.enableBiometric();
+    if (result.isSuccess) {
+      // Refresh user profile to get updated biometric_enabled status
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        final profile = await _authService.getUserProfile(session.user.id);
+        if (profile != null) {
+          _setState(_state.copyWith(userProfile: profile, isLoading: false));
+        }
+      }
+      _setState(_state.copyWith(isLoading: false));
+      return true;
+    }
+    _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
+    return false;
+  }
+
+  /// Disable biometric authentication for current user
+  Future<bool> disableBiometric() async {
+    _setState(_state.copyWith(isLoading: true, errorMessage: null));
+    final result = await _authService.disableBiometric();
+    if (result.isSuccess) {
+      // Refresh user profile to get updated biometric_enabled status
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        final profile = await _authService.getUserProfile(session.user.id);
+        if (profile != null) {
+          _setState(_state.copyWith(userProfile: profile, isLoading: false));
+        }
+      }
+      _setState(_state.copyWith(isLoading: false));
+      return true;
+    }
+    _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
+    return false;
+  }
+
+  /// Check if biometric authentication is available and enabled
+  Future<bool> isBiometricAvailableAndEnabled() async {
+    return await _authService.isBiometricAvailableAndEnabled();
+  }
+
   Future<void> signOut() async {
     await _authService.signOut();
     _setState(const auth.AuthState(status: auth.AuthStatus.unauthenticated, isLoading: false));

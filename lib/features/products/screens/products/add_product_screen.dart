@@ -79,50 +79,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Thêm Sản Phẩm Mới',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 2,
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Section: Thông tin cơ bản
-              _buildSectionTitle('Thông Tin Cơ Bản'),
-              const SizedBox(height: 16),
+    print('DEBUG: AddProductScreen build được gọi');
+    // Immediately redirect to the progressive disclosure wizard
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('DEBUG: Thực hiện redirect đến /add-product-step1');
+      Navigator.pushReplacementNamed(context, '/add-product-step1')
+          .then((_) {
+            print('DEBUG: Redirect thành công');
+          })
+          .catchError((error) {
+            print('DEBUG: Lỗi redirect: $error');
+          });
+    });
 
-              _buildBasicInfoForm(),
-
-              const SizedBox(height: 24),
-
-              // Section: Thuộc tính đặc thù
-              _buildSectionTitle('Thuộc Tính Sản Phẩm'),
-              const SizedBox(height: 16),
-
-              _buildCategorySelector(),
-
-              const SizedBox(height: 16),
-
-              _buildDynamicAttributesForm(),
-
-              const SizedBox(height: 32),
-
-              // Action buttons
-              _buildActionButtons(),
-            ],
-          ),
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Đang chuyển hướng...'),
+          ],
         ),
       ),
     );
@@ -173,7 +151,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
           ),
           validator: (value) {
             // SKU is now optional - only validate if provided
-            if (value != null && value.trim().isNotEmpty && value.trim().length < 3) {
+            if (value != null &&
+                value.trim().isNotEmpty &&
+                value.trim().length < 3) {
               return 'Mã SKU phải có ít nhất 3 ký tự';
             }
             return null;
@@ -313,17 +293,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
         // Loại phân bón
         DropdownButtonFormField<String>(
-          value: _fertilizerTypeController.text.isEmpty ? null : _fertilizerTypeController.text,
+          value: _fertilizerTypeController.text.isEmpty
+              ? null
+              : _fertilizerTypeController.text,
           decoration: _buildInputDecoration(
             label: 'Loại (Tùy chọn)',
             hint: 'Chọn loại phân bón',
             icon: Icons.type_specimen,
           ),
           items: ['vô cơ', 'hữu cơ', 'hỗn hợp'].map((type) {
-            return DropdownMenuItem<String>(
-              value: type,
-              child: Text(type),
-            );
+            return DropdownMenuItem<String>(value: type, child: Text(type));
           }).toList(),
           onChanged: (value) {
             _fertilizerTypeController.text = value ?? '';
@@ -349,7 +328,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   // Weight is now optional - only validate if provided
-                  if (value != null && value.trim().isNotEmpty && double.tryParse(value) == null) {
+                  if (value != null &&
+                      value.trim().isNotEmpty &&
+                      double.tryParse(value) == null) {
                     return 'Khối lượng phải là số';
                   }
                   return null;
@@ -359,10 +340,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _weightUnitController.text.isEmpty ? 'kg' : _weightUnitController.text,
-                decoration: _buildInputDecoration(
-                  label: 'Đơn vị',
-                ),
+                value: _weightUnitController.text.isEmpty
+                    ? 'kg'
+                    : _weightUnitController.text,
+                decoration: _buildInputDecoration(label: 'Đơn vị'),
                 items: ['kg', 'tấn', 'bao'].map((unit) {
                   return DropdownMenuItem<String>(
                     value: unit,
@@ -443,7 +424,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   // Volume is now optional - only validate if provided
-                  if (value != null && value.trim().isNotEmpty && double.tryParse(value) == null) {
+                  if (value != null &&
+                      value.trim().isNotEmpty &&
+                      double.tryParse(value) == null) {
                     return 'Thể tích phải là số';
                   }
                   return null;
@@ -453,10 +436,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _volumeUnitController.text.isEmpty ? 'ml' : _volumeUnitController.text,
-                decoration: _buildInputDecoration(
-                  label: 'Đơn vị',
-                ),
+                value: _volumeUnitController.text.isEmpty
+                    ? 'ml'
+                    : _volumeUnitController.text,
+                decoration: _buildInputDecoration(label: 'Đơn vị'),
                 items: ['ml', 'lít', 'chai', 'gói', 'lọ'].map((unit) {
                   return DropdownMenuItem<String>(
                     value: unit,
@@ -582,17 +565,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
         // Nút Hủy
         Expanded(
           child: OutlinedButton(
-            onPressed: _isLoading ? null : () {
-              Navigator.pop(context);
-            },
+            onPressed: _isLoading
+                ? null
+                : () {
+                    Navigator.pop(context);
+                  },
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               side: BorderSide(color: Colors.grey[400]!),
             ),
-            child: const Text(
-              'Hủy',
-              style: TextStyle(fontSize: 16),
-            ),
+            child: const Text('Hủy', style: TextStyle(fontSize: 16)),
           ),
         ),
 
@@ -603,7 +585,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           child: ElevatedButton(
             onPressed: _isLoading ? null : _saveProduct,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
+              backgroundColor: Colors.green,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
@@ -621,10 +603,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   )
                 : const Text(
                     'Lưu Sản Phẩm',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
           ),
         ),
@@ -642,24 +621,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
       labelText: label,
       hintText: hint,
       prefixIcon: icon != null ? Icon(icon) : null,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide(color: Colors.grey[300]!),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(
-          color: Theme.of(context).primaryColor,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: Colors.green, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
 
@@ -737,7 +708,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
         sku: _skuController.text.trim(),
         name: _nameController.text.trim(),
         category: _selectedCategory,
-        companyId: _selectedCompanyId?.isEmpty == true ? null : _selectedCompanyId,
+        companyId: _selectedCompanyId?.isEmpty == true
+            ? null
+            : _selectedCompanyId,
         attributes: _buildAttributes(),
         isActive: true,
         isBanned: false,
@@ -770,9 +743,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(provider.errorMessage.isNotEmpty
-                  ? provider.errorMessage
-                  : 'Có lỗi xảy ra khi thêm sản phẩm'),
+              content: Text(
+                provider.errorMessage.isNotEmpty
+                    ? provider.errorMessage
+                    : 'Có lỗi xảy ra khi thêm sản phẩm',
+              ),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 3),
             ),

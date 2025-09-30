@@ -146,4 +146,79 @@ class CompanyService extends BaseService {
     if (excludeId == null) return list.isNotEmpty;
     return list.any((r) => r['id'] != excludeId);
   }
+
+  // Check if company has products
+  Future<bool> hasProducts(String companyId) async {
+    ensureAuthenticated();
+
+    final response = await addStoreFilter(
+      _supabase.from('products').select('id'),
+    )
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .limit(1);
+
+    return (response as List).isNotEmpty;
+  }
+
+  // Check if company has purchase orders
+  Future<bool> hasPurchaseOrders(String companyId) async {
+    ensureAuthenticated();
+
+    final response = await addStoreFilter(
+      _supabase.from('purchase_orders').select('id'),
+    )
+        .eq('supplier_id', companyId)
+        .limit(1);
+
+    return (response as List).isNotEmpty;
+  }
+
+  // Get companies with metadata (products count, orders count)
+  Future<List<Map<String, dynamic>>> getCompaniesWithMetadata() async {
+    ensureAuthenticated();
+
+    try {
+      // Load basic companies first
+      final companies = await getCompanies();
+
+      // Manually count products and orders for each company
+      final companiesWithMetadata = <Map<String, dynamic>>[];
+
+      for (var company in companies) {
+        // Count products - use actual query result length
+        final productsResponse = await addStoreFilter(
+          _supabase.from('products').select('id'),
+        )
+            .eq('company_id', company.id)
+            .eq('is_active', true);
+        final productsCount = (productsResponse as List).length;
+
+        // Count purchase orders (dùng supplier_id, không phải company_id)
+        final ordersResponse = await addStoreFilter(
+          _supabase.from('purchase_orders').select('id'),
+        )
+            .eq('supplier_id', company.id);
+        final ordersCount = (ordersResponse as List).length;
+
+        companiesWithMetadata.add({
+          'id': company.id,
+          'name': company.name,
+          'phone': company.phone,
+          'address': company.address,
+          'contact_person': company.contactPerson,
+          'note': company.note,
+          'store_id': company.storeId,
+          'created_at': company.createdAt?.toIso8601String(),
+          'updated_at': company.updatedAt?.toIso8601String(),
+          'products_count': productsCount,
+          'orders_count': ordersCount,
+        });
+      }
+
+      return companiesWithMetadata;
+    } catch (e) {
+      throw Exception('Lỗi lấy danh sách nhà cung cấp với metadata: $e');
+    }
+  }
 }

@@ -103,6 +103,9 @@ class ProfileScreen extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
+                      // Biometric Toggle
+                      _buildBiometricToggle(context, authProvider),
+                      const Divider(height: 1),
                       _buildMenuTile(
                         icon: Icons.lock_outline,
                         title: 'Đổi mật khẩu',
@@ -190,6 +193,82 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBiometricToggle(BuildContext context, AuthProvider authProvider) {
+    final user = authProvider.currentUser;
+    final isEnabled = user?.biometricEnabled ?? false;
+
+    return FutureBuilder<bool>(
+      future: authProvider.isBiometricAvailableAndEnabled(),
+      builder: (context, snapshot) {
+        final isAvailable = snapshot.data ?? false;
+        final isLoading = authProvider.state.isLoading;
+
+        return ListTile(
+          leading: Icon(
+            Icons.fingerprint,
+            color: isAvailable ? Colors.green : Colors.grey[600],
+          ),
+          title: const Text('Đăng nhập Face ID'),
+          subtitle: Text(
+            isAvailable
+              ? 'Đăng nhập nhanh bằng sinh trắc học'
+              : 'Thiết bị không hỗ trợ hoặc chưa thiết lập',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+          trailing: isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Switch(
+                  value: isEnabled,
+                  onChanged: isLoading ? null : (value) async {
+                    if (value) {
+                      final success = await authProvider.enableBiometric();
+                      if (context.mounted && success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Đã kích hoạt đăng nhập Face ID'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(authProvider.state.errorMessage ?? 'Không thể kích hoạt Face ID'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    } else {
+                      final success = await authProvider.disableBiometric();
+                      if (context.mounted && success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Đã tắt đăng nhập Face ID'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      } else if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(authProvider.state.errorMessage ?? 'Không thể tắt Face ID'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+        );
+      },
     );
   }
 

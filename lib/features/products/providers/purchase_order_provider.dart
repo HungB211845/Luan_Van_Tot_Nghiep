@@ -28,12 +28,29 @@ class POCartItem {
     this.unitCost = 0.0,
     this.unit,
   }) : quantityController = TextEditingController(text: quantity.toString()),
-       unitCostController = TextEditingController(text: unitCost.toStringAsFixed(0));
+       unitCostController = TextEditingController(
+         text: unitCost.toStringAsFixed(0),
+       );
 
   // Add a dispose method for the controllers
   void dispose() {
     quantityController.dispose();
     unitCostController.dispose();
+  }
+
+  // Add copyWith method
+  POCartItem copyWith({
+    Product? product,
+    int? quantity,
+    double? unitCost,
+    String? unit,
+  }) {
+    return POCartItem(
+      product: product ?? this.product,
+      quantity: quantity ?? this.quantity,
+      unitCost: unitCost ?? this.unitCost,
+      unit: unit ?? this.unit,
+    );
   }
 }
 
@@ -98,7 +115,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
   });
 
   // Get valid items for PO creation (quantity > 0)
-  List<POCartItem> get validPOCartItems => _poCartItems.where((item) => item.quantity > 0).toList();
+  List<POCartItem> get validPOCartItems =>
+      _poCartItems.where((item) => item.quantity > 0).toList();
 
   // Product Filtering Getters
   List<Product> get filteredProducts => _filteredProducts;
@@ -138,7 +156,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
     try {
       final fetched = await _poService.searchPurchaseOrders(
         searchText: _searchText,
-        supplierIds: _selectedSupplierIds.isNotEmpty ? _selectedSupplierIds : null,
+        supplierIds: _selectedSupplierIds.isNotEmpty
+            ? _selectedSupplierIds
+            : null,
         sortBy: _sortBy,
         sortAsc: _sortAsc,
       );
@@ -149,22 +169,38 @@ class PurchaseOrderProvider extends ChangeNotifier {
       // Filter by supplier ids
       if (_selectedSupplierIds.isNotEmpty) {
         results = results
-            .where((po) => po.supplierId != null && _selectedSupplierIds.contains(po.supplierId))
+            .where(
+              (po) =>
+                  po.supplierId != null &&
+                  _selectedSupplierIds.contains(po.supplierId),
+            )
             .toList();
       }
 
       // Filter by date range
       if (_fromDate != null) {
-        final start = DateTime(_fromDate!.year, _fromDate!.month, _fromDate!.day);
+        final start = DateTime(
+          _fromDate!.year,
+          _fromDate!.month,
+          _fromDate!.day,
+        );
         results = results.where((po) {
-          final od = DateTime(po.orderDate.year, po.orderDate.month, po.orderDate.day);
+          final od = DateTime(
+            po.orderDate.year,
+            po.orderDate.month,
+            po.orderDate.day,
+          );
           return od.isAtSameMomentAs(start) || od.isAfter(start);
         }).toList();
       }
       if (_toDate != null) {
         final end = DateTime(_toDate!.year, _toDate!.month, _toDate!.day);
         results = results.where((po) {
-          final od = DateTime(po.orderDate.year, po.orderDate.month, po.orderDate.day);
+          final od = DateTime(
+            po.orderDate.year,
+            po.orderDate.month,
+            po.orderDate.day,
+          );
           return od.isAtSameMomentAs(end) || od.isBefore(end);
         }).toList();
       }
@@ -199,8 +235,16 @@ class PurchaseOrderProvider extends ChangeNotifier {
           final supplierName = (po.supplierName ?? '').toLowerCase();
           final matchesText = poNum.contains(q) || supplierName.contains(q);
           if (dateQuery != null) {
-            final od = DateTime(po.orderDate.year, po.orderDate.month, po.orderDate.day);
-            final dq = DateTime(dateQuery!.year, dateQuery!.month, dateQuery!.day);
+            final od = DateTime(
+              po.orderDate.year,
+              po.orderDate.month,
+              po.orderDate.day,
+            );
+            final dq = DateTime(
+              dateQuery!.year,
+              dateQuery!.month,
+              dateQuery!.day,
+            );
             return od == dq; // exact date match
           }
           return matchesText;
@@ -257,7 +301,10 @@ class PurchaseOrderProvider extends ChangeNotifier {
   // Load next page (client-side)
   void loadMore() {
     if (reachedEnd) return;
-    _visibleCount = (_visibleCount + _pageSize).clamp(0, _purchaseOrders.length);
+    _visibleCount = (_visibleCount + _pageSize).clamp(
+      0,
+      _purchaseOrders.length,
+    );
     notifyListeners();
   }
 
@@ -345,7 +392,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
         // Lấy danh sách product IDs từ các item của PO này
         // Cần đảm bảo _selectedPOItems đã được load hoặc load lại
         await loadPODetails(poId); // Ensure _selectedPOItems is updated
-        final productIds = _selectedPOItems.map((item) => item.productId).toList();
+        final productIds = _selectedPOItems
+            .map((item) => item.productId)
+            .toList();
 
         // Yêu cầu ProductProvider làm mới tồn kho và giá cho các sản phẩm này
         await _productProvider.refreshInventoryAfterGoodsReceipt(productIds);
@@ -384,7 +433,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _filteredProducts = await _productService.getProductsByCompany(_selectedSupplierId);
+      _filteredProducts = await _productService.getProductsByCompany(
+        _selectedSupplierId,
+      );
     } catch (e) {
       debugPrint('Error loading products for supplier: $e');
       _filteredProducts = [];
@@ -399,34 +450,66 @@ class PurchaseOrderProvider extends ChangeNotifier {
     await _loadProductsForSupplier();
   }
 
-  void addToPOCart(Product product, {int quantity = 1, double? unitCost, String? unit}) {
-    final existingIndex = _poCartItems.indexWhere((item) => item.product.id == product.id);
+  void addToPOCart(
+    Product product, {
+    int quantity = 1,
+    double? unitCost,
+    String? unit,
+  }) {
+    final existingIndex = _poCartItems.indexWhere(
+      (item) => item.product.id == product.id,
+    );
     if (existingIndex != -1) {
       _poCartItems[existingIndex].quantity += quantity;
     } else {
-      _poCartItems.add(POCartItem(
-        product: product,
-        quantity: quantity,
-        unitCost: unitCost ?? 0.0,
-        unit: unit,
-      ));
+      _poCartItems.add(
+        POCartItem(
+          product: product,
+          quantity: quantity,
+          unitCost: unitCost ?? 0.0,
+          unit: unit,
+        ),
+      );
     }
     notifyListeners();
   }
 
-  void updatePOCartItem(String productId, {int? newQuantity, double? newUnitCost, String? newUnit}) {
-    final index = _poCartItems.indexWhere((item) => item.product.id == productId);
+  void addPOCartItem(POCartItem item) {
+    final existingIndex = _poCartItems.indexWhere(
+      (cartItem) => cartItem.product.id == item.product.id,
+    );
+    if (existingIndex != -1) {
+      _poCartItems[existingIndex] = item;
+    } else {
+      _poCartItems.add(item);
+    }
+    notifyListeners();
+  }
+
+  void updatePOCartItem(
+    String productId, {
+    int? newQuantity,
+    double? newUnitCost,
+    String? newUnit,
+  }) {
+    final index = _poCartItems.indexWhere(
+      (item) => item.product.id == productId,
+    );
     if (index != -1) {
       if (newQuantity != null) {
         // Allow quantity = 0, don't auto-remove
         _poCartItems[index].quantity = newQuantity.clamp(0, 999999);
         // Update controller text
-        _poCartItems[index].quantityController.text = _poCartItems[index].quantity.toString();
+        _poCartItems[index].quantityController.text = _poCartItems[index]
+            .quantity
+            .toString();
       }
       if (newUnitCost != null) {
         _poCartItems[index].unitCost = newUnitCost.clamp(0.0, double.infinity);
         // Update controller text
-        _poCartItems[index].unitCostController.text = _poCartItems[index].unitCost.toStringAsFixed(0);
+        _poCartItems[index].unitCostController.text = _poCartItems[index]
+            .unitCost
+            .toStringAsFixed(0);
       }
       if (newUnit != null) {
         _poCartItems[index].unit = newUnit;
@@ -442,7 +525,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
   }
 
   void removeFromPOCart(String productId) {
-    final index = _poCartItems.indexWhere((item) => item.product.id == productId);
+    final index = _poCartItems.indexWhere(
+      (item) => item.product.id == productId,
+    );
     if (index != -1) {
       _poCartItems[index].dispose(); // Dispose controllers
       _poCartItems.removeAt(index);
@@ -451,20 +536,38 @@ class PurchaseOrderProvider extends ChangeNotifier {
   }
 
   void clearPOCart() {
+    // DON'T clear supplier selection - only clear cart items
+    // _selectedSupplierId should be preserved during PO creation workflow
+    for (var item in _poCartItems) {
+      item.dispose(); // Dispose all controllers
+    }
+    _poCartItems.clear();
+    // Keep _filteredProducts if supplier is still selected
+    // _filteredProducts.clear(); // Don't clear - may be needed
+    notifyListeners();
+  }
+
+  void clearPOCartAndSupplier() {
+    // Use this method when truly starting fresh (e.g., after PO creation success)
     _selectedSupplierId = null;
     for (var item in _poCartItems) {
       item.dispose(); // Dispose all controllers
     }
     _poCartItems.clear();
-    _filteredProducts.clear(); // Clear filtered products
+    _filteredProducts.clear();
     notifyListeners();
   }
 
   // Create Purchase Order from Cart
-  Future<PurchaseOrder?> createPOFromCart({String? notes, PurchaseOrderStatus status = PurchaseOrderStatus.draft}) async {
+  Future<PurchaseOrder?> createPOFromCart({
+    String? notes,
+    PurchaseOrderStatus status = PurchaseOrderStatus.draft,
+  }) async {
     final validItems = validPOCartItems;
     if (_selectedSupplierId == null || validItems.isEmpty) {
-      _setError('Vui lòng chọn nhà cung cấp và thêm sản phẩm có số lượng > 0 vào đơn hàng');
+      _setError(
+        'Vui lòng chọn nhà cung cấp và thêm sản phẩm có số lượng > 0 vào đơn hàng',
+      );
       return null;
     }
 
@@ -483,17 +586,21 @@ class PurchaseOrderProvider extends ChangeNotifier {
       storeId: BaseService.getDefaultStoreId(),
     );
 
-    final items = validItems.map((cartItem) => PurchaseOrderItem(
-      id: '', // Handled by DB
-      purchaseOrderId: '', // Handled by service
-      productId: cartItem.product.id,
-      quantity: cartItem.quantity,
-      unitCost: cartItem.unitCost,
-      unit: cartItem.unit,
-      totalCost: cartItem.quantity * cartItem.unitCost,
-      createdAt: DateTime.now(),
-      storeId: BaseService.getDefaultStoreId(),
-    )).toList();
+    final items = validItems
+        .map(
+          (cartItem) => PurchaseOrderItem(
+            id: '', // Handled by DB
+            purchaseOrderId: '', // Handled by service
+            productId: cartItem.product.id,
+            quantity: cartItem.quantity,
+            unitCost: cartItem.unitCost,
+            unit: cartItem.unit,
+            totalCost: cartItem.quantity * cartItem.unitCost,
+            createdAt: DateTime.now(),
+            storeId: BaseService.getDefaultStoreId(),
+          ),
+        )
+        .toList();
 
     try {
       final newPO = await _poService.createPurchaseOrder(order, items);
@@ -510,7 +617,10 @@ class PurchaseOrderProvider extends ChangeNotifier {
   Future<bool> updatePOStatus(String poId, PurchaseOrderStatus status) async {
     _setStatus(POStatus.loading);
     try {
-      final updatedPO = await _poService.updatePurchaseOrderStatus(poId, status);
+      final updatedPO = await _poService.updatePurchaseOrderStatus(
+        poId,
+        status,
+      );
       final index = _purchaseOrders.indexWhere((po) => po.id == poId);
       if (index != -1) {
         _purchaseOrders[index] = updatedPO;

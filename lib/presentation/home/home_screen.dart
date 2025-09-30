@@ -1,10 +1,63 @@
 import 'package:flutter/material.dart';
 import '../../core/routing/route_names.dart';
 import '../../shared/widgets/connectivity_banner.dart';
-import '../main_navigation/main_navigation_screen.dart';
+import '../../features/products/screens/products/product_list_screen.dart';
+import '../../features/customers/screens/customers/customer_list_screen.dart';
+import '../../features/products/screens/company/company_list_screen.dart';
+import '../../features/products/screens/purchase_order/po_list_screen.dart';
+import '../../features/reports/screens/reports_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  void _handleFeatureNavigation(BuildContext context, String route) {
+    // Navigate using root navigator for full-screen (no bottom nav)
+    switch (route) {
+      case RouteNames.products:
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (context) => const ProductListScreen()),
+        );
+        break;
+      case RouteNames.customers:
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (context) => CustomerListScreen()),
+        );
+        break;
+      case RouteNames.companies:
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (context) => const CompanyListScreen()),
+        );
+        break;
+      case RouteNames.purchaseOrders:
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (context) => PurchaseOrderListScreen()),
+        );
+        break;
+      case '/reports':
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (context) => ReportsScreen()),
+        );
+        break;
+      default:
+        // Các routes khác (POS, Profile, Transaction) là tabs
+        // Show snackbar hướng dẫn dùng bottom nav
+        final tabNames = {
+          RouteNames.pos: 'Bán Hàng',
+          RouteNames.profile: 'Tài khoản',
+          RouteNames.transactionList: 'Giao Dịch',
+        };
+        if (tabNames.containsKey(route)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Dùng thanh điều hướng bên dưới để chuyển đến ${tabNames[route]}'),
+              duration: const Duration(seconds: 2),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +172,7 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
-        onTap: () => MainNavigationHelper.navigateToTab(context, route),
+        onTap: () => _handleFeatureNavigation(context, route),
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(16),

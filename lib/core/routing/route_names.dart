@@ -14,6 +14,9 @@ class RouteNames {
   static const String customers = '/customers';
   static const String products = '/products';
   static const String productDetail = '/product-detail';
+  static const String addProductStep1 = '/add-product-step1';
+  static const String addProductStep2 = '/add-product-step2';
+  static const String addProductStep3 = '/add-product-step3';
   static const String companies = '/companies';
   static const String addCompany = '/companies/add';
   static const String editCompany = '/companies/edit';
@@ -21,11 +24,14 @@ class RouteNames {
   static const String purchaseOrders = '/purchase-orders';
   static const String createPurchaseOrder = '/purchase-orders/create';
   static const String purchaseOrderDetail = '/purchase-orders/detail';
-  static const String purchaseOrderReceiveSuccess = '/purchase-orders/receive-success';
+  static const String purchaseOrderReceiveSuccess =
+      '/purchase-orders/receive-success';
   static const String pos = '/pos';
   static const String cart = '/cart'; // Thêm route cho CartScreen
-  static const String transactionSuccess = '/transaction-success'; // Thêm route cho TransactionSuccessScreen
-  static const String transactionList = '/transaction-list'; // Transaction history screen
+  static const String transactionSuccess =
+      '/transaction-success'; // Thêm route cho TransactionSuccessScreen
+  static const String transactionList =
+      '/transaction-list'; // Transaction history screen
   static const String reports = '/reports';
   static const String profile = '/profile';
   static const String changePassword = '/change-password';

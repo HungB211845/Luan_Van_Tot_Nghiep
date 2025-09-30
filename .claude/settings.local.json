@@ -16,7 +16,8 @@
       "Bash(cat:*)",
       "Bash(grep:*)",
       "Bash(r)",
-      "Bash(nc localhost 3000)"
+      "Bash(nc localhost 3000)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

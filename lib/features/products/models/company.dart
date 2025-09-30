@@ -11,6 +11,10 @@ class Company {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  // Metadata fields (optional)
+  final int? productsCount;
+  final int? ordersCount;
+
   Company({
     required this.id,
     required this.name,
@@ -21,6 +25,8 @@ class Company {
     required this.storeId, // Add storeId
     this.createdAt,
     this.updatedAt,
+    this.productsCount,
+    this.ordersCount,
   });
 
   factory Company.fromJson(Map<String, dynamic> json) {
@@ -34,6 +40,8 @@ class Company {
       storeId: json['store_id'], // Add storeId
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
+      productsCount: json['products_count'],
+      ordersCount: json['orders_count'],
     );
   }
 
@@ -48,4 +56,8 @@ class Company {
       'store_id': storeId, // Add storeId
     };
   }
+
+  // Helper getters
+  bool get hasProducts => (productsCount ?? 0) > 0;
+  bool get hasOrders => (ordersCount ?? 0) > 0;
 }

@@ -6,20 +6,15 @@ import '../home/home_screen.dart';
 import '../../features/pos/screens/transaction/transaction_list_screen.dart';
 import '../../features/pos/screens/pos/pos_screen.dart';
 import '../../features/auth/screens/profile/profile_screen.dart';
-
-// Additional screens for feature cards
 import '../../features/products/screens/products/product_list_screen.dart';
-import '../../features/customers/screens/customers/customer_list_screen.dart';
-import '../../features/products/screens/company/company_list_screen.dart';
-import '../../features/products/screens/purchase_order/po_list_screen.dart';
-import '../../features/reports/screens/reports_screen.dart';
 
 // Providers
 import '../../features/pos/providers/transaction_provider.dart';
 import '../../features/customers/providers/customer_provider.dart';
-import '../../core/routing/route_names.dart';
+import '../../features/products/providers/product_edit_mode_provider.dart';
 
-// NOTE: Removed global key to fix duplicate GlobalKey issues
+// Tab Navigator
+import 'tab_navigator.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -30,75 +25,123 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  int _previousIndex = 0;
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const TransactionListScreen(),
-    const POSScreen(),
-    const ProductListScreen(),
-    const ProfileScreen(),
-  ];
-
+  // Create navigator keys once for the entire lifetime
+  late final GlobalKey<NavigatorState> _homeKey;
+  late final GlobalKey<NavigatorState> _transactionsKey;
+  late final GlobalKey<NavigatorState> _posKey;
+  late final GlobalKey<NavigatorState> _productsKey;
+  late final GlobalKey<NavigatorState> _profileKey;
 
   @override
   void initState() {
     super.initState();
+
+    // Initialize navigator keys once
+    _homeKey = GlobalKey<NavigatorState>(debugLabel: 'HomeNavigator');
+    _transactionsKey = GlobalKey<NavigatorState>(debugLabel: 'TransactionsNavigator');
+    _posKey = GlobalKey<NavigatorState>(debugLabel: 'POSNavigator');
+    _productsKey = GlobalKey<NavigatorState>(debugLabel: 'ProductsNavigator');
+    _profileKey = GlobalKey<NavigatorState>(debugLabel: 'ProfileNavigator');
+
     // Initialize providers on startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Load initial data for transaction screen
       context.read<TransactionProvider>().loadTransactions();
       context.read<CustomerProvider>().loadCustomers();
     });
   }
 
+  /// Get navigator key by index
+  GlobalKey<NavigatorState> _getKeyForIndex(int index) {
+    switch (index) {
+      case 0: return _homeKey;
+      case 1: return _transactionsKey;
+      case 2: return _posKey;
+      case 3: return _productsKey;
+      case 4: return _profileKey;
+      default: return _homeKey;
+    }
+  }
+
+  /// Handle back button - pop current tab's navigation stack
+  Future<bool> _onWillPop() async {
+    final key = _getKeyForIndex(_currentIndex);
+    if (key.currentState?.canPop() ?? false) {
+      key.currentState?.pop();
+      return false; // Don't exit app
+    }
+    return true; // Exit app
+  }
+
   void _onTabTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
+    if (_currentIndex == index) {
+      // Tap vào tab hiện tại → reset về root của tab đó
+      final key = _getKeyForIndex(index);
+      key.currentState?.popUntil((route) => route.isFirst);
+    } else {
+      // Switch sang tab khác
+      setState(() {
+        _previousIndex = _currentIndex;
+        _currentIndex = index;
+      });
 
-    // Refresh data when switching to transaction tab
-    if (index == 1) {
-      context.read<TransactionProvider>().refresh();
+      // Refresh data when switching to transaction tab
+      if (index == 1) {
+        context.read<TransactionProvider>().refresh();
+      }
     }
   }
 
-  // Method to handle feature card navigation
-  void navigateToFeature(String route) {
-    switch (route) {
-      case RouteNames.pos:
-        _onTabTapped(2); // Switch to POS tab
-        break;
-      case RouteNames.transactionList:
-        _onTabTapped(1); // Switch to Transaction tab
-        break;
-      case RouteNames.products:
-        _onTabTapped(3); // Switch to Products tab
-        break;
-      case RouteNames.profile:
-        _onTabTapped(4); // Switch to Profile tab
-        break;
-      default:
-        // For other routes, navigate normally with bottom nav preserved
-        Navigator.pushNamed(context, route);
-        break;
-    }
-  }
-
-  // Static method to navigate from anywhere in the app
-  static void navigateToTab(BuildContext context, String route) {
-    // Fallback to normal navigation since we removed global key
-    Navigator.pushNamed(context, route);
-  }
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: _buildCustomBottomNav(),
-      floatingActionButton: _buildCenterPOSButton(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    return Consumer<ProductEditModeProvider>(
+      builder: (context, editModeProvider, child) {
+        final hideBottomNav = editModeProvider.isEditMode;
+
+        return WillPopScope(
+          onWillPop: _onWillPop,
+          child: Scaffold(
+            body: IndexedStack(
+              index: _currentIndex,
+              children: [
+                // Tab 0: Home với nested navigator
+                TabNavigator(
+                  navigatorKey: _homeKey,
+                  initialScreen: const HomeScreen(),
+                ),
+
+                // Tab 1: Transactions với nested navigator
+                TabNavigator(
+                  navigatorKey: _transactionsKey,
+                  initialScreen: const TransactionListScreen(),
+                ),
+
+                // Tab 2: POS (standalone - fullscreen)
+                TabNavigator(
+                  navigatorKey: _posKey,
+                  initialScreen: const POSScreen(),
+                ),
+
+                // Tab 3: Products với nested navigator
+                TabNavigator(
+                  navigatorKey: _productsKey,
+                  initialScreen: const ProductListScreen(),
+                ),
+
+                // Tab 4: Profile với nested navigator
+                TabNavigator(
+                  navigatorKey: _profileKey,
+                  initialScreen: const ProfileScreen(),
+                ),
+              ],
+            ),
+            bottomNavigationBar: hideBottomNav ? null : _buildCustomBottomNav(),
+            floatingActionButton: hideBottomNav ? null : _buildCenterPOSButton(),
+            floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          ),
+        );
+      },
     );
   }
 
@@ -209,10 +252,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-// Static helper class for navigation
+/// Static helper class để navigate từ bất kỳ đâu trong app
 class MainNavigationHelper {
-  static void navigateToTab(BuildContext context, String route) {
-    // Fallback to normal navigation since we removed global key
-    Navigator.pushNamed(context, route);
+  /// Switch đến tab cụ thể từ bất kỳ context nào
+  static void switchToTab(BuildContext context, int tabIndex) {
+    // Find MainNavigationScreen trong widget tree và trigger tab change
+    // Vì ta đang dùng nested navigator, cần pop về root trước
+    Navigator.of(context, rootNavigator: true).popUntil((route) {
+      return route.settings.name == '/' || !route.navigator!.canPop();
+    });
+  }
+
+  /// Navigate đến một screen trong tab hiện tại
+  static void navigateInCurrentTab(BuildContext context, Widget screen) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => screen),
+    );
+  }
+
+  /// Navigate đến một screen và show route name
+  static void navigateToRoute(BuildContext context, String routeName) {
+    Navigator.of(context).pushNamed(routeName);
   }
 }

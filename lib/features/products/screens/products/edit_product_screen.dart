@@ -5,7 +5,8 @@ import '../../models/fertilizer_attributes.dart';
 import '../../models/pesticide_attributes.dart';
 import '../../models/seed_attributes.dart';
 import '../../providers/product_provider.dart';
-import '../../providers/company_provider.dart'; // Thêm import
+import '../../providers/company_provider.dart';
+import '../../../../shared/services/base_service.dart';
 
 class EditProductScreen extends StatefulWidget {
   final Product product;
@@ -19,6 +20,7 @@ class EditProductScreen extends StatefulWidget {
 class _EditProductScreenState extends State<EditProductScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _hasChanges = false;
 
   // Controllers
   late TextEditingController _nameController;
@@ -47,17 +49,19 @@ class _EditProductScreenState extends State<EditProductScreen> {
   void initState() {
     super.initState();
 
-    // Khởi tạo controllers với dữ liệu từ product có sẵn
     _nameController = TextEditingController(text: widget.product.name);
     _skuController = TextEditingController(text: widget.product.sku);
     _descriptionController = TextEditingController(text: widget.product.description ?? '');
     _selectedCategory = widget.product.category;
     _selectedCompanyId = widget.product.companyId;
 
-    // Điền dữ liệu cho các thuộc tính đặc thù
     _populateAttributeControllers();
 
-    // Tải danh sách công ty từ CompanyProvider
+    // Track changes
+    _nameController.addListener(() => setState(() => _hasChanges = true));
+    _skuController.addListener(() => setState(() => _hasChanges = true));
+    _descriptionController.addListener(() => setState(() => _hasChanges = true));
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CompanyProvider>().loadCompanies();
     });
@@ -92,7 +96,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   @override
   void dispose() {
-    // Dispose tất cả controllers
     _nameController.dispose();
     _skuController.dispose();
     _descriptionController.dispose();
@@ -111,230 +114,135 @@ class _EditProductScreenState extends State<EditProductScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chỉnh Sửa Sản Phẩm'),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildSectionTitle('Thông Tin Cơ Bản'),
-              const SizedBox(height: 16),
-              _buildBasicInfoForm(),
-              const SizedBox(height: 24),
-              _buildSectionTitle('Thuộc Tính Sản Phẩm'),
-              const SizedBox(height: 16),
-              _buildCategorySelector(),
-              const SizedBox(height: 16),
-              _buildDynamicAttributesForm(),
-              const SizedBox(height: 32),
-              _buildActionButtons(),
-            ],
+  Future<bool> _onWillPop() async {
+    if (!_hasChanges) return true;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Hủy thay đổi?'),
+        content: const Text('Bạn có thay đổi chưa được lưu. Bạn có muốn hủy các thay đổi không?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Tiếp tục chỉnh sửa'),
           ),
-        ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hủy thay đổi'),
+          ),
+        ],
       ),
     );
+
+    return result ?? false;
   }
 
-  // ... (Các hàm build UI được copy và điều chỉnh từ AddProductScreen)
+  Future<void> _saveChanges() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold));
-  }
+    setState(() => _isLoading = true);
 
-  Widget _buildBasicInfoForm() {
-    return Column(
-      children: [
-        TextFormField(
-          controller: _nameController,
-          decoration: _buildInputDecoration(label: 'Tên sản phẩm', icon: Icons.inventory),
-          validator: (value) => (value?.trim().isEmpty ?? true) ? 'Vui lòng nhập tên' : null,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _skuController,
-          readOnly: true, // KHÔNG CHO SỬA SKU
-          decoration: _buildInputDecoration(label: 'Mã SKU/Barcode', icon: Icons.qr_code).copyWith(
-            fillColor: Colors.grey[200],
+    try {
+      final updatedProduct = widget.product.copyWith(
+        name: _nameController.text.trim(),
+        sku: _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+        category: _selectedCategory,
+        companyId: _selectedCompanyId,
+        attributes: _buildAttributes(),
+        updatedAt: DateTime.now(),
+      );
+
+      final provider = context.read<ProductProvider>();
+      final success = await provider.updateProduct(updatedProduct);
+
+      if (success && mounted) {
+        setState(() => _hasChanges = false);
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã cập nhật sản phẩm thành công'),
+            backgroundColor: Colors.green,
           ),
-        ),
-        const SizedBox(height: 16),
-        Consumer<CompanyProvider>(
-          builder: (context, provider, child) {
-            return DropdownButtonFormField<String>(
-              value: _selectedCompanyId,
-              decoration: _buildInputDecoration(label: 'Nhà cung cấp', icon: Icons.business),
-              items: provider.companies.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-              onChanged: (value) => setState(() => _selectedCompanyId = value),
-              validator: (value) => (value == null) ? 'Vui lòng chọn nhà cung cấp' : null,
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _descriptionController,
-          decoration: _buildInputDecoration(label: 'Mô tả', icon: Icons.description),
-          maxLines: 3,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategorySelector() {
-    return DropdownButtonFormField<ProductCategory>(
-      value: _selectedCategory,
-      decoration: _buildInputDecoration(label: 'Loại sản phẩm', icon: Icons.category),
-      items: ProductCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(_getCategoryDisplayName(c)))).toList(),
-      onChanged: null, // KHÔNG CHO SỬA LOẠI SẢN PHẨM
-    );
-  }
-
-  Widget _buildDynamicAttributesForm() {
-    switch (_selectedCategory) {
-      case ProductCategory.FERTILIZER: return _buildFertilizerForm();
-      case ProductCategory.PESTICIDE: return _buildPesticideForm();
-      case ProductCategory.SEED: return _buildSeedForm();
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.errorMessage.isEmpty ? 'Có lỗi xảy ra' : provider.errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  Widget _buildFertilizerForm() {
-    return Column(children: [
-      TextFormField(
-        controller: _npkRatioController,
-        decoration: _buildInputDecoration(label: 'Tỷ lệ NPK', icon: Icons.science),
-        validator: (v) => (v?.isEmpty ?? true) ? 'Nhập NPK' : null,
-      ),
-      const SizedBox(height: 16),
-      Row(children: [
-        Expanded(child: DropdownButtonFormField<String>(
-          value: _fertilizerTypeController.text,
-          decoration: _buildInputDecoration(label: 'Loại'),
-          items: ['vô cơ', 'hữu cơ', 'hỗn hợp'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-          onChanged: (v) => _fertilizerTypeController.text = v ?? '',
-          validator: (v) => (v?.isEmpty ?? true) ? 'Chọn loại' : null,
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: TextFormField(
-          controller: _weightController,
-          decoration: _buildInputDecoration(label: 'Khối lượng'),
-          keyboardType: TextInputType.number,
-          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập khối lượng' : null,
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: DropdownButtonFormField<String>(
-          value: _weightUnitController.text,
-          decoration: _buildInputDecoration(label: 'Đơn vị'),
-          items: ['kg', 'tấn', 'bao'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-          onChanged: (v) => _weightUnitController.text = v ?? '',
-          validator: (v) => (v?.isEmpty ?? true) ? 'Chọn đơn vị' : null,
-        )),
-      ]),
-    ]);
-  }
-
-  Widget _buildPesticideForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextFormField(
-          controller: _activeIngredientController,
-          decoration: _buildInputDecoration(label: 'Hoạt chất chính', icon: Icons.biotech),
-          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập hoạt chất' : null,
+  Future<void> _deleteProduct() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Xóa sản phẩm',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 16),
-        Row(children: [
-          Expanded(child: TextFormField(
-            controller: _concentrationController,
-            decoration: _buildInputDecoration(label: 'Nồng độ'),
-            validator: (v) => (v?.isEmpty ?? true) ? 'Nhập nồng độ' : null,
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: TextFormField(
-            controller: _volumeController,
-            decoration: _buildInputDecoration(label: 'Thể tích'),
-            keyboardType: TextInputType.number,
-            validator: (v) => (v?.isEmpty ?? true) ? 'Nhập thể tích' : null,
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: DropdownButtonFormField<String>(
-            value: _volumeUnitController.text,
-            decoration: _buildInputDecoration(label: 'Đơn vị'),
-            items: ['ml', 'lít', 'chai', 'lọ'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-            onChanged: (v) => _volumeUnitController.text = v ?? '',
-            validator: (v) => (v?.isEmpty ?? true) ? 'Chọn đơn vị' : null,
-          )),
-        ]),
-      ],
+        content: Text(
+          'Bạn có chắc chắn muốn xóa "${widget.product.name}" không?\n\nHành động này không thể hoàn tác.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
     );
-  }
 
-  Widget _buildSeedForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Expanded(child: TextFormField(
-            controller: _strainController,
-            decoration: _buildInputDecoration(label: 'Tên giống', icon: Icons.grass),
-            validator: (v) => (v?.isEmpty ?? true) ? 'Nhập tên giống' : null,
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: TextFormField(
-            controller: _originController,
-            decoration: _buildInputDecoration(label: 'Nguồn gốc', icon: Icons.place),
-            validator: (v) => (v?.isEmpty ?? true) ? 'Nhập nguồn gốc' : null,
-          )),
-        ]),
-        const SizedBox(height: 16),
-        Row(children: [
-          Expanded(child: TextFormField(
-            controller: _germinationRateController,
-            decoration: _buildInputDecoration(label: 'Tỷ lệ nảy mầm (%)'),
-            keyboardType: TextInputType.number,
-            validator: (v) => (v?.isEmpty ?? true) ? 'Nhập tỷ lệ' : null,
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: TextFormField(
-            controller: _purityController,
-            decoration: _buildInputDecoration(label: 'Độ thuần chủng (%)'),
-            keyboardType: TextInputType.number,
-            validator: (v) => (v?.isEmpty ?? true) ? 'Nhập độ thuần' : null,
-          )),
-        ]),
-      ],
-    );
-  }
+    if (confirmed == true && mounted) {
+      setState(() => _isLoading = true);
 
-  Widget _buildActionButtons() {
-    return Row(children: [
-      Expanded(child: OutlinedButton(onPressed: _isLoading ? null : () => Navigator.pop(context), child: const Text('Hủy'))),
-      const SizedBox(width: 16),
-      Expanded(child: ElevatedButton(
-        onPressed: _isLoading ? null : _updateProduct,
-        child: _isLoading ? const CircularProgressIndicator() : const Text('Lưu Thay Đổi'),
-      )),
-    ]);
-  }
+      try {
+        final provider = context.read<ProductProvider>();
+        final success = await provider.deleteProduct(widget.product.id);
 
-  InputDecoration _buildInputDecoration({required String label, String? hint, IconData? icon}) {
-    return InputDecoration(
-      labelText: label, hintText: hint, prefixIcon: icon != null ? Icon(icon) : null, border: const OutlineInputBorder(),
-    );
-  }
-
-  String _getCategoryDisplayName(ProductCategory category) {
-    switch (category) {
-      case ProductCategory.FERTILIZER: return 'Phân Bón';
-      case ProductCategory.PESTICIDE: return 'Thuốc BVTV';
-      case ProductCategory.SEED: return 'Lúa Giống';
+        if (success && mounted) {
+          Navigator.pop(context); // Close EditProductScreen
+          Navigator.pop(context); // Close ProductDetailScreen
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Đã xóa sản phẩm thành công'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(provider.errorMessage.isEmpty ? 'Có lỗi xảy ra' : provider.errorMessage),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
   }
 
@@ -347,43 +255,419 @@ class _EditProductScreenState extends State<EditProductScreen> {
           weight: int.tryParse(_weightController.text.trim()) ?? 0,
           unit: _weightUnitController.text.trim(),
         ).toJson();
-      // ... các case khác tương tự
-      default:
-        return {};
+      case ProductCategory.PESTICIDE:
+        return PesticideAttributes(
+          activeIngredient: _activeIngredientController.text.trim(),
+          concentration: _concentrationController.text.trim(),
+          volume: double.tryParse(_volumeController.text.trim()) ?? 0.0,
+          unit: _volumeUnitController.text.trim(),
+          targetPests: [],
+        ).toJson();
+      case ProductCategory.SEED:
+        return SeedAttributes(
+          strain: _strainController.text.trim(),
+          origin: _originController.text.trim(),
+          germinationRate: _germinationRateController.text.trim(),
+          purity: _purityController.text.trim(),
+        ).toJson();
     }
   }
 
-  Future<void> _updateProduct() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: AppBar(
+          title: const Text(
+            'Chỉnh Sửa Sản Phẩm',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+          actions: [
+            TextButton(
+              onPressed: _isLoading ? null : _saveChanges,
+              child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text(
+                    'Lưu',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+            ),
+          ],
+        ),
+        body: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
 
-    try {
-      final updatedProduct = widget.product.copyWith(
-        name: _nameController.text.trim(),
-        companyId: _selectedCompanyId,
-        description: _descriptionController.text.trim(),
-        attributes: _buildAttributes(),
-      );
+                // Basic Info Group
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          'Thông Tin Cơ Bản',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ),
+                      _buildBasicInfoFields(),
+                    ],
+                  ),
+                ),
 
-      final provider = context.read<ProductProvider>();
-      final success = await provider.updateProduct(updatedProduct);
+                const SizedBox(height: 20),
 
-      if (mounted) {
-        if (success) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật thành công!'), backgroundColor: Colors.green));
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(provider.errorMessage), backgroundColor: Colors.red));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+                // Product Attributes Group
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          'Thuộc Tính Sản Phẩm',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ),
+                      _buildCategoryRow(),
+                      _buildDynamicAttributesForm(),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Delete Button - Separated at bottom
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _deleteProduct,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Xóa Sản Phẩm Này'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBasicInfoFields() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        children: [
+          TextFormField(
+            controller: _nameController,
+            decoration: _buildInputDecoration(
+              label: 'Tên sản phẩm *',
+              icon: Icons.inventory,
+            ),
+            validator: (v) => (v?.trim().isEmpty ?? true) ? 'Nhập tên sản phẩm' : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _skuController,
+            decoration: _buildInputDecoration(
+              label: 'Mã SKU/Barcode',
+              icon: Icons.qr_code,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Consumer<CompanyProvider>(
+            builder: (context, provider, _) {
+              return DropdownButtonFormField<String>(
+                value: _selectedCompanyId,
+                decoration: _buildInputDecoration(
+                  label: 'Nhà cung cấp *',
+                  icon: Icons.business,
+                ),
+                items: provider.companies.map((c) {
+                  return DropdownMenuItem(value: c.id, child: Text(c.name));
+                }).toList(),
+                onChanged: (v) => setState(() {
+                  _selectedCompanyId = v;
+                  _hasChanges = true;
+                }),
+                validator: (v) => (v?.isEmpty ?? true) ? 'Chọn nhà cung cấp' : null,
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _descriptionController,
+            decoration: _buildInputDecoration(
+              label: 'Mô tả',
+              icon: Icons.description,
+            ),
+            maxLines: 3,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: DropdownButtonFormField<ProductCategory>(
+        value: _selectedCategory,
+        decoration: _buildInputDecoration(
+          label: 'Loại sản phẩm *',
+          icon: Icons.category,
+        ),
+        items: ProductCategory.values.map((cat) {
+          return DropdownMenuItem(
+            value: cat,
+            child: Text(_getCategoryName(cat)),
+          );
+        }).toList(),
+        onChanged: (v) {
+          if (v != null) {
+            setState(() {
+              _selectedCategory = v;
+              _hasChanges = true;
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildDynamicAttributesForm() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: _selectedCategory == ProductCategory.FERTILIZER
+        ? _buildFertilizerForm()
+        : _selectedCategory == ProductCategory.PESTICIDE
+          ? _buildPesticideForm()
+          : _buildSeedForm(),
+    );
+  }
+
+  Widget _buildFertilizerForm() {
+    return Column(
+      children: [
+        TextFormField(
+          controller: _npkRatioController,
+          decoration: _buildInputDecoration(label: 'Tỷ lệ NPK *', icon: Icons.science),
+          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập NPK' : null,
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _fertilizerTypeController.text.isEmpty ? null : _fertilizerTypeController.text,
+          decoration: _buildInputDecoration(label: 'Loại *'),
+          items: ['vô cơ', 'hữu cơ', 'hỗn hợp'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+          onChanged: (v) => setState(() {
+            _fertilizerTypeController.text = v ?? '';
+            _hasChanges = true;
+          }),
+          validator: (v) => (v?.isEmpty ?? true) ? 'Chọn loại' : null,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _weightController,
+                decoration: _buildInputDecoration(label: 'Khối lượng *'),
+                keyboardType: TextInputType.number,
+                validator: (v) => (v?.isEmpty ?? true) ? 'Nhập khối lượng' : null,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _weightUnitController.text.isEmpty ? null : _weightUnitController.text,
+                decoration: _buildInputDecoration(label: 'Đơn vị *'),
+                items: ['kg', 'tấn', 'bao'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                onChanged: (v) => setState(() {
+                  _weightUnitController.text = v ?? '';
+                  _hasChanges = true;
+                }),
+                validator: (v) => (v?.isEmpty ?? true) ? 'Chọn đơn vị' : null,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPesticideForm() {
+    return Column(
+      children: [
+        TextFormField(
+          controller: _activeIngredientController,
+          decoration: _buildInputDecoration(label: 'Hoạt chất chính *', icon: Icons.biotech),
+          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập hoạt chất' : null,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _concentrationController,
+          decoration: _buildInputDecoration(label: 'Nồng độ *'),
+          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập nồng độ' : null,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _volumeController,
+                decoration: _buildInputDecoration(label: 'Thể tích *'),
+                keyboardType: TextInputType.number,
+                validator: (v) => (v?.isEmpty ?? true) ? 'Nhập thể tích' : null,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _volumeUnitController.text.isEmpty ? null : _volumeUnitController.text,
+                decoration: _buildInputDecoration(label: 'Đơn vị *'),
+                items: ['ml', 'lít', 'chai', 'lọ'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                onChanged: (v) => setState(() {
+                  _volumeUnitController.text = v ?? '';
+                  _hasChanges = true;
+                }),
+                validator: (v) => (v?.isEmpty ?? true) ? 'Chọn đơn vị' : null,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSeedForm() {
+    return Column(
+      children: [
+        TextFormField(
+          controller: _strainController,
+          decoration: _buildInputDecoration(label: 'Tên giống *', icon: Icons.grass),
+          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập tên giống' : null,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _originController,
+          decoration: _buildInputDecoration(label: 'Nguồn gốc *'),
+          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập nguồn gốc' : null,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _germinationRateController,
+                decoration: _buildInputDecoration(label: 'Tỷ lệ nảy mầm (%) *'),
+                keyboardType: TextInputType.number,
+                validator: (v) => (v?.isEmpty ?? true) ? 'Nhập tỷ lệ' : null,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _purityController,
+                decoration: _buildInputDecoration(label: 'Độ thuần chủng (%) *'),
+                keyboardType: TextInputType.number,
+                validator: (v) => (v?.isEmpty ?? true) ? 'Nhập độ thuần' : null,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _buildInputDecoration({required String label, IconData? icon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: icon != null ? Icon(icon, size: 20, color: Colors.green) : null,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.grey[300]!),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Colors.green, width: 2),
+      ),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    );
+  }
+
+  String _getCategoryName(ProductCategory cat) {
+    switch (cat) {
+      case ProductCategory.FERTILIZER:
+        return 'Phân Bón';
+      case ProductCategory.PESTICIDE:
+        return 'Thuốc BVTV';
+      case ProductCategory.SEED:
+        return 'Lúa Giống';
     }
   }
 }

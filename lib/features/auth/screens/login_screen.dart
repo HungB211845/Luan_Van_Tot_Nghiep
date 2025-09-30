@@ -102,12 +102,24 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleBiometricLogin() async {
-    final ok = await context.read<AuthProvider>().signInWithBiometric();
+    final authProvider = context.read<AuthProvider>();
+    final ok = await authProvider.signInWithBiometric();
     if (!mounted) return;
     if (ok) {
       Navigator.of(context).pushReplacementNamed(RouteNames.homeAlias);
+    } else {
+      // Show error message from AuthProvider
+      final errorMessage = authProvider.state.errorMessage;
+      if (errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
-    // Error message is already handled by AuthProvider state
   }
 
   Future<void> _handleGoogle() async {
@@ -239,16 +251,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: _handleBiometricLogin,
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                    ),
-                    icon: const Icon(Icons.fingerprint),
-                    label: const Text('Đăng nhập bằng sinh trắc học'),
-                  ),
+
+                // Face ID Button - Only show if available
+                _BiometricLoginButton(
+                  isLoading: auth.isLoading,
+                  onPressed: _handleBiometricLogin,
                 ),
 
                 if (auth.errorMessage != null) ...[
@@ -305,6 +312,65 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BiometricLoginButton extends StatefulWidget {
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  const _BiometricLoginButton({
+    required this.isLoading,
+    required this.onPressed,
+  });
+
+  @override
+  State<_BiometricLoginButton> createState() => _BiometricLoginButtonState();
+}
+
+class _BiometricLoginButtonState extends State<_BiometricLoginButton> {
+  @override
+  void initState() {
+    super.initState();
+    // Trigger rebuild when widget is first created
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      key: ValueKey(DateTime.now().millisecondsSinceEpoch), // Force rebuild every time
+      future: context.read<AuthProvider>().isBiometricAvailableAndEnabled(),
+      builder: (context, snapshot) {
+        // Show loading while checking
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        final isAvailable = snapshot.data ?? false;
+        if (!isAvailable) return const SizedBox.shrink();
+
+        return Column(
+          children: [
+            SizedBox(
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: widget.isLoading ? null : widget.onPressed,
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  side: const BorderSide(color: Colors.green),
+                ),
+                icon: const Icon(Icons.fingerprint, color: Colors.green),
+                label: const Text('Đăng nhập bằng Face ID', style: TextStyle(color: Colors.green)),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        );
+      },
     );
   }
 }
