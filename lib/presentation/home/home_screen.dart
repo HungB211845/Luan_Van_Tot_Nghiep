@@ -6,6 +6,7 @@ import '../../features/customers/screens/customers/customer_list_screen.dart';
 import '../../features/products/screens/company/company_list_screen.dart';
 import '../../features/products/screens/purchase_order/po_list_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
+import '../../features/debt/screens/debt_list_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -36,6 +37,11 @@ class HomeScreen extends StatelessWidget {
       case '/reports':
         Navigator.of(context, rootNavigator: true).push(
           MaterialPageRoute(builder: (context) => ReportsScreen()),
+        );
+        break;
+      case RouteNames.debts:
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (context) => const DebtListScreen()),
         );
         break;
       default:
@@ -140,6 +146,14 @@ class HomeScreen extends StatelessWidget {
                     subtitle: 'Thống kê',
                     route: '/reports', // Add this route later
                     color: Colors.purple,
+                  ),
+                  _buildFeatureCard(
+                    context,
+                    icon: Icons.credit_card,
+                    title: 'Công Nợ',
+                    subtitle: 'Quản lý công nợ',
+                    route: RouteNames.debts,
+                    color: Colors.red,
                   ),
                   _buildFeatureCard(
                     context,

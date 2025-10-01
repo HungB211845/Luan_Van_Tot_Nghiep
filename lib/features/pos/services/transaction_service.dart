@@ -5,14 +5,14 @@ import '../models/transaction.dart';
 import '../models/transaction_item.dart';
 import '../models/payment_method.dart';
 import '../../../shared/models/paginated_result.dart';
-// import '../../customers/models/customer.dart'; // Tạm thời bỏ comment
-// import '../../debt/services/debt_service.dart'; // Tạm thời bỏ comment
+import '../../debt/services/debt_service.dart';
 
 class TransactionService extends BaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
-  // final DebtService _debtService; // Tạm thời bỏ comment
+  final DebtService _debtService;
 
-  TransactionService(); // Tạm thời không inject DebtService
+  TransactionService({DebtService? debtService})
+      : _debtService = debtService ?? DebtService();
 
   // =====================================================
   // TRANSACTION OPERATIONS (POS SALES)
@@ -24,7 +24,7 @@ class TransactionService extends BaseService {
     required List<TransactionItem> items,
     required PaymentMethod paymentMethod,
     String? notes,
-    // Customer? customer, // Tạm thời bỏ comment
+    DateTime? debtDueDate, // Due date for debt transactions
   }) async {
     try {
       ensureAuthenticated();
@@ -65,13 +65,21 @@ class TransactionService extends BaseService {
       // Update inventory using optimized batch FIFO function
       await _updateInventoryBatchFIFO(items);
 
-      // Nếu là giao dịch ghi nợ, tạo bản ghi nợ (sẽ được xử lý sau khi DebtService hoàn thiện)
-      // if (paymentMethod == PaymentMethod.DEBT && customer != null) {
-      //   await _debtService.createDebtFromTransaction(
-      //     Transaction.fromJson(transactionResponse),
-      //     customer,
-      //   );
-      // }
+      // Create debt record if payment method is debt
+      if (paymentMethod == PaymentMethod.debt && customerId != null) {
+        try {
+          await _debtService.createDebtFromTransaction(
+            transaction: Transaction.fromJson(transactionResponse),
+            customerId: customerId,
+            dueDate: debtDueDate,
+            notes: notes,
+          );
+        } catch (debtError) {
+          // Log debt creation error but don't fail the transaction
+          // Transaction is already created, debt can be created manually later
+          print('Warning: Failed to create debt record: $debtError');
+        }
+      }
 
       return transactionId;
     } catch (e) {
@@ -378,6 +386,7 @@ class TransactionService extends BaseService {
 
   /// Lấy transaction với items (1 query thay vì 2) - OPTIMIZED
   Future<Transaction?> getTransactionWithItems(String transactionId) async {
+    print('[DEBUG] Service: Fetching tx with id: $transactionId for store: ${BaseService.getDefaultStoreId()}');
     try {
       ensureAuthenticated();
 
@@ -385,7 +394,8 @@ class TransactionService extends BaseService {
       final stopwatch = Stopwatch()..start();
 
       // Use direct JOIN query for specific transaction ID (most efficient)
-      final response = await addStoreFilter(_supabase
+      // RLS policy will handle store isolation, so no client-side filter is needed.
+      final response = await _supabase
           .from('transactions')
           .select('''
             id, created_at, store_id, customer_id, total_amount,
@@ -395,7 +405,7 @@ class TransactionService extends BaseService {
               id, product_id, quantity, unit_price, sub_total,
               products(name, sku)
             )
-          '''))
+          ''')
           .eq('id', transactionId)
           .maybeSingle();
 

@@ -81,6 +81,23 @@ class CustomerService extends BaseService {
     }
   }
 
+  Future<Customer?> getCustomerById(String customerId) async {
+    try {
+      ensureAuthenticated();
+      final response = await _supabase
+          .from('customers')
+          .select()
+          .eq('id', customerId)
+          .eq('store_id', currentStoreId!)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return Customer.fromJson(response);
+    } catch (e) {
+      throw Exception('Lỗi lấy thông tin khách hàng: $e');
+    }
+  }
+
   Future<List<Customer>> getCustomersSorted(String sortBy, bool ascending) async {
     try {
       String orderField;

@@ -156,4 +156,18 @@ class TransactionProvider extends ChangeNotifier {
   Future<void> refresh() async {
     await loadTransactions();
   }
+
+  /// Fetches a single transaction by its ID.
+  /// This is useful for navigating to a detail screen when you only have the ID.
+  Future<Transaction?> getTransactionById(String transactionId) async {
+    // No need to set global loading status for this single fetch
+    try {
+      final transaction = await _service.getTransactionWithItems(transactionId);
+      return transaction;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return null;
+    }
+  }
 }

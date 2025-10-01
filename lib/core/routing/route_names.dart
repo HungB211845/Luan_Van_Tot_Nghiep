@@ -33,6 +33,7 @@ class RouteNames {
   static const String transactionList =
       '/transaction-list'; // Transaction history screen
   static const String reports = '/reports';
+  static const String debts = '/debts'; // Debt management screen
   static const String profile = '/profile';
   static const String changePassword = '/change-password';
   static const String logout = '/logout';

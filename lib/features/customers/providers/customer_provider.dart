@@ -123,6 +123,16 @@ class CustomerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Get a customer from the already loaded list in memory (cache).
+  Customer? getCustomerFromCache(String customerId) {
+    try {
+      return _customers.firstWhere((c) => c.id == customerId);
+    } catch (e) {
+      // firstWhere throws if not found
+      return null;
+    }
+  }
+
   void clearSearch() {
     _searchQuery = '';
     _filteredCustomers = [];

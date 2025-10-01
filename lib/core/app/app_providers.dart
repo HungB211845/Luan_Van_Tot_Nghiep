@@ -10,6 +10,7 @@ import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/providers/permission_provider.dart';
 import '../../features/auth/providers/store_provider.dart';
 import '../../features/auth/providers/session_provider.dart';
+import '../../features/debt/providers/debt_provider.dart';
 
 class AppProviders {
   static List<SingleChildWidget> get list => [
@@ -27,6 +28,7 @@ class AppProviders {
             Provider.of<ProductProvider>(context, listen: false),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => DebtProvider()),
         // Dễ dàng thêm providers mới ở đây
       ];
 }

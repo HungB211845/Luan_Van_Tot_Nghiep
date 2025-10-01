@@ -842,6 +842,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     PaymentMethod paymentMethod = PaymentMethod.cash,
     bool isDebt = false,
     String? notes,
+    DateTime? debtDueDate, // Due date for debt transactions
   }) async {
     if (_cartItems.isEmpty) {
       _setError('Giỏ hàng trống');
@@ -869,6 +870,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         items: transactionItems,
         paymentMethod: paymentMethod,
         notes: notes,
+        debtDueDate: debtDueDate,
       );
 
       // Clear cart after successful transaction

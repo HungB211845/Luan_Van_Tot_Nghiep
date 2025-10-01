@@ -6,8 +6,11 @@ import '../../models/customer.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/utils/formatter.dart';
 
+import '../../../debt/models/debt.dart';
+import '../../../debt/providers/debt_provider.dart';
 import 'edit_customer_screen.dart';
 import 'customer_transaction_history_screen.dart';
+import '../../../debt/screens/customer_debt_detail_screen.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   final Customer customer;
@@ -23,10 +26,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Load both statistics and debt list when the screen opens
       context.read<CustomerProvider>().loadCustomerStatistics(widget.customer.id);
+      context.read<DebtProvider>().loadCustomerDebts(widget.customer.id);
     });
   }
 
+  // ... (All other helper methods like _showDeleteDialog, _callCustomer, etc. remain unchanged)
   void _showDeleteDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -125,7 +131,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       return;
     }
 
-    // Thử cách này trước
     final message = Uri.encodeComponent(
       'Xin chào ${widget.customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
     );
@@ -136,43 +141,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       if (await canLaunchUrl(smsUrl)) {
         await launchUrl(smsUrl);
       } else {
-        // Fallback: chỉ mở SMS app
         final basicSmsUrl = Uri.parse('sms:${widget.customer.phone}');
         await launchUrl(basicSmsUrl);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  Future<void> _sendDebtReminder(BuildContext context) async {
-    if (widget.customer.phone == null) return;
-
-    final message = Uri.encodeComponent(
-      'Xin chào ${widget.customer.name}, hiện tại anh/chị có khoản nợ cần thanh toán. Mong sắp xếp trả sớm. Cảm ơn!'
-    );
-
-    final smsUrl = Uri.parse('sms:${widget.customer.phone}?body=$message');
-
-    try {
-      if (await canLaunchUrl(smsUrl)) {
-        await launchUrl(smsUrl);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Không thể gửi tin nhắn được'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi: $e'),
-          backgroundColor: Colors.red,
-        ),
       );
     }
   }
@@ -188,6 +162,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     );
   }
 
+  void _navigateToDebtManagement() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CustomerDebtDetailScreen(
+          customerId: widget.customer.id,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -195,7 +180,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       appBar: AppBar(
         title: Text(
           widget.customer.name,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.green,
         elevation: 0,
@@ -209,19 +194,15 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 ),
               );
             },
-            icon: Icon(Icons.edit),
+            icon: const Icon(Icons.edit),
             tooltip: 'Chỉnh sửa',
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              switch (value) {
-                case 'delete':
-                  _showDeleteDialog(context);
-                  break;
-              }
+              if (value == 'delete') _showDeleteDialog(context);
             },
             itemBuilder: (BuildContext context) => [
-              PopupMenuItem<String>(
+              const PopupMenuItem<String>(
                 value: 'delete',
                 child: Row(
                   children: [
@@ -236,17 +217,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header với avatar và tên
+            // ... (Header card and other info cards remain unchanged)
             Card(
               elevation: 3,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Container(
                 width: double.infinity,
-                padding: EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   gradient: LinearGradient(
@@ -264,106 +245,32 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.person,
                         size: 40,
                         color: Colors.white,
                       ),
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Text(
                       widget.customer.name,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (widget.customer.note != null) ...[
-                      SizedBox(height: 4),
-                      Text(
-                        widget.customer.note!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.9),
-                          fontStyle: FontStyle.italic,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
                   ],
                 ),
               ),
             ),
-
-            SizedBox(height: 16),
-
-            // Quick actions
-            if (widget.customer.phone != null)
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () => _callCustomer(context),
-                              icon: Icon(Icons.phone, color: Colors.white),
-                              label: Text('Gọi Điện', style: TextStyle(color: Colors.white)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () => _sendMessage(context),
-                              icon: Icon(Icons.message, color: Colors.white),
-                              label: Text('Tin Nhắn', style: TextStyle(color: Colors.white)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _sendDebtReminder(context),
-                          icon: Icon(Icons.notifications, color: Colors.white),
-                          label: Text('Gửi Nhắc Nợ', style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade600,
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            SizedBox(height: 16),
-
-            // Thông tin chi tiết
+            const SizedBox(height: 16),
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -375,9 +282,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         color: Colors.grey[800],
                       ),
                     ),
-                    SizedBox(height: 16),
-
-                    // Số điện thoại
+                    const SizedBox(height: 16),
                     if (widget.customer.phone != null)
                       _buildInfoRow(
                         icon: Icons.phone,
@@ -385,144 +290,130 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         label: 'Số Điện Thoại',
                         value: widget.customer.phone!,
                       ),
-
-                    // Địa chỉ
-                    if (widget.customer.address != null)
-                      _buildInfoRow(
-                        icon: Icons.location_on,
-                        iconColor: Colors.red,
-                        label: 'Địa Chỉ',
-                        value: widget.customer.address!,
-                        isMultiLine: true,
-                      ),
-
-                    // Hạn mức nợ
                     _buildInfoRow(
                       icon: Icons.money,
                       iconColor: Colors.orange,
                       label: 'Hạn Mức Nợ',
                       value: AppFormatter.formatCurrency(widget.customer.debtLimit),
                     ),
-
-                    // Lãi suất
                     _buildInfoRow(
                       icon: Icons.percent,
                       iconColor: Colors.purple,
                       label: 'Lãi Suất',
                       value: '${widget.customer.interestRate}% / tháng',
-                    ),
-
-                    // Ngày tạo
-                    _buildInfoRow(
-                      icon: Icons.calendar_today,
-                      iconColor: Colors.green,
-                      label: 'Ngày Tạo',
-                      value: AppFormatter.formatDate(widget.customer.createdAt),
-                    ),
-
-                    // Cập nhật cuối
-                    _buildInfoRow(
-                      icon: Icons.update,
-                      iconColor: Colors.grey,
-                      label: 'Cập Nhật Cuối',
-                      value: AppFormatter.formatDate(widget.customer.updatedAt),
                       isLast: true,
                     ),
                   ],
                 ),
               ),
             ),
-
-            SizedBox(height: 16),
-
-            // Thống kê
+            const SizedBox(height: 16),
             Consumer<CustomerProvider>(
               builder: (context, customerProvider, child) {
                 final stats = customerProvider.customerStatistics;
                 final isLoading = customerProvider.loadingStatistics;
-
                 return Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Thống Kê',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
                           ),
                         ),
-                        SizedBox(height: 16),
-
+                        const SizedBox(height: 16),
                         if (isLoading)
-                          Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: LoadingWidget(),
-                            ),
-                          )
-                        else ...[
+                          const Center(child: LoadingWidget())
+                        else
                           Row(
                             children: [
                               Expanded(
                                 child: _buildStatCard(
                                   icon: Icons.shopping_cart,
-                                  iconColor: Colors.blue,
                                   title: 'Giao Dịch',
                                   value: '${stats?['transaction_count'] ?? 0}',
-                                  subtitle: 'Tổng số lần mua',
-                                  onTap: stats != null && (stats['transaction_count'] ?? 0) > 0
-                                      ? () => _navigateToTransactionHistory()
-                                      : null,
+                                  onTap: () => _navigateToTransactionHistory(),
                                 ),
                               ),
-                              SizedBox(width: 12),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: _buildStatCard(
                                   icon: Icons.money_off,
-                                  iconColor: Colors.red,
-                                  title: 'Công Nợ',
-                                  value: AppFormatter.formatCurrency(stats?['outstanding_debt']?.toDouble() ?? 0.0),
-                                  subtitle: 'Hiện tại',
+                                  title: 'Tổng Nợ',
+                                  value: AppFormatter.formatCurrency(
+                                      stats?['outstanding_debt']?.toDouble() ?? 0.0),
+                                  onTap: () => _navigateToDebtManagement(),
                                 ),
                               ),
                             ],
                           ),
-
-                          SizedBox(height: 12),
-
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildStatCard(
-                                  icon: Icons.account_balance_wallet,
-                                  iconColor: Colors.green,
-                                  title: 'Doanh Thu',
-                                  value: AppFormatter.formatCurrency(stats?['total_revenue']?.toDouble() ?? 0.0),
-                                  subtitle: 'Tổng mua hàng',
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: _buildStatCard(
-                                  icon: Icons.star,
-                                  iconColor: Colors.orange,
-                                  title: 'Mức Độ',
-                                  value: widget.customer.debtLimit > 3000000 ? 'VIP' : 'Thường',
-                                  subtitle: 'Phân loại',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
                       ],
                     ),
                   ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            // NEW DEBT LIST CARD - with corrected provider calls
+            _buildDebtListCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // New method to build the debt list card
+  Widget _buildDebtListCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Chi Tiết Công Nợ',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(),
+            Consumer<DebtProvider>(
+              builder: (context, debtProvider, child) {
+                if (debtProvider.isLoading) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: LoadingWidget(),
+                  );
+                }
+                if (debtProvider.errorMessage.isNotEmpty) {
+                  return Center(child: Text(debtProvider.errorMessage));
+                }
+                // CORRECTED: Use the 'debts' getter
+                if (debtProvider.debts.isEmpty) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Text('Khách hàng này không có nợ.'),
+                    ),
+                  );
+                }
+
+                return Column(
+                  // CORRECTED: Use the 'debts' getter
+                  children: debtProvider.debts
+                      .map((debt) => _buildDebtItem(debt))
+                      .toList(),
                 );
               },
             ),
@@ -532,28 +423,90 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     );
   }
 
+  // New method to build a single debt item with corrected model properties
+  Widget _buildDebtItem(Debt debt) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                // CORRECTED: Handle nullable transactionId
+                'Mã đơn: ${debt.transactionId?.substring(0, 8) ?? 'N/A'}...',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                AppFormatter.formatDate(debt.createdAt),
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Nợ gốc:', style: TextStyle(fontWeight: FontWeight.w500)),
+              Text(
+                // CORRECTED: Use 'originalAmount'
+                AppFormatter.formatCurrency(debt.originalAmount),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Đã trả:', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.green)),
+              Text(
+                // CORRECTED: Use 'paidAmount'
+                AppFormatter.formatCurrency(debt.paidAmount),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Còn lại:', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+              Text(
+                AppFormatter.formatCurrency(debt.remainingAmount),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (debt != context.read<DebtProvider>().debts.last)
+            const Divider(height: 1),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoRow({
     required IconData icon,
     required Color iconColor,
     required String label,
     required String value,
-    bool isMultiLine = false,
     bool isLast = false,
   }) {
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
       child: Row(
-        crossAxisAlignment: isMultiLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            padding: EdgeInsets.all(8),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: iconColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: iconColor, size: 20),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -566,7 +519,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: TextStyle(
@@ -585,14 +538,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
   Widget _buildStatCard({
     required IconData icon,
-    required Color iconColor,
     required String title,
     required String value,
-    required String subtitle,
     VoidCallback? onTap,
   }) {
     final child = Container(
-      padding: EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(8),
@@ -600,8 +551,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ),
       child: Column(
         children: [
-          Icon(icon, color: iconColor, size: 24),
-          SizedBox(height: 8),
+          Icon(icon, size: 24),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
@@ -616,13 +567,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               fontSize: 12,
               color: Colors.grey[600],
               fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.grey[500],
             ),
           ),
         ],

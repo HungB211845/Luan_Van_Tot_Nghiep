@@ -52,6 +52,7 @@ class POSViewModel {
     required PaymentMethod paymentMethod,
     bool isDebt = false,
     String? notes,
+    DateTime? debtDueDate, // Due date for debt transactions
   }) async {
     // Gọi thẳng hàm checkout của ProductProvider với customerId đã chọn
     return await productProvider.checkout(
@@ -59,6 +60,7 @@ class POSViewModel {
       paymentMethod: paymentMethod,
       isDebt: isDebt,
       notes: notes,
+      debtDueDate: debtDueDate,
     );
   }
 

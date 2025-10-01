@@ -8,6 +8,9 @@ import '../../../customers/providers/customer_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../view_models/pos_view_model.dart';
 import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../core/routing/route_names.dart';
+import '../../../customers/models/customer.dart';
+import '../../../customers/screens/customers/customer_list_screen.dart';
 
 class POSScreen extends StatefulWidget {
   const POSScreen({Key? key}) : super(key: key);
@@ -16,13 +19,29 @@ class POSScreen extends StatefulWidget {
   State<POSScreen> createState() => _POSScreenState();
 }
 
-class _POSScreenState extends State<POSScreen> {
+// Add SingleTickerProviderStateMixin for TabController
+class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMixin {
   POSViewModel? _viewModel;
   bool _isInitialized = false;
   final _searchController = TextEditingController();
   ProductCategory? _selectedCategory;
   bool _isProcessingPayment = false;
-  int _selectedTab = 0; // 0: Products, 1: Invoice
+  TabController? _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController!.addListener(_handleTabSelection);
+  }
+
+  void _handleTabSelection() {
+    // Only trigger state change and haptics if the tab index is changed by the user (swipe or tap)
+    if (_tabController!.indexIsChanging) {
+      setState(() {}); // Rebuild to update tab indicator style
+      HapticFeedback.selectionClick();
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -47,12 +66,15 @@ class _POSScreenState extends State<POSScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController?.removeListener(_handleTabSelection);
+    _tabController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // The AppBar is now simplified as tabs are handled in the body's header
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: const Text('Bán Hàng (POS)'),
@@ -72,12 +94,11 @@ class _POSScreenState extends State<POSScreen> {
         final isLandscape = orientation == Orientation.landscape;
         final isTablet = MediaQuery.of(context).size.shortestSide >= 600;
 
-        // Use two-column layout for landscape or tablet
         if (isLandscape || isTablet) {
           return _buildTwoColumnLayout();
         }
 
-        // Use tab-based layout for portrait mobile
+        // Use the new TabBarView layout for portrait mobile
         return _buildTabBasedLayout();
       },
     );
@@ -86,33 +107,34 @@ class _POSScreenState extends State<POSScreen> {
   Widget _buildTwoColumnLayout() {
     return Row(
       children: [
-        // Left Column - Products (60% width)
         Expanded(flex: 6, child: _buildProductColumn()),
-        // Divider
         Container(width: 1, color: Colors.grey[300]),
-        // Right Column - Invoice (40% width)
         Expanded(flex: 4, child: _buildInvoiceColumn()),
       ],
     );
   }
 
+  // REFACTORED to use TabBar and TabBarView
   Widget _buildTabBasedLayout() {
     return Column(
       children: [
-        // Segmented Control
-        _buildSegmentedControl(),
-
-        // Content Area
+        _buildCustomTabBar(), // Use the custom styled TabBar
         Expanded(
-          child: _selectedTab == 0
-              ? _buildProductColumn()
-              : _buildInvoiceColumn(),
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildProductColumn(),
+              _buildInvoiceColumn(),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSegmentedControl() {
+  // This widget replaces the old SegmentedControl with a real TabBar
+  // but keeps the same visual style.
+  Widget _buildCustomTabBar() {
     final cartItemCount = context.watch<ProductProvider>().cartItemsCount;
 
     return Container(
@@ -122,135 +144,67 @@ class _POSScreenState extends State<POSScreen> {
         color: Colors.grey[200],
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => _switchTab(0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: _selectedTab == 0 ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: _selectedTab == 0
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.inventory_2,
-                      size: 20,
-                      color: _selectedTab == 0
-                          ? Colors.green
-                          : Colors.grey[600],
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Sản phẩm',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: _selectedTab == 0
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: _selectedTab == 0
-                            ? Colors.green
-                            : Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      child: TabBar(
+        controller: _tabController,
+        indicator: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        labelColor: Colors.green, // This will be overridden by the child's style
+        unselectedLabelColor: Colors.grey[600],
+        tabs: [
+          // Tab 1: Products
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.inventory_2, size: 20, color: _tabController?.index == 0 ? Colors.green : Colors.grey[600]),
+                const SizedBox(width: 8),
+                Text('Sản phẩm', style: TextStyle(fontSize: 16, fontWeight: _tabController?.index == 0 ? FontWeight.w600 : FontWeight.w500, color: _tabController?.index == 0 ? Colors.green : Colors.grey[600])),
+              ],
             ),
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => _switchTab(1),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: _selectedTab == 1 ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: _selectedTab == 1
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          // Tab 2: Invoice
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Stack(
-                      children: [
-                        Icon(
-                          Icons.receipt_long,
-                          size: 20,
-                          color: _selectedTab == 1
-                              ? Colors.green
-                              : Colors.grey[600],
+                    Icon(Icons.receipt_long, size: 20, color: _tabController?.index == 1 ? Colors.green : Colors.grey[600]),
+                    if (cartItemCount > 0)
+                      Positioned(
+                        right: -8,
+                        top: -8,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                          child: Text('$cartItemCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                         ),
-                        if (cartItemCount > 0)
-                          Positioned(
-                            right: -6,
-                            top: -6,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Text(
-                                '$cartItemCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      cartItemCount > 0
-                          ? 'Hóa đơn ($cartItemCount)'
-                          : 'Hóa đơn',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: _selectedTab == 1
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: _selectedTab == 1
-                            ? Colors.green
-                            : Colors.grey[600],
                       ),
-                    ),
                   ],
                 ),
-              ),
+                const SizedBox(width: 8),
+                Text(cartItemCount > 0 ? 'Hóa đơn' : 'Hóa đơn', style: TextStyle(fontSize: 16, fontWeight: _tabController?.index == 1 ? FontWeight.w600 : FontWeight.w500, color: _tabController?.index == 1 ? Colors.green : Colors.grey[600])),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  // All other _build methods remain the same as they are the content of the tabs
+  // ... (_buildProductColumn, _buildInvoiceColumn, etc.)
 
   Widget _buildProductColumn() {
     return Column(
@@ -355,126 +309,57 @@ class _POSScreenState extends State<POSScreen> {
 
           const SizedBox(height: 16),
 
-          // Payment Buttons Row
-          Row(
-            children: [
-              // Main Cash Payment Button
-              Expanded(
-                flex: 2,
-                child: SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: hasItems && !_isProcessingPayment
-                        ? () => _processPayment('cash')
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: _isProcessingPayment
-                        ? const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Đang xử lý...',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          )
-                        : const Text(
-                            'Thanh Toán Tiền Mặt',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
+          // Single Payment Button - Apple Style
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: hasItems && !_isProcessingPayment
+                  ? _showPaymentActionSheet
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+                disabledBackgroundColor: Colors.grey[300],
+                disabledForegroundColor: Colors.grey[500],
+              ),
+              child: _isProcessingPayment
+                  ? const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
                             ),
                           ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // Debt Payment Button
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: hasItems && !_isProcessingPayment && _viewModel?.selectedCustomer != null
-                        ? () => _processPayment('debt')
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _viewModel?.selectedCustomer != null 
-                          ? Colors.orange 
-                          : Colors.grey[300],
-                      foregroundColor: _viewModel?.selectedCustomer != null 
-                          ? Colors.white 
-                          : Colors.grey,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Ghi Nợ',
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Đang xử lý...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const Text(
+                      'Thanh Toán',
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // Bank Transfer Button
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: hasItems && !_isProcessingPayment
-                        ? () => _processPayment('bank')
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Chuyển Khoản',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-
-
         ],
       ),
     );
@@ -901,13 +786,6 @@ class _POSScreenState extends State<POSScreen> {
     _onProductTap(product);
   }
 
-  void _switchTab(int index) {
-    setState(() {
-      _selectedTab = index;
-    });
-    HapticFeedback.selectionClick();
-  }
-
   void _onProductTap(Product product) {
     // Add product to cart instantly - no navigation needed
     _viewModel?.addProductToCart(product, 1);
@@ -916,35 +794,27 @@ class _POSScreenState extends State<POSScreen> {
     // Haptic feedback for instant satisfaction
     HapticFeedback.lightImpact();
 
-    // Auto-switch to invoice tab after adding product for better UX
-    // Only on portrait mobile mode
-    final orientation = MediaQuery.of(context).orientation;
-    final isTablet = MediaQuery.of(context).size.shortestSide >= 600;
-
-    if (orientation == Orientation.portrait && !isTablet) {
-      // Briefly switch to invoice tab to show the added item
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() {
-            _selectedTab = 1;
-          });
-        }
-      });
-    }
+    // Don't auto-switch tab - let user manually switch when ready
+    // This prevents conflict with payment flow
   }
 
   void _selectCustomer() async {
-    // TODO: Implement customer selection
-    // For now, just toggle between guest and a demo customer
-    if (_viewModel?.selectedCustomer == null) {
-      // Select a demo customer
+    // Navigate to the CustomerListScreen in selection mode
+    final selectedCustomer = await Navigator.push<Customer>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CustomerListScreen(isSelectionMode: true),
+      ),
+    );
+
+    // If a customer was selected (and not cancelled), update the view model
+    if (selectedCustomer != null) {
       setState(() {
-        // This would normally come from customer selection
+        _viewModel?.selectedCustomer = selectedCustomer;
       });
     } else {
-      // Back to guest
-      _viewModel?.selectedCustomer = null;
-      setState(() {});
+      // If user cancels, maybe we should set it back to guest?
+      // For now, we do nothing to allow them to cancel without losing a previously selected customer.
     }
   }
 
@@ -975,6 +845,161 @@ class _POSScreenState extends State<POSScreen> {
       setState(() {});
       HapticFeedback.lightImpact();
     }
+  }
+
+  void _showPaymentActionSheet() {
+    final customerName = _viewModel?.selectedCustomer?.name ?? 'Khách lẻ';
+    final hasCustomer = _viewModel?.selectedCustomer != null;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+
+                // Title
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Chọn phương thức thanh toán',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ),
+
+                const Divider(height: 1),
+
+                // Payment options
+                _buildPaymentOption(
+                  icon: Icons.money,
+                  title: 'Tiền mặt',
+                  color: Colors.green,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _processPayment('cash');
+                  },
+                ),
+
+                _buildPaymentOption(
+                  icon: Icons.credit_card,
+                  title: hasCustomer
+                      ? 'Ghi nợ cho $customerName'
+                      : 'Ghi nợ (Chọn khách hàng trước)',
+                  color: Colors.orange,
+                  enabled: hasCustomer,
+                  onTap: hasCustomer
+                      ? () {
+                          Navigator.pop(context);
+                          _processPayment('debt');
+                        }
+                      : null,
+                ),
+
+                _buildPaymentOption(
+                  icon: Icons.account_balance,
+                  title: 'Chuyển khoản',
+                  color: Colors.blue,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _processPayment('bank');
+                  },
+                ),
+
+                const Divider(height: 1),
+
+                // Cancel button
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: const Text(
+                      'Hủy',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPaymentOption({
+    required IconData icon,
+    required String title,
+    required Color color,
+    bool enabled = true,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: enabled ? color.withOpacity(0.1) : Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: enabled ? color : Colors.grey[400],
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: enabled ? Colors.black87 : Colors.grey[400],
+                ),
+              ),
+            ),
+            if (enabled)
+              Icon(Icons.chevron_right, color: Colors.grey[400]),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _processPayment(String method) async {
@@ -1014,18 +1039,21 @@ class _POSScreenState extends State<POSScreen> {
       // Hide loading indicator
       _hideProcessingIndicator();
 
+      // Debug log
+      print('✅ Transaction created with ID: $transactionId');
+
       if (transactionId != null && transactionId.isNotEmpty) {
         // Success - process completed transaction
+        print('🚀 Navigating to success screen...');
         await _handleSuccessfulPayment(transactionId, method, paymentMethod);
       } else {
         // Payment failed
+        print('❌ Transaction failed - no ID returned');
         _showError(
           productProvider.errorMessage.isNotEmpty
               ? productProvider.errorMessage
               : 'Có lỗi xảy ra khi thanh toán. Vui lòng thử lại.',
         );
-
-
       }
     } catch (e) {
       // Hide loading indicator
@@ -1040,45 +1068,78 @@ class _POSScreenState extends State<POSScreen> {
     String method,
     PaymentMethod paymentMethod,
   ) async {
+    if (!mounted) {
+      print('❌ Widget not mounted, skipping navigation');
+      return;
+    }
+
     try {
-      // Update transaction provider with the new transaction
-      final transactionProvider = context.read<TransactionProvider>();
-      await transactionProvider.refresh();
+      print('🎵 Playing success haptic...');
+      // Success feedback with enhanced haptic pattern
+      await _playSuccessHaptic();
 
-      // Success feedback
-      HapticFeedback.lightImpact();
+      // Navigate to Transaction Success Screen FIRST (before resetting)
+      if (!mounted) {
+        print('❌ Widget not mounted after haptic');
+        return;
+      }
 
-      // Navigate to Transaction Success Screen
-      await Navigator.pushNamed(
-        context, 
-        '/transaction-success',
+      print('🧭 About to navigate with transaction ID: $transactionId');
+      print('🧭 Route: ${RouteNames.transactionSuccess}');
+
+      // Use root navigator to escape from tab navigation context
+      await Navigator.of(context, rootNavigator: true).pushNamed(
+        RouteNames.transactionSuccess,
         arguments: transactionId,
       );
+
+      print('✅ Returned from success screen');
 
       // After returning from success screen, reset POS for next customer
-      _resetForNextCustomer();
-      
+      if (mounted) {
+        print('🔄 Resetting for next customer...');
+        _resetForNextCustomer();
+      }
+
+      // Update transaction provider in background
+      if (mounted) {
+        print('🔄 Refreshing transaction list...');
+        final transactionProvider = context.read<TransactionProvider>();
+        transactionProvider.loadTransactions();
+      }
+
+      // Refresh products to update inventory stock
+      if (mounted) {
+        print('🔄 Refreshing products to update inventory...');
+        final productProvider = context.read<ProductProvider>();
+        await productProvider.loadProducts();
+        print('✅ Products refreshed');
+      }
     } catch (e) {
-      // Even if transaction provider update fails, the payment was successful
-      // Navigate to success screen anyway
-      await Navigator.pushNamed(
-        context, 
-        '/transaction-success',
-        arguments: transactionId,
-      );
-      
-      _resetForNextCustomer();
+      print('❌ Error in _handleSuccessfulPayment: $e');
+      // Even if navigation fails, try to reset
+      if (mounted) {
+        _resetForNextCustomer();
+      }
+
+      // Try to refresh products
+      if (mounted) {
+        final productProvider = context.read<ProductProvider>();
+        await productProvider.loadProducts();
+      }
     }
   }
 
   void _resetForNextCustomer() {
-    setState(() {
-      _selectedTab = 0; // Switch back to products tab
-      // Reset customer selection to guest
-      if (_viewModel != null) {
-        _viewModel!.selectedCustomer = null;
-      }
-    });
+    if (mounted) {
+      setState(() {
+        _tabController?.animateTo(0); // Switch back to products tab
+        // Reset customer selection to guest
+        if (_viewModel != null) {
+          _viewModel!.selectedCustomer = null;
+        }
+      });
+    }
   }
 
   void _showProcessingIndicator() {
@@ -1112,5 +1173,13 @@ class _POSScreenState extends State<POSScreen> {
     }
   }
 
-
+  // Enhanced haptic feedback for successful payment
+  Future<void> _playSuccessHaptic() async {
+    // Success pattern: Light -> Medium -> Heavy impacts with delays
+    HapticFeedback.lightImpact();
+    await Future.delayed(const Duration(milliseconds: 80));
+    HapticFeedback.mediumImpact();
+    await Future.delayed(const Duration(milliseconds: 80));
+    HapticFeedback.heavyImpact();
+  }
 }
