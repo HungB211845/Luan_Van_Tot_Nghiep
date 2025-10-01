@@ -164,7 +164,7 @@ class ProfileScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: () => _showLogoutDialog(context),
+                    onPressed: () => _showLogoutActionSheet(context),
                   ),
                 ),
               ],
@@ -285,28 +285,54 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showLogoutDialog(BuildContext context) {
-    showDialog(
+  void _showLogoutActionSheet(BuildContext context) {
+    final authProvider = context.read<AuthProvider>();
+    final storeName = authProvider.currentStore?.storeName ?? 'hiện tại';
+
+    showModalBottomSheet(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Đăng xuất'),
-          content: const Text('Bạn có chắc chắn muốn đăng xuất không?'),
-          actions: [
-            TextButton(
-              child: const Text('Hủy'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Đăng xuất', style: TextStyle(color: Colors.white)),
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.read<AuthProvider>().signOut();
-                Navigator.of(context).pushReplacementNamed(RouteNames.login);
-              },
-            ),
-          ],
+      builder: (BuildContext bc) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.logout),
+                title: Text('Đăng xuất khỏi Cửa hàng "$storeName"'),
+                onTap: () async {
+                  Navigator.of(bc).pop(); // Dismiss the sheet
+                  await authProvider.signOut();
+                  // Navigate to login screen using root navigator (escape tab navigator)
+                  if (context.mounted) {
+                    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+                      RouteNames.login,
+                      (route) => false,
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.swap_horiz),
+                title: const Text('Chuyển cửa hàng khác'),
+                onTap: () async {
+                  Navigator.of(bc).pop(); // Dismiss the sheet
+                  await authProvider.switchStore();
+                  // Navigate to store code screen using root navigator (escape tab navigator)
+                  if (context.mounted) {
+                    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+                      RouteNames.storeCode,
+                      (route) => false,
+                    );
+                  }
+                },
+              ),
+              const Divider(thickness: 1),
+              ListTile(
+                leading: const Icon(Icons.cancel_outlined),
+                title: const Text('Hủy'),
+                onTap: () => Navigator.of(bc).pop(),
+              ),
+            ],
+          ),
         );
       },
     );

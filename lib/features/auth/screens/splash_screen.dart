@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/routing/route_names.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/auth_state.dart';
+import '../services/secure_storage_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -40,8 +41,18 @@ class _SplashScreenState extends State<SplashScreen> {
     _maybeNavigate(_auth!.state);
   }
 
-  void _maybeNavigate(AuthState state) {
+  void _maybeNavigate(AuthState state) async {
     if (_navigated) return;
+
+    // First, check if a store has been selected.
+    final storeCode = await SecureStorageService().getLastStoreCode();
+    if (storeCode == null || storeCode.isEmpty) {
+      _navigated = true;
+      Navigator.of(context).pushReplacementNamed(RouteNames.storeCode);
+      return;
+    }
+
+    // If store is selected, proceed with auth status check
     switch (state.status) {
       case AuthStatus.authenticated:
         _navigated = true;

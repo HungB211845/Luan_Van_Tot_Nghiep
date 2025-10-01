@@ -22,9 +22,14 @@ class DebtProvider extends ChangeNotifier {
   String _errorMessage = '';
   String _paymentError = '';
 
+  // For Master-Detail view
+  String? _selectedCustomerId;
+
   // =====================================================
   // GETTERS
   // =====================================================
+
+  String? get selectedCustomerId => _selectedCustomerId;
 
   List<Debt> get debts => _debts;
   List<DebtPayment> get payments => _payments;
@@ -53,6 +58,12 @@ class DebtProvider extends ChangeNotifier {
   // =====================================================
   // DEBT OPERATIONS
   // =====================================================
+
+  /// Select a customer to show in the detail pane of a Master-Detail view.
+  void selectCustomerForDetail(String? customerId) {
+    _selectedCustomerId = customerId;
+    notifyListeners();
+  }
 
   /// Create debt from POS transaction
   Future<String?> createDebtFromTransaction({

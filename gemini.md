@@ -23,19 +23,22 @@ temperature: 0.3
 
 Đây là những sai lầm tao đã mắc phải và tuyệt đối không được lặp lại.
 
-1.  **Cấm Giả Định, Phải Kiểm Tra:** Không được tự ý giả định tên hàm, tên thuộc tính, hay tham số của bất kỳ class hay widget nào. Trước khi dùng, phải đọc file gốc. Sai lầm đã mắc phải: Gọi `handleSortOption` không tồn tại, dùng `itemExtent` cho `AzListView`, dùng `size` cho `LoadingWidget`.
+1.  **Cấm Giả Định, Phải Kiểm Tra:** Không được tự ý giả định tên hàm, thuộc tính, hay tham số của bất kỳ class/widget nào. Trước khi dùng, phải đọc file gốc.
 
-2.  **Cấm `setState` trong `build`:** Tuyệt đối không được gọi `setState` hoặc một hàm có chứa `setState` từ bên trong một phương thức `build`. Nó gây ra lỗi 'setState() called during build'.
+2.  **Cấm `setState` trong `build`:** Tuyệt đối không được gọi `setState` hoặc hàm chứa nó từ bên trong một phương thức `build`.
 
 3.  **Cẩn Trọng Tuyệt Đối với `const`:** Dùng sai `const` sẽ gây lỗi biên dịch. Nếu một widget con không phải là `const`, thì widget cha và danh sách `children` chứa nó cũng không thể là `const`.
 
-4.  **Luôn Kiểm Tra `import`:** Mỗi khi thêm một widget hoặc một provider mới vào file, phải tự kiểm tra xem đã `import` đủ chưa. Lỗi 'isn't a type' hầu hết là do thiếu `import`.
+4.  **Luôn Kiểm Tra `import`:** Mỗi khi thêm một widget hoặc provider mới, phải tự kiểm tra xem đã `import` đủ chưa.
 
-5.  **`write_file` Phải Đầy Đủ (OLD RULE - DEPRECATED):** Khi dùng `write_file` để refactor code, tuyệt đối cấm dùng comment placeholder (`//...`) thay cho implementation của một hàm.
+5.  **Hiểu Rõ Ngữ Cảnh Thực Thi:** Phải nhận thức rõ code đang chạy ở đâu. Code Dart ở client và code SQL trong SQL Editor có ngữ cảnh khác nhau (`auth.uid()` là `NULL` trong SQL Editor).
 
-6.  **Hiểu Rõ Ngữ Cảnh Thực Thi:** Phải nhận thức rõ code đang chạy ở đâu. Code Dart ở client và code SQL trong SQL Editor có ngữ cảnh khác nhau. `auth.uid()` trả về `NULL` trong SQL Editor.
+6.  **QUY TẮC VÀNG KHI REFACTOR (THE GOLDEN REFACTORING PROCESS):** Mọi thay đổi, dù nhỏ, đều phải tuân thủ quy trình 3 bước: **ĐỌC -> SỬA -> XÁC MINH.**
+    -   **1. ĐỌC (READ):** Trước khi sửa bất kỳ file nào, phải dùng `read_file` để có phiên bản code mới nhất. Không được code dựa trên trí nhớ hay log cũ.
+    -   **2. SỬA (MODIFY):** Dùng lệnh `replace` với `old_string` và `new_string` rõ ràng, cụ thể. **Ưu tiên thay thế cả một hàm (method) hoàn chỉnh** thay vì chỉ một vài dòng lẻ, để tránh lỗi cú pháp. Tuyệt đối không dùng `write_file` cho việc refactor, trừ khi tạo file mới.
+    -   **3. XÁC MINH (VERIFY):** Sau khi sửa một file, phải **đọc lại chính file đó** để đảm bảo thay đổi đã được áp dụng đúng và không phá vỡ cấu trúc (ví dụ: thiếu dấu `}`).
+    -   *Việc không tuân thủ quy trình này đã trực tiếp dẫn đến các lỗi: khai báo trùng (`selectProduct`), gọi hàm không tồn tại (`checkStoreCodeAvailability`), lỗi cú pháp (thiếu `}` trong `AuthProvider`), và quên `import` (`AppFormatter`).*
 
-7.  **QUY TẮC TỐI THƯỢNG: Cấm Tái Tạo Code Từ Trí Nhớ:** Khi refactor một file, **cấm tuyệt đối** việc viết lại toàn bộ file bằng `write_file` dựa trên trí nhớ. Quy trình đúng và duy nhất là: **1. Đọc file gốc. 2. Dùng lệnh `replace` để thay thế chính xác và duy nhất phần code cần sửa. 3. Giữ nguyên toàn bộ phần còn lại.** Quy tắc này được đặt ra để chống lại sai lầm nghiêm trọng và có hệ thống là vô tình xóa đi các hàm helper, gây ra lỗi biên dịch liên tục.
 
 # Context (Phần Bối Cảnh Dự Án)
 

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../../core/routing/route_names.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../services/oauth_service.dart';
 import '../services/secure_storage_service.dart';
+import '../models/auth_state.dart';
+import '../../../shared/widgets/grouped_text_fields.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,417 +16,184 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _storeCodeController = TextEditingController(); // ADD: Store code field
   final _formKey = GlobalKey<FormState>();
+  final _passwordFocusNode = FocusNode();
   bool _obscure = true;
-  bool _rememberMe = false;
-  final _oauth = OAuthService();
-  final _secure = SecureStorageService();
+  String? _storeName;
+
+  static const Color primaryTextColor = Color(0xFF1D1D1F);
+  static const Color secondaryTextColor = Color(0xFF8A8A8E);
+  static const FontWeight titleWeight = FontWeight.w600;
+  static const FontWeight regularWeight = FontWeight.w400;
 
   @override
   void initState() {
     super.initState();
-    _restoreRemembered();
+    _loadSavedData();
   }
 
-  Future<void> _restoreRemembered() async {
-    // If flag not set yet, default to true on first run
-    final raw = await _secure.read('remember_flag');
-    final remember = raw == null ? true : await _secure.getRememberFlag();
-    if (raw == null) {
-      await _secure.setRememberFlag(true);
-    }
-    final email = await _secure.getRememberedEmail();
-    final storeCode = await _secure.getRememberedStoreCode();
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _passwordFocusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSavedData() async {
+    final email = await SecureStorageService().getRememberedEmail();
+    final storeName = await SecureStorageService().getLastStoreName();
     if (!mounted) return;
     setState(() {
-      _rememberMe = remember;
-      if (remember && (email ?? '').isNotEmpty) {
-        _emailController.text = email!;
-      }
-      if (remember && (storeCode ?? '').isNotEmpty) {
-        _storeCodeController.text = storeCode!;
-      }
+      if (email != null) _emailController.text = email;
+      _storeName = storeName;
     });
   }
 
-  Future<void> _onRememberChanged(bool? v) async {
-    final newVal = v ?? false;
-    setState(() => _rememberMe = newVal);
-    await _secure.setRememberFlag(newVal);
-    if (newVal) {
-      // Immediately persist current email and store code if any and notify user
-      final email = _emailController.text.trim();
-      final storeCode = _storeCodeController.text.trim();
-      if (email.isNotEmpty) {
-        await _secure.storeRememberedEmail(email);
-      }
-      if (storeCode.isNotEmpty) {
-        await _secure.storeRememberedStoreCode(storeCode);
-      }
+  Future<void> _handleLogin() async {
+    // Unfocus to dismiss keyboard before navigating
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final storeCode = await SecureStorageService().getLastStoreCode();
+
+    if (storeCode == null || storeCode.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã lưu thông tin đăng nhập')),
+        const SnackBar(content: Text('Lỗi: Không tìm thấy mã cửa hàng.'), backgroundColor: Colors.red),
       );
+      Navigator.of(context).pushReplacementNamed(RouteNames.storeCode);
+      return;
     }
-  }
 
-  Future<void> _clearRememberedData() async {
-    await _secure.delete('remember_email');
-    await _secure.delete('remember_store_code');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Đã xóa thông tin đã lưu')),
-    );
-  }
-
-  Future<void> _handleLogin() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    final ok = await context.read<AuthProvider>().signInWithStore(
+    final ok = await authProvider.signInWithStore(
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      storeCode: _storeCodeController.text.trim(), // ADD: Store code validation
+      storeCode: storeCode,
     );
-    if (!mounted) return;
-    if (ok) {
-      // handle remember me
-      if (_rememberMe) {
-        await _secure.setRememberFlag(true);
-        await _secure.storeRememberedEmail(_emailController.text.trim());
-        await _secure.storeRememberedStoreCode(_storeCodeController.text.trim());
-      } else {
-        await _secure.setRememberFlag(false);
-        await _secure.delete('remember_email');
-        await _secure.delete('remember_store_code');
-      }
-      Navigator.of(context).pushReplacementNamed(RouteNames.homeAlias);
+
+    if (ok && mounted) {
+      await SecureStorageService().storeRememberedEmail(_emailController.text.trim());
+      Navigator.of(context).pushReplacementNamed(RouteNames.home);
     }
   }
 
   Future<void> _handleBiometricLogin() async {
     final authProvider = context.read<AuthProvider>();
     final ok = await authProvider.signInWithBiometric();
-    if (!mounted) return;
-    if (ok) {
-      Navigator.of(context).pushReplacementNamed(RouteNames.homeAlias);
-    } else {
-      // Show error message from AuthProvider
-      final errorMessage = authProvider.state.errorMessage;
-      if (errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+    if (ok && mounted) {
+      Navigator.of(context).pushReplacementNamed(RouteNames.home);
     }
   }
 
-  Future<void> _handleGoogle() async {
-    // SECURITY: Disable OAuth until store-aware implementation
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đăng nhập Google tạm thời không khả dụng. Vui lòng sử dụng email/password với mã cửa hàng.'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
-  Future<void> _handleFacebook() async {
-    // SECURITY: Disable OAuth until store-aware implementation  
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đăng nhập Facebook tạm thời không khả dụng. Vui lòng sử dụng email/password với mã cửa hàng.'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
-  @override
+ @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>().state;
+    final auth = context.watch<AuthProvider>();
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 16),
-                const Text(
-                  'Welcome Back',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-                  textAlign: TextAlign.center,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Hey! Rất vui được gặp lại bạn',
-                  style: TextStyle(color: Colors.grey[700]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 28),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          // Top spacer for 3:5 ratio
+                          const Spacer(flex: 3),
 
-                // Store Code
-                _RoundedField(
-                  controller: _storeCodeController,
-                  hint: 'Mã cửa hàng (ví dụ: ABC123)',
-                  keyboardType: TextInputType.text,
-                  prefixIcon: Icons.store_outlined,
-                  validator: (v) => (v==null||v.isEmpty||v.length<3) ? 'Mã cửa hàng không hợp lệ' : null,
-                ),
-                const SizedBox(height: 14),
+                          // Main content block
+                          const Icon(Icons.store_mall_directory, color: Colors.green, size: 50),
+                          const SizedBox(height: 24),
+                          Text(
+                            _storeName != null ? 'Cửa hàng $_storeName' : 'Đăng Nhập',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(fontSize: 32, fontWeight: titleWeight, color: primaryTextColor, height: 1.2),
+                          ),
+                          const SizedBox(height: 32),
+                          GroupedTextFields(
+                            topController: _emailController,
+                            bottomController: _passwordController,
+                            bottomFocusNode: _passwordFocusNode,
+                            isBottomObscured: _obscure,
+                            onTopFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                            onBottomFieldSubmitted: (_) => _handleLogin(), // Login on enter
+                            topValidator: (v) => (v == null || !v.contains('@')) ? 'Email không hợp lệ' : null,
+                            bottomValidator: (v) => (v == null || v.length < 6) ? 'Mật khẩu phải có ít nhất 6 ký tự' : null,
+                            bottomSuffixIcon: FutureBuilder<bool>(
+                              future: context.read<AuthProvider>().isBiometricAvailableAndEnabled(),
+                              builder: (context, snapshot) {
+                                final bool biometricAvailable = snapshot.data ?? false;
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (biometricAvailable)
+                                      IconButton(
+                                        icon: const Icon(Icons.fingerprint, color: Colors.green),
+                                        onPressed: _handleBiometricLogin,
+                                      ),
+                                    IconButton(
+                                      onPressed: () => setState(() => _obscure = !_obscure),
+                                      icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: Colors.grey[500]),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                          if (auth.state.errorMessage != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16.0),
+                              child: Center(child: Text(auth.state.errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red))),
+                            ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            height: 52,
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: auth.state.isLoading ? null : _handleLogin,
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                              child: auth.state.isLoading
+                                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                                  : Text('Đăng nhập', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
 
-                // Email
-                _RoundedField(
-                  controller: _emailController,
-                  hint: 'Email',
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.email_outlined,
-                  validator: (v) => (v==null||v.isEmpty||!v.contains('@')) ? 'Email không hợp lệ' : null,
-                ),
-                const SizedBox(height: 14),
+                          // Bottom spacer for 3:5 ratio
+                          const Spacer(flex: 5),
 
-                // Password
-                _RoundedField(
-                  controller: _passwordController,
-                  hint: 'Mật khẩu',
-                  prefixIcon: Icons.lock_outline,
-                  obscure: _obscure,
-                  onToggleObscure: () => setState(() => _obscure = !_obscure),
-                  validator: (v) => (v==null||v.length<6) ? 'Tối thiểu 6 ký tự' : null,
-                ),
-
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
-                    child: const Text('Quên mật khẩu?'),
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: _rememberMe,
-                      onChanged: _onRememberChanged,
-                    ),
-                    const Text('Ghi nhớ tôi'),
-                  ],
-                ),
-
-                // Description + quick clear button
-                Padding(
-                  padding: const EdgeInsets.only(left: 12.0, bottom: 8),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Nếu bật, email của bạn sẽ được lưu an toàn để tự điền lần sau.',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _clearRememberedData,
-                        child: const Text('Xóa thông tin đã lưu'),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: auth.isLoading ? null : _handleLogin,
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                    ),
-                    child: Text(auth.isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Face ID Button - Only show if available
-                _BiometricLoginButton(
-                  isLoading: auth.isLoading,
-                  onPressed: _handleBiometricLogin,
-                ),
-
-                if (auth.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  Text(auth.errorMessage!, style: const TextStyle(color: Colors.red)),
-                ],
-
-                const SizedBox(height: 20),
-                Row(
-                  children: const [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Text('hoặc'),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: auth.isLoading ? null : _handleGoogle,
-                        icon: const Icon(Icons.g_mobiledata, size: 28),
-                        label: const Text('Google'),
+                          // Bottom-pinned action links
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
+                            child: Text('Quên mật khẩu?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('Chưa có tài khoản?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pushNamed(RouteNames.signupStep1),
+                                child: Text('Tạo cửa hàng mới', style: GoogleFonts.inter(color: Colors.green.withOpacity(0.9), fontWeight: FontWeight.w600)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16), // Padding from bottom
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: auth.isLoading ? null : _handleFacebook,
-                        icon: const Icon(Icons.facebook, size: 20),
-                        label: const Text('Facebook'),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pushNamed(RouteNames.register),
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                    ),
-                    child: const Text('Sign Up'),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BiometricLoginButton extends StatefulWidget {
-  final bool isLoading;
-  final VoidCallback onPressed;
-
-  const _BiometricLoginButton({
-    required this.isLoading,
-    required this.onPressed,
-  });
-
-  @override
-  State<_BiometricLoginButton> createState() => _BiometricLoginButtonState();
-}
-
-class _BiometricLoginButtonState extends State<_BiometricLoginButton> {
-  @override
-  void initState() {
-    super.initState();
-    // Trigger rebuild when widget is first created
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      key: ValueKey(DateTime.now().millisecondsSinceEpoch), // Force rebuild every time
-      future: context.read<AuthProvider>().isBiometricAvailableAndEnabled(),
-      builder: (context, snapshot) {
-        // Show loading while checking
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-
-        final isAvailable = snapshot.data ?? false;
-        if (!isAvailable) return const SizedBox.shrink();
-
-        return Column(
-          children: [
-            SizedBox(
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: widget.isLoading ? null : widget.onPressed,
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  side: const BorderSide(color: Colors.green),
-                ),
-                icon: const Icon(Icons.fingerprint, color: Colors.green),
-                label: const Text('Đăng nhập bằng Face ID', style: TextStyle(color: Colors.green)),
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _RoundedField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final IconData prefixIcon;
-  final bool obscure;
-  final VoidCallback? onToggleObscure;
-  final String? Function(String?)? validator;
-  final TextInputType? keyboardType;
-
-  const _RoundedField({
-    required this.controller,
-    required this.hint,
-    required this.prefixIcon,
-    this.obscure = false,
-    this.onToggleObscure,
-    this.validator,
-    this.keyboardType,
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      keyboardType: keyboardType,
-      obscureText: obscure,
-      decoration: InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.grey[100],
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        prefixIcon: Icon(prefixIcon),
-        suffixIcon: onToggleObscure != null
-            ? IconButton(
-                onPressed: onToggleObscure,
-                icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
-              )
-            : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.purple),
+            );
+          },
         ),
       ),
     );

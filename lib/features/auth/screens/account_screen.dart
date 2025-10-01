@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/services/session_service.dart';
@@ -76,23 +77,27 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AuthProvider>().state;
-    final user = state.userProfile;
+    final authProvider = context.watch<AuthProvider>();
+    final userProfile = authProvider.currentUser;
+    final supabaseUser = Supabase.instance.client.auth.currentUser;
+    final storeName = authProvider.currentStore?.storeName ?? 'hiện tại';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tài khoản')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: Text(user?.fullName ?? 'Người dùng'),
-              subtitle: Text('Email: ${state.userProfile != null ? 'Đã đăng nhập' : 'Chưa đăng nhập'}'),
+          if (userProfile != null)
+            Card(
+              child: ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person)),
+                title: Text(userProfile.fullName ?? 'Người dùng'),
+                subtitle: Text(supabaseUser?.email ?? 'Chưa đăng nhập'),
+              ),
             ),
-          ),
           const SizedBox(height: 12),
           Card(
             child: SwitchListTile(
@@ -111,16 +116,7 @@ class _AccountScreenState extends State<AccountScreen> {
               onChanged: _loadingRemember ? null : _toggleRemember,
             ),
           ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: () async {
-              await context.read<AuthProvider>().signOut();
-              if (!mounted) return;
-              Navigator.of(context).pushNamedAndRemoveUntil(RouteNames.login, (route) => false);
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Đăng xuất'),
-          ),
+
         ],
       ),
     );

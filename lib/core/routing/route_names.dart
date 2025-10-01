@@ -8,6 +8,8 @@ class RouteNames {
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
   static const String otp = '/otp';
+  static const String storeCode = '/store-code'; // For the new initial screen
+  static const String signupStep1 = '/signup-step1'; // For the new signup wizard
   static const String biometricLogin = '/biometric-login';
   static const String storeSetup = '/store-setup';
   static const String onboarding = '/onboarding';

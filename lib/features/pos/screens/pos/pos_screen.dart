@@ -85,7 +85,37 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
       ),
       body: _viewModel == null
           ? const Center(child: LoadingWidget())
-          : _buildTabBasedLayout(),
+          : _buildAdaptiveLayout(),
+    );
+  }
+
+  Widget _buildAdaptiveLayout() {
+    const double tabletBreakpoint = 768;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= tabletBreakpoint) {
+          // Tablet or Desktop layout
+          return _buildTwoColumnLayout();
+        }
+        // Mobile layout
+        return _buildTabBasedLayout();
+      },
+    );
+  }
+
+  Widget _buildTwoColumnLayout() {
+    return Row(
+      children: [
+        Expanded(
+          flex: 6, // Product list takes more space
+          child: _buildProductColumn(),
+        ),
+        const VerticalDivider(width: 1, thickness: 1),
+        Expanded(
+          flex: 4, // Invoice takes less space
+          child: _buildInvoiceColumn(),
+        ),
+      ],
     );
   }
 
