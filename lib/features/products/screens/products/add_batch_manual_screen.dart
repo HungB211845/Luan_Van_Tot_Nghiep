@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:math';
 import '../../models/product_batch.dart';
@@ -6,6 +7,52 @@ import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/services/base_service.dart';
+
+/// Custom TextInputFormatter for VND currency
+/// Formats: 1000000 → 1.000.000
+class CurrencyInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    // Remove all non-digit characters
+    String digitsOnly = newValue.text.replaceAll(RegExp(r'[^\d]'), '');
+
+    if (digitsOnly.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    // Format with thousand separators (dot)
+    String formatted = _formatWithDots(digitsOnly);
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  String _formatWithDots(String number) {
+    if (number.isEmpty) return '';
+
+    // Reverse the string to add dots from right to left
+    String reversed = number.split('').reversed.join();
+    String result = '';
+
+    for (int i = 0; i < reversed.length; i++) {
+      if (i > 0 && i % 3 == 0) {
+        result += '.';
+      }
+      result += reversed[i];
+    }
+
+    return result.split('').reversed.join();
+  }
+}
 
 /// Màn hình nhập lô hàng thủ công
 /// Dành cho hàng mua lẻ không có đơn đặt trước
@@ -79,7 +126,8 @@ class _AddBatchManualScreenState extends State<AddBatchManualScreen> {
         productId: product.id,
         batchNumber: _batchNumberController.text.trim(),
         quantity: int.parse(_quantityController.text.trim()),
-        costPrice: double.parse(_costPriceController.text.trim()),
+        // Remove dots before parsing (1.000.000 → 1000000)
+        costPrice: double.parse(_costPriceController.text.trim().replaceAll('.', '')),
         receivedDate: _receivedDate,
         expiryDate: _expiryDate,
         supplierId: _selectedSupplierId,
@@ -266,14 +314,19 @@ class _AddBatchManualScreenState extends State<AddBatchManualScreen> {
                               controller: _costPriceController,
                               decoration: _buildInputDecoration(
                                 label: 'Giá vốn *',
-                                hint: '50000',
+                                hint: '1.000.000',
                               ),
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                CurrencyInputFormatter(),
+                              ],
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
                                   return 'Nhập giá vốn';
                                 }
-                                final price = double.tryParse(value);
+                                // Remove dots before parsing (1.000.000 → 1000000)
+                                final cleanedValue = value.replaceAll('.', '');
+                                final price = double.tryParse(cleanedValue);
                                 if (price == null || price < 0) {
                                   return 'Giá ≥ 0';
                                 }

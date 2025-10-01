@@ -5,7 +5,7 @@ import '../../providers/company_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../../../shared/services/base_service.dart';
 import 'add_product_step2_screen.dart';
-import '../company/company_picker_screen.dart';
+import '../company/add_edit_company_screen.dart';
 
 class AddProductStep1Screen extends StatefulWidget {
   const AddProductStep1Screen({super.key});
@@ -18,7 +18,6 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   String? _selectedCompanyId;
-  String? _selectedCompanyName;
   bool _isLoading = false;
 
   @override
@@ -40,12 +39,13 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Thông tin cơ bản',
+          'Thêm Sản Phẩm Mới',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
+          // "Lưu" button - Always present escape hatch
           TextButton(
             onPressed: (_canSaveMinimal() && !_isLoading) ? _saveMinimal : null,
             child: Text(
@@ -66,7 +66,39 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Product name
+              // Step indicator
+              Row(
+                children: [
+                  _buildStepIndicator(1, true),
+                  _buildStepLine(false),
+                  _buildStepIndicator(2, false),
+                  _buildStepLine(false),
+                  _buildStepIndicator(3, false),
+                ],
+              ),
+
+              const SizedBox(height: 32),
+
+              // Welcome message
+              const Text(
+                'Bắt đầu với thông tin cơ bản',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'Chỉ cần hai thông tin này để bắt đầu',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+
+              const SizedBox(height: 40),
+
+              // Product name - Large, prominent
               TextFormField(
                 controller: _nameController,
                 style: const TextStyle(fontSize: 18),
@@ -100,100 +132,104 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
                   }
                   return null;
                 },
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) => setState(() {}), // Refresh save button state
               ),
 
               const SizedBox(height: 24),
 
-              // Company selector - Navigation row (Apple style)
-              InkWell(
-                onTap: () async {
-                  final selectedId = await Navigator.of(context).push<String>(
-                    MaterialPageRoute(
-                      builder: (context) => CompanyPickerScreen(
-                        selectedCompanyId: _selectedCompanyId,
-                      ),
-                    ),
-                  );
-
-                  if (selectedId != null && mounted) {
-                    final provider = context.read<CompanyProvider>();
-                    final company = provider.companies.firstWhere(
-                      (c) => c.id == selectedId,
-                      orElse: () => throw Exception('Company not found'),
-                    );
-
-                    setState(() {
-                      _selectedCompanyId = selectedId;
-                      _selectedCompanyName = company.name;
-                    });
-                  }
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 20,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _selectedCompanyId == null
-                          ? Colors.grey[300]!
-                          : Colors.grey[300]!,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.business,
-                        size: 24,
-                        color: _selectedCompanyId != null
-                            ? Colors.green
-                            : Colors.grey[600],
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Nhà cung cấp',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _selectedCompanyName ?? 'Chọn nhà cung cấp',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: _selectedCompanyId != null
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                color: _selectedCompanyId != null
-                                    ? Colors.black87
-                                    : Colors.grey[500],
-                              ),
-                            ),
-                          ],
+              // Company selector - Clean dropdown
+              Consumer<CompanyProvider>(
+                builder: (context, provider, child) {
+                  if (provider.isLoading && provider.companies.isEmpty) {
+                    return DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Nhà cung cấp',
+                        hintText: 'Đang tải...',
+                        prefixIcon: const Icon(Icons.business, size: 24),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 20,
                         ),
                       ),
-                      Icon(
-                        Icons.chevron_right,
-                        color: Colors.grey[400],
-                        size: 24,
+                      items: const [],
+                      onChanged: null,
+                    );
+                  }
+
+                  return DropdownButtonFormField<String>(
+                    value: _selectedCompanyId,
+                    decoration: InputDecoration(
+                      labelText: 'Nhà cung cấp',
+                      hintText: 'Chọn nhà cung cấp',
+                      prefixIcon: const Icon(Icons.business, size: 24),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.add_circle, color: Colors.green, size: 28),
+                        tooltip: 'Thêm nhà cung cấp mới',
+                        onPressed: () async {
+                          final result = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const AddEditCompanyScreen(),
+                            ),
+                          );
+                          // Reload companies and auto-select the newly created one
+                          if (result != null && result is String && mounted) {
+                            await context.read<CompanyProvider>().loadCompanies();
+                            setState(() {
+                              _selectedCompanyId = result; // Auto-select the new company
+                            });
+                          }
+                        },
                       ),
-                    ],
-                  ),
-                ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Colors.green,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 20,
+                      ),
+                    ),
+                    items: provider.companies.map((company) {
+                      return DropdownMenuItem<String>(
+                        value: company.id,
+                        child: Text(
+                          company.name,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCompanyId = value;
+                      });
+                    },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Vui lòng chọn nhà cung cấp';
+                      }
+                      return null;
+                    },
+                  );
+                },
               ),
 
               const Spacer(),
 
-              // Continue button
+              // Continue button - Primary action
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -217,9 +253,47 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
                   ),
                 ),
               ),
+
+              const SizedBox(height: 16),
+
+              // Help text
+              Text(
+                'Bạn có thể bấm "Lưu" ở góc trên để lưu sản phẩm với thông tin tối thiểu',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator(int step, bool isActive) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green : Colors.grey[300],
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          '$step',
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.grey[600],
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepLine(bool isCompleted) {
+    return Expanded(
+      child: Container(
+        height: 2,
+        color: isCompleted ? Colors.green : Colors.grey[300],
       ),
     );
   }
@@ -234,7 +308,7 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
   }
 
   void _continue() {
-    if (_formKey.currentState!.validate() && _selectedCompanyId != null) {
+    if (_formKey.currentState!.validate()) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -248,63 +322,65 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
   }
 
   Future<void> _saveMinimal() async {
-    if (!(_formKey.currentState!.validate() && _selectedCompanyId != null)) {
-      return;
-    }
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final newProduct = Product(
-        id: '',
-        name: _nameController.text.trim(),
-        category: ProductCategory.FERTILIZER,
-        companyId: _selectedCompanyId!,
-        attributes: {},
-        isActive: true,
-        isBanned: false,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        storeId: BaseService.getDefaultStoreId(),
-      );
-
-      final provider = context.read<ProductProvider>();
-      final success = await provider.addProduct(newProduct);
-
-      if (success && mounted) {
-        await _showSuccessDialog('Đã lưu sản phẩm với thông tin cơ bản!');
-        Navigator.popUntil(
-          context,
-          (route) => route.settings.name != '/add-product-step1',
+      try {
+        // Create minimal product with just name and company
+        final newProduct = Product(
+          id: '',
+          name: _nameController.text.trim(),
+          category: ProductCategory.FERTILIZER, // Default category
+          companyId: _selectedCompanyId!,
+          attributes: {},
+          isActive: true,
+          isBanned: false,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          storeId: BaseService.getDefaultStoreId(),
         );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              provider.errorMessage.isNotEmpty
-                  ? provider.errorMessage
-                  : 'Có lỗi xảy ra khi lưu sản phẩm',
+
+        final provider = context.read<ProductProvider>();
+        final success = await provider.addProduct(newProduct);
+
+        if (success && mounted) {
+          // Show success dialog
+          await _showSuccessDialog('Đã lưu sản phẩm với thông tin cơ bản!');
+
+          // Return to product list
+          Navigator.popUntil(
+            context,
+            (route) => route.settings.name != '/add-product-step1',
+          );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                provider.errorMessage.isNotEmpty
+                    ? provider.errorMessage
+                    : 'Có lỗi xảy ra khi lưu sản phẩm',
+              ),
+              backgroundColor: Colors.red,
             ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi không mong muốn: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi không mong muốn: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -323,7 +399,7 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Colors.green.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -357,7 +433,7 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(

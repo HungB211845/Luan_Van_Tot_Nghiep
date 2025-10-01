@@ -52,10 +52,29 @@ class _AddBatchFromPOScreenState extends State<AddBatchFromPOScreen> {
   }
 
   List<PurchaseOrder> _getFilteredPOs(List<PurchaseOrder> allPOs) {
-    // Only show POs that are sent or confirmed (not draft or cancelled or delivered)
+    final product = context.read<ProductProvider>().selectedProduct;
+    if (product == null) return [];
+
+    // CRITICAL FILTER: Only show POs that match:
+    // 1. Correct company (supplier must match product's company)
+    // 2. Status is sent or confirmed (ready to receive)
+    //
+    // Note: We filter by company here. Filtering by specific product
+    // would require loading all PO items which is expensive.
+    // The product-level filter happens in ReceivePOItemsScreen
+    // where only items matching the selected product are shown.
     var filtered = allPOs.where((po) {
-      return po.status == PurchaseOrderStatus.sent ||
-             po.status == PurchaseOrderStatus.confirmed;
+      // Filter by status first
+      final hasCorrectStatus = po.status == PurchaseOrderStatus.sent ||
+                               po.status == PurchaseOrderStatus.confirmed;
+
+      if (!hasCorrectStatus) return false;
+
+      // Filter by company: PO supplier MUST match product's company
+      // This ensures we only show POs from the correct supplier
+      final isCorrectSupplier = po.supplierId == product.companyId;
+
+      return isCorrectSupplier;
     }).toList();
 
     // Apply search filter

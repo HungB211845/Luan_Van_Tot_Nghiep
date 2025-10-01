@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:math';
 import '../../models/purchase_order.dart';
@@ -11,6 +12,52 @@ import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/services/base_service.dart';
+
+/// Custom TextInputFormatter for VND currency
+/// Formats: 1000000 → 1.000.000
+class CurrencyInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    // Remove all non-digit characters
+    String digitsOnly = newValue.text.replaceAll(RegExp(r'[^\d]'), '');
+
+    if (digitsOnly.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    // Format with thousand separators (dot)
+    String formatted = _formatWithDots(digitsOnly);
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  String _formatWithDots(String number) {
+    if (number.isEmpty) return '';
+
+    // Reverse the string to add dots from right to left
+    String reversed = number.split('').reversed.join();
+    String result = '';
+
+    for (int i = 0; i < reversed.length; i++) {
+      if (i > 0 && i % 3 == 0) {
+        result += '.';
+      }
+      result += reversed[i];
+    }
+
+    return result.split('').reversed.join();
+  }
+}
 
 /// Màn hình xác nhận nhận hàng từ PO
 /// Tự động điền thông tin từ PO, chỉ cần xác nhận và bổ sung
@@ -37,6 +84,15 @@ class _ReceivePOItemsScreenState extends State<ReceivePOItemsScreen> {
   void initState() {
     super.initState();
     _initializeItemData();
+  }
+
+  @override
+  void dispose() {
+    // Dispose all controllers
+    for (var data in _itemDataMap.values) {
+      data.dispose();
+    }
+    super.dispose();
   }
 
   void _initializeItemData() {
@@ -287,17 +343,37 @@ class _ReceivePOItemsScreenState extends State<ReceivePOItemsScreen> {
 
           // Items list
           Expanded(
-            child: Consumer<PurchaseOrderProvider>(
-              builder: (context, provider, _) {
-                if (provider.isLoading) {
+            child: Consumer2<PurchaseOrderProvider, ProductProvider>(
+              builder: (context, poProvider, productProvider, _) {
+                if (poProvider.isLoading) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final items = provider.selectedPOItems;
+                final selectedProduct = productProvider.selectedProduct;
+                final allItems = poProvider.selectedPOItems;
+
+                // CRITICAL FILTER: Only show items for the currently selected product
+                // This ensures we only receive batches for the product we're working on
+                final items = selectedProduct != null
+                    ? allItems.where((item) => item.productId == selectedProduct.id).toList()
+                    : allItems;
 
                 if (items.isEmpty) {
-                  return const Center(
-                    child: Text('Không có sản phẩm nào trong đơn hàng này'),
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          selectedProduct != null
+                              ? 'Đơn hàng này không chứa sản phẩm\n"${selectedProduct.name}"'
+                              : 'Không có sản phẩm nào trong đơn hàng này',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
                   );
                 }
 
@@ -421,17 +497,33 @@ class _ReceivePOItemsScreenState extends State<ReceivePOItemsScreen> {
 
             // Cost price (editable but pre-filled)
             TextFormField(
-              initialValue: data.costPrice.toStringAsFixed(0),
+              controller: data.costPriceController,
               decoration: _buildInputDecoration(
                 label: 'Giá vốn *',
                 icon: Icons.attach_money,
               ),
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                CurrencyInputFormatter(),
+              ],
               onChanged: (value) {
-                final price = double.tryParse(value) ?? 0;
+                // Remove dots before parsing (1.000.000 → 1000000)
+                final cleanedValue = value.replaceAll('.', '');
+                final price = double.tryParse(cleanedValue) ?? 0;
                 setState(() {
                   data.costPrice = price;
                 });
+              },
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Nhập giá vốn';
+                }
+                final cleanedValue = value.replaceAll('.', '');
+                final price = double.tryParse(cleanedValue);
+                if (price == null || price < 0) {
+                  return 'Giá ≥ 0';
+                }
+                return null;
               },
             ),
 
@@ -552,6 +644,7 @@ class _ItemReceiveData {
   int receivedQuantity;
   double costPrice;
   DateTime? expiryDate;
+  final TextEditingController costPriceController;
 
   _ItemReceiveData({
     required this.poItem,
@@ -559,5 +652,25 @@ class _ItemReceiveData {
     required this.receivedQuantity,
     required this.costPrice,
     this.expiryDate,
-  });
+  }) : costPriceController = TextEditingController(
+    text: _formatCurrency(costPrice),
+  );
+
+  // Format initial value with dots
+  static String _formatCurrency(double price) {
+    final priceStr = price.toStringAsFixed(0);
+    final reversed = priceStr.split('').reversed.join();
+    String result = '';
+    for (int i = 0; i < reversed.length; i++) {
+      if (i > 0 && i % 3 == 0) {
+        result += '.';
+      }
+      result += reversed[i];
+    }
+    return result.split('').reversed.join();
+  }
+
+  void dispose() {
+    costPriceController.dispose();
+  }
 }
