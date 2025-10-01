@@ -79,9 +79,6 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() {
-      if (mounted) setState(() => _searchQuery = _searchController.text);
-    });
     _loadData();
   }
 
@@ -252,6 +249,11 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
                     child: CupertinoSearchTextField(
                       controller: _searchController,
                       placeholder: 'Tìm theo số tiền, mã giao dịch...',
+                      onChanged: (query) {
+                        setState(() {
+                          _searchQuery = query;
+                        });
+                      },
                     ),
                   ),
                 ),
