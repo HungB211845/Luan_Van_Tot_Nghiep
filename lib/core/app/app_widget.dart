@@ -20,10 +20,11 @@ class AppWidget extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.green,
         visualDensity: VisualDensity.adaptivePlatformDensity,
+        useMaterial3: true,
         // Apply Inter font globally
-        textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme).apply(
-          bodyColor: const Color(0xFF1D1D1F), // Dark gray for body text
-          displayColor: const Color(0xFF1D1D1F), // Dark gray for headlines
+        textTheme: GoogleFonts.interTextTheme().apply(
+          bodyColor: const Color(0xFF1D1D1F),
+          displayColor: const Color(0xFF1D1D1F),
         ),
         // Style for TextFields to be minimalist
         inputDecorationTheme: InputDecorationTheme(
@@ -41,8 +42,14 @@ class AppWidget extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Colors.green, width: 2),
           ),
-          floatingLabelStyle: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          floatingLabelStyle: const TextStyle(
+            color: Colors.green,
+            fontWeight: FontWeight.w600,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 16,
+            horizontal: 16,
+          ),
         ),
       ),
       

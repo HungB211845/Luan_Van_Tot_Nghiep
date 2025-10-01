@@ -90,29 +90,41 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildAdaptiveLayout() {
-    const double tabletBreakpoint = 768;
+    // Material Design breakpoints:
+    // - Mobile: < 600px (tabs)
+    // - Tablet: 600-1200px (2-column 6:4)
+    // - Desktop: > 1200px (2-column 7:3)
+    const double tabletBreakpoint = 600;
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= tabletBreakpoint) {
-          // Tablet or Desktop layout
-          return _buildTwoColumnLayout();
+          // Tablet or Desktop layout: side-by-side
+          return _buildTwoColumnLayout(constraints.maxWidth);
         }
-        // Mobile layout
+        // Mobile layout: tabs
         return _buildTabBasedLayout();
       },
     );
   }
 
-  Widget _buildTwoColumnLayout() {
+  Widget _buildTwoColumnLayout(double screenWidth) {
+    // Adjust ratio based on screen width
+    // Tablet (600-1200): 6:4 ratio (60% products, 40% invoice)
+    // Desktop (>1200): 7:3 ratio (70% products, 30% invoice)
+    const double desktopBreakpoint = 1200;
+    final isDesktop = screenWidth >= desktopBreakpoint;
+    final productFlex = isDesktop ? 7 : 6;
+    final invoiceFlex = isDesktop ? 3 : 4;
+
     return Row(
       children: [
         Expanded(
-          flex: 6, // Product list takes more space
+          flex: productFlex,
           child: _buildProductColumn(),
         ),
         const VerticalDivider(width: 1, thickness: 1),
         Expanded(
-          flex: 4, // Invoice takes less space
+          flex: invoiceFlex,
           child: _buildInvoiceColumn(),
         ),
       ],

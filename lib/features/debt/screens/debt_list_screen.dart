@@ -108,7 +108,8 @@ class _DebtListScreenState extends State<DebtListScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double tabletBreakpoint = 768;
+        // Consistent breakpoint: 600px
+        const double tabletBreakpoint = 600;
         if (constraints.maxWidth >= tabletBreakpoint) {
           return _buildDesktopLayout();
         }
@@ -348,10 +349,13 @@ class _DebtListScreenState extends State<DebtListScreen> {
   Widget _buildSegmentItem(String text, bool isSelected) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-<<<<<<< HEAD
       child: Text(
         text,
-        style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontSize: 14, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal),
+        style: TextStyle(
+          color: isSelected ? Colors.white : Colors.black,
+          fontSize: 14,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        ),
       ),
     );
   }

@@ -40,7 +40,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double tabletBreakpoint = 768;
+        // Consistent with POS screen: 600px breakpoint
+        const double tabletBreakpoint = 600;
         if (constraints.maxWidth >= tabletBreakpoint) {
           return _buildDesktopLayout();
         }
@@ -117,7 +118,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         IconButton(
           icon: const Icon(Icons.add),
           onPressed: () {
-            const double tabletBreakpoint = 768;
+            const double tabletBreakpoint = 600;
             final screenWidth = MediaQuery.of(context).size.width;
 
             if (screenWidth >= tabletBreakpoint) {

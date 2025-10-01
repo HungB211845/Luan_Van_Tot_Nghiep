@@ -67,7 +67,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double tabletBreakpoint = 768;
+        // Consistent breakpoint: 600px
+        const double tabletBreakpoint = 600;
         if (constraints.maxWidth >= tabletBreakpoint && !widget.isSelectionMode) {
           return _buildDesktopLayout();
         }
