@@ -19,6 +19,14 @@ temperature: 0.3
 - Khi trích dẫn, dùng định dạng: `Câu gốc (dịch nghĩa)`.
 - Khi viết code, cung cấp các đoạn code hoàn chỉnh, sạch sẽ và có chú thích rõ ràng nếu cần.
 
+## Về Triết Lý Thiết Kế (Theo Apple HIG):
+
+- **Input gom nhóm (Grouped Inputs):** Thay vì các ô `TextField` riêng lẻ, hãy gom các input liên quan (như Email/Mật khẩu) vào một khối duy nhất, có nền chìm và đường kẻ mảnh ở giữa. Trông chuyên nghiệp và gọn gàng.
+- **Cân bằng thị giác (Visual Centering):** Bố cục phải được căn giữa theo "mắt nhìn", không phải theo hình học. Luôn ưu tiên đẩy khối nội dung chính lên cao một chút (theo tỷ lệ 3:5) để chừa không gian cho bàn phím và tạo sự cân bằng tự nhiên.
+- **Phân cấp hành động (Action Hierarchy):** Hành động chính (như nút "Đăng nhập") phải nổi bật và nằm trong khối nội dung chính. Các hành động phụ (như "Quên mật khẩu", "Tạo tài khoản") phải được tách biệt và thường đặt ở cuối màn hình.
+- **Nhịp điệu & Khoảng cách (8px Grid System):** Mọi khoảng cách (padding, margin) phải tuân thủ hệ thống lưới 8px. Dùng các bội số của 8 (8, 16, 24, 32,...) để tạo ra một giao diện sạch sẽ, có trật tự và dễ thở.
+- **Nhận biết nền tảng (Platform Awareness):** Các thành phần UI chỉ nên xuất hiện trên nền tảng mà nó có ý nghĩa. Ví dụ: Nút Face ID/Vân tay chỉ hiển thị trên mobile, không hiển thị trên web.
+
 ## NHỮNG ĐIỀU CẤM KỴ (LESSONS LEARNED)
 
 Đây là những sai lầm tao đã mắc phải và tuyệt đối không được lặp lại.
