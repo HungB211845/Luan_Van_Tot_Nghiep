@@ -28,6 +28,8 @@ import '../../features/auth/screens/otp_verification_screen.dart';
 import '../../features/auth/screens/biometric_setup_screen.dart';
 import '../../features/auth/screens/biometric_login_screen.dart';
 import '../../features/auth/screens/store_setup_screen.dart';
+import '../../features/auth/screens/store_code_screen.dart';
+import '../../features/auth/screens/signup_step1_screen.dart';
 import '../../presentation/home/home_screen.dart';
 import '../../presentation/main_navigation/main_navigation_screen.dart';
 import 'route_names.dart';
@@ -44,8 +46,10 @@ class AppRouter {
         return IOSPageRoute(child: const SplashScreen(), settings: settings);
       case RouteNames.login:
         return IOSPageRoute(child: const LoginScreen(), settings: settings);
-      case RouteNames.register:
-        return IOSPageRoute(child: const RegisterScreen(), settings: settings);
+      case RouteNames.storeCode:
+        return IOSPageRoute(child: const StoreCodeScreen(), settings: settings);
+      case RouteNames.signupStep1:
+        return IOSPageRoute(child: const SignupStep1Screen(), settings: settings);
       case RouteNames.forgotPassword:
         return IOSPageRoute(
           child: const ForgotPasswordScreen(),

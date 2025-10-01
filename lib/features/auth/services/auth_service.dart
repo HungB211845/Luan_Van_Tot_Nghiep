@@ -742,8 +742,13 @@ class AuthService {
       await _secure.setRememberFlag(false);
       // Keep refresh_token, last_store_code and last_store_id for biometric login
       print('🔍 DEBUG: Sign out complete, preserved refresh token and store context for biometric');
-    } catch (_) {}
+    } catch (e) {
+      print('Error during sign out: $e');
+      rethrow;
+    }
   }
+
+  Future<void> clearLastStoreCode() async => _secure.clearLastStoreCode();
 
   Future<void> _createOrUpdateSession(User user) async {
     final deviceId = await _getDeviceId();
@@ -908,6 +913,49 @@ class AuthService {
       return profile != null;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Validates a store code and saves it to secure storage if valid.
+  Future<Store?> validateAndSetStore(String storeCode) async {
+    try {
+      final result = await _supabase.rpc('validate_store_for_login', params: {
+        'store_code_param': storeCode
+      });
+
+      if (result == null || result['valid'] != true) {
+        throw Exception('Mã cửa hàng không hợp lệ hoặc đã bị vô hiệu hóa.');
+      }
+
+      final store = Store.fromJson(result['store_data']);
+
+      // Save to secure storage for future sessions
+      await _secure.storeLastStoreCode(store.storeCode);
+      await _secure.storeLastStoreId(store.id);
+      await _secure.storeLastStoreName(store.storeName);
+
+      return store;
+    } catch (e) {
+      // Re-throw with a more specific message if possible
+      if (e is Exception) {
+        throw e;
+      }
+      throw Exception('Lỗi khi xác thực cửa hàng: $e');
+    }
+  }
+
+  /// Checks if a store code is available.
+  Future<Map<String, dynamic>> checkStoreCodeAvailability(String storeCode) async {
+    try {
+      final result = await _supabase.rpc('check_store_code_availability', params: {
+        'p_store_code': storeCode
+      });
+      return result as Map<String, dynamic>;
+    } catch (e) {
+      return {
+        'isAvailable': false,
+        'message': 'Lỗi kiểm tra: ${e.toString()}'
+      };
     }
   }
 }

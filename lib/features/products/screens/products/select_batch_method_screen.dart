@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/product_provider.dart';
 import 'add_batch_manual_screen.dart';
 import 'add_batch_from_po_screen.dart';
+import 'add_batch_dialog.dart';
 
 /// Màn hình lựa chọn phương thức nhập lô hàng
 /// - Luồng 1: Nhập kho thủ công (cho hàng mua lẻ)
@@ -132,11 +133,28 @@ class SelectBatchMethodScreen extends StatelessWidget {
                 subtitle: 'Cho hàng mua lẻ hoặc không có đơn đặt trước',
                 details: 'Nhập đầy đủ thông tin lô hàng bao gồm mã lô, số lượng, giá nhập, hạn sử dụng',
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const AddBatchManualScreen(),
-                    ),
-                  );
+                  const double tabletBreakpoint = 768;
+                  final screenWidth = MediaQuery.of(context).size.width;
+
+                  if (screenWidth >= tabletBreakpoint) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => const AddBatchManualDialog(),
+                    ).then((success) {
+                      if (success == true) {
+                        Navigator.of(context).pop(); // Close the method selection screen on success
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Thêm lô hàng thành công!'), backgroundColor: Colors.green),
+                        );
+                      }
+                    });
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const AddBatchManualScreen(),
+                      ),
+                    );
+                  }
                 },
               ),
 

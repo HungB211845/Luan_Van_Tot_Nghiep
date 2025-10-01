@@ -1,7 +1,11 @@
+import 'package:agricultural_pos/features/auth/models/auth_state.dart';
+import 'package:agricultural_pos/features/auth/providers/auth_provider.dart';
+import 'package:agricultural_pos/features/auth/services/secure_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 // Screens for each tab
+import '../../core/routing/route_names.dart';
 import '../home/home_screen.dart';
 import '../../features/pos/screens/transaction/transaction_list_screen.dart';
 import '../../features/pos/screens/pos/pos_screen.dart';
@@ -25,6 +29,7 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  late final AuthProvider _authProvider;
 
   // Navigator keys to maintain state for each tab
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
@@ -38,11 +43,38 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    _authProvider = context.read<AuthProvider>();
+    _authProvider.addListener(_onAuthStateChanged);
+
     // Initialize providers on startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TransactionProvider>().loadTransactions();
       context.read<CustomerProvider>().loadCustomers();
     });
+  }
+
+  @override
+  void dispose() {
+    _authProvider.removeListener(_onAuthStateChanged);
+    super.dispose();
+  }
+
+  void _onAuthStateChanged() {
+    if (!mounted) return;
+
+    if (_authProvider.state.status == AuthStatus.unauthenticated) {
+      // Use a post-frame callback to avoid trying to navigate during a build
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final storeCode = await SecureStorageService().getLastStoreCode();
+        if (!mounted) return;
+
+        final route = (storeCode == null || storeCode.isEmpty)
+            ? RouteNames.storeCode
+            : RouteNames.login;
+
+        Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
+      });
+    }
   }
 
   Future<bool> _onWillPop() async {

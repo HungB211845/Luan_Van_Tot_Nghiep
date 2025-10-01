@@ -10,7 +10,6 @@ import '../../customers/providers/customer_provider.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/widgets/loading_widget.dart';
 
-// Enums for filters and sorting
 enum DebtFilterStatus { all, overdue, dueSoon }
 enum DebtSortOption { highestDebt, lowestDebt, nameAZ, mostRecent }
 
@@ -22,7 +21,6 @@ class DebtListScreen extends StatefulWidget {
 }
 
 class _DebtListScreenState extends State<DebtListScreen> {
-  final CustomerService _customerService = CustomerService();
   final TextEditingController _searchController = TextEditingController();
   DebtFilterStatus _selectedFilter = DebtFilterStatus.all;
   DebtSortOption _sortOption = DebtSortOption.highestDebt;
@@ -44,12 +42,11 @@ class _DebtListScreenState extends State<DebtListScreen> {
   }
 
   Future<void> _loadData() async {
-    await context.read<DebtProvider>().loadAllDebts();
-    await context.read<CustomerProvider>().loadCustomers();
+    context.read<DebtProvider>().loadAllDebts();
+    context.read<CustomerProvider>().loadCustomers();
   }
 
   List<MapEntry<String, List<Debt>>> _getProcessedData(DebtProvider provider) {
-    // 1. Filter
     List<Debt> filteredDebts;
     switch (_selectedFilter) {
       case DebtFilterStatus.overdue:
@@ -63,7 +60,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
         break;
     }
 
-    // 2. Group by Customer
     final Map<String, List<Debt>> debtsByCustomer = {};
     for (final debt in filteredDebts) {
       if (debt.remainingAmount > 0) {
@@ -71,7 +67,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
       }
     }
 
-    // 3. Search
     if (_searchQuery.isNotEmpty) {
       final customerProvider = context.read<CustomerProvider>();
       final query = _searchQuery.toLowerCase();
@@ -83,7 +78,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
       });
     }
 
-    // 4. Sort
     var sortedEntries = debtsByCustomer.entries.toList();
     final customerProvider = context.read<CustomerProvider>();
     sortedEntries.sort((a, b) {
@@ -112,14 +106,72 @@ class _DebtListScreenState extends State<DebtListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double tabletBreakpoint = 768;
+        if (constraints.maxWidth >= tabletBreakpoint) {
+          return _buildDesktopLayout();
+        }
+        return _buildMobileLayout();
+      },
+    );
+  }
+
+  Widget _buildMobileLayout() {
     return Scaffold(
-      body: Consumer<DebtProvider>(
-        builder: (context, provider, _) {
-          final processedData = _getProcessedData(provider);
-          return RefreshIndicator(
-            onRefresh: _loadData,
-            child: CustomScrollView(
-              slivers: [
+      body: _buildListContent(isMasterDetail: false),
+      bottomNavigationBar: _buildSummaryFooter(),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Scaffold(
+      body: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Column(
+              children: [
+                AppBar(title: const Text('Quản Lý Công Nợ'), backgroundColor: Colors.green, foregroundColor: Colors.white, actions: [_buildSortButton()]),
+                Expanded(child: _buildListContent(isMasterDetail: true)),
+              ],
+            ),
+          ),
+          const VerticalDivider(width: 1, thickness: 1),
+          Expanded(
+            flex: 6,
+            child: Consumer<DebtProvider>(
+              builder: (context, provider, child) {
+                if (provider.selectedCustomerId == null) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text('Chọn một khách hàng để xem sổ cái', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                }
+                return CustomerDebtDetailScreen(customerId: provider.selectedCustomerId!);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListContent({required bool isMasterDetail}) {
+    return Consumer<DebtProvider>(
+      builder: (context, provider, _) {
+        final processedData = _getProcessedData(provider);
+        return RefreshIndicator(
+          onRefresh: _loadData,
+          child: CustomScrollView(
+            slivers: [
+              if (!isMasterDetail)
                 SliverAppBar(
                   title: const Text('Quản Lý Công Nợ'),
                   backgroundColor: Colors.green,
@@ -128,23 +180,103 @@ class _DebtListScreenState extends State<DebtListScreen> {
                   floating: true,
                   actions: [_buildSortButton()],
                 ),
-                SliverToBoxAdapter(child: _buildSegmentedControl()),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: CupertinoSearchTextField(
-                      controller: _searchController,
-                      placeholder: 'Tìm theo tên hoặc SĐT khách hàng',
-                    ),
+              SliverToBoxAdapter(child: _buildSegmentedControl()),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: CupertinoSearchTextField(
+                    controller: _searchController,
+                    placeholder: 'Tìm theo tên hoặc SĐT khách hàng',
                   ),
                 ),
-                _buildSliverDebtList(provider, processedData),
-              ],
-            ),
-          );
+              ),
+              _buildSliverDebtList(provider, processedData, isMasterDetail),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSliverDebtList(DebtProvider provider, List<MapEntry<String, List<Debt>>> sortedEntries, bool isMasterDetail) {
+    if (provider.isLoading && sortedEntries.isEmpty) {
+      return const SliverFillRemaining(child: Center(child: LoadingWidget()));
+    }
+    if (sortedEntries.isEmpty) {
+      return const SliverFillRemaining(child: Center(child: Text('Không có công nợ nào khớp bộ lọc.')));
+    }
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final entry = sortedEntries[index];
+          return _buildCustomerDebtCard(entry.key, entry.value, isMasterDetail);
         },
+        childCount: sortedEntries.length,
       ),
-      bottomNavigationBar: _buildSummaryFooter(),
+    );
+  }
+
+  Widget _buildCustomerDebtCard(String customerId, List<Debt> debts, bool isMasterDetail) {
+    final totalRemaining = debts.fold<double>(0, (sum, debt) => sum + debt.remainingAmount);
+    final bool hasOverdue = debts.any((d) => d.isOverdue);
+    final bool hasDueSoon = !hasOverdue && debts.any((d) => d.isDueSoon);
+    final customer = context.read<CustomerProvider>().getCustomerFromCache(customerId);
+    final provider = context.read<DebtProvider>();
+    final bool isSelected = isMasterDetail && provider.selectedCustomerId == customerId;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      elevation: isSelected ? 4 : 2,
+      color: isSelected ? Colors.green.withOpacity(0.1) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: isSelected ? Colors.green : Colors.grey[200]!, width: 1.5),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          if (isMasterDetail) {
+            provider.selectCustomerForDetail(customerId);
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => CustomerDebtDetailScreen(customerId: customerId)),
+            ).then((_) => _loadData());
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(customer?.name ?? 'KH: ${customerId.substring(0, 8)}...', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    if (customer?.phone != null) Padding(padding: const EdgeInsets.only(top: 4.0), child: Text(customer!.phone!, style: TextStyle(color: Colors.grey[600], fontSize: 14))),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Còn nợ', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      if (hasOverdue) const Icon(Icons.error, color: Colors.red, size: 20)
+                      else if (hasDueSoon) const Icon(Icons.hourglass_bottom, color: Colors.orange, size: 20),
+                      if (hasOverdue || hasDueSoon) const SizedBox(width: 6),
+                      Text(NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(totalRemaining), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -172,11 +304,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
           _buildSortAction(DebtSortOption.nameAZ, 'Tên A-Z'),
           _buildSortAction(DebtSortOption.mostRecent, 'Ngày nợ gần nhất'),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          isDestructiveAction: true,
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Hủy'),
-        ),
+        cancelButton: CupertinoActionSheetAction(isDestructiveAction: true, onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
       ),
     );
   }
@@ -220,97 +348,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
   Widget _buildSegmentItem(String text, bool isSelected) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      child: Text(
-        text,
-        style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontSize: 14, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal),
-      ),
-    );
-  }
-
-  Widget _buildSliverDebtList(DebtProvider provider, List<MapEntry<String, List<Debt>>> sortedEntries) {
-    if (provider.isLoading && sortedEntries.isEmpty) {
-      return const SliverFillRemaining(child: Center(child: LoadingWidget()));
-    }
-    if (sortedEntries.isEmpty) {
-      return const SliverFillRemaining(child: Center(child: Text('Không có công nợ nào khớp bộ lọc.')));
-    }
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final entry = sortedEntries[index];
-          return _buildCustomerDebtCard(entry.key, entry.value);
-        },
-        childCount: sortedEntries.length,
-      ),
-    );
-  }
-
-  Widget _buildCustomerDebtCard(String customerId, List<Debt> debts) {
-    final totalRemaining = debts.fold<double>(0, (sum, debt) => sum + debt.remainingAmount);
-    final bool hasOverdue = debts.any((d) => d.isOverdue);
-    final bool hasDueSoon = !hasOverdue && debts.any((d) => d.isDueSoon);
-    final customer = context.read<CustomerProvider>().getCustomerFromCache(customerId);
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => CustomerDebtDetailScreen(customerId: customerId)),
-          ).then((_) => _loadData());
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      customer?.name ?? 'KH: ${customerId.substring(0, 8)}...',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    if (customer?.phone != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          customer!.phone!,
-                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('Còn nợ', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      if (hasOverdue)
-                        const Icon(Icons.error, color: Colors.red, size: 20)
-                      else if (hasDueSoon)
-                        const Icon(Icons.hourglass_bottom, color: Colors.orange, size: 20),
-                      if (hasOverdue || hasDueSoon) const SizedBox(width: 6),
-                      Text(
-                        NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(totalRemaining),
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: Text(text, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontSize: 14, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
     );
   }
 
@@ -329,10 +367,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Tổng công nợ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                Text(
-                  NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(totalRemaining),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red),
-                ),
+                Text(NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(totalRemaining), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
               ],
             ),
           ),

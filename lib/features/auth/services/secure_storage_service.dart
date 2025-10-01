@@ -8,6 +8,7 @@ class SecureStorageService {
   static const _keyRememberFlag = 'remember_flag';
   static const _keyLastStoreCode = 'last_store_code';
   static const _keyLastStoreId = 'last_store_id';
+  static const _keyLastStoreName = 'last_store_name';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
@@ -38,6 +39,12 @@ class SecureStorageService {
   Future<String?> getLastStoreCode() async => read(_keyLastStoreCode);
   Future<void> storeLastStoreId(String storeId) async => write(_keyLastStoreId, storeId);
   Future<String?> getLastStoreId() async => read(_keyLastStoreId);
+
+  // Store name for display on login screen
+  Future<void> storeLastStoreName(String storeName) async => write(_keyLastStoreName, storeName);
+  Future<String?> getLastStoreName() async => read(_keyLastStoreName);
+
+  Future<void> clearLastStoreCode() async => delete(_keyLastStoreCode);
 
   // Biometric refresh token storage (Face ID/Touch ID protected)
   Future<void> storeBiometricRefreshToken(String token) async {

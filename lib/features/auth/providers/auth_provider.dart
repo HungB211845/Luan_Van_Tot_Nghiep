@@ -191,7 +191,12 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     await _authService.signOut();
-    _setState(const auth.AuthState(status: auth.AuthStatus.unauthenticated, isLoading: false));
+    // The auth state will be updated by the _handleAuthChange listener.
+  }
+
+  Future<void> switchStore() async {
+    await _authService.clearLastStoreCode();
+    await signOut();
   }
 
   Future<bool> signUp({
@@ -224,6 +229,27 @@ class AuthProvider extends ChangeNotifier {
     }
     _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
     return false;
+  }
+
+  /// Validates the store code and saves it for the session.
+  Future<Store?> validateAndSetStore(String storeCode) async {
+    _setState(_state.copyWith(isLoading: true, errorMessage: null));
+    try {
+      final store = await _authService.validateAndSetStore(storeCode);
+      if (store != null) {
+        _setState(_state.copyWith(store: store, isLoading: false));
+        return store;
+      }
+      return null;
+    } catch (e) {
+      _setState(_state.copyWith(errorMessage: e.toString().replaceAll('Exception: ', ''), isLoading: false));
+      return null;
+    }
+  }
+
+  /// Checks store code availability.
+  Future<Map<String, dynamic>> checkStoreCodeAvailability(String storeCode) async {
+    return await _authService.checkStoreCodeAvailability(storeCode);
   }
 
   void _setState(auth.AuthState newState) {
