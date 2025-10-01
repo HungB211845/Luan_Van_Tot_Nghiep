@@ -257,12 +257,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => CustomerDebtDetailScreen(customerId: customerId)),
-          ).then((_) => _loadData());
-        },
+        onTap: null, // Disabled as per user request
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(

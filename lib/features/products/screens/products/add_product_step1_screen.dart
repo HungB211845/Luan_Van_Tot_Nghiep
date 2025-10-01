@@ -5,6 +5,7 @@ import '../../providers/company_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../../../shared/services/base_service.dart';
 import 'add_product_step2_screen.dart';
+import '../company/add_edit_company_screen.dart';
 
 class AddProductStep1Screen extends StatefulWidget {
   const AddProductStep1Screen({super.key});
@@ -164,6 +165,24 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
                       labelText: 'Nhà cung cấp',
                       hintText: 'Chọn nhà cung cấp',
                       prefixIcon: const Icon(Icons.business, size: 24),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.add_circle, color: Colors.green, size: 28),
+                        tooltip: 'Thêm nhà cung cấp mới',
+                        onPressed: () async {
+                          final result = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const AddEditCompanyScreen(),
+                            ),
+                          );
+                          // Reload companies and auto-select the newly created one
+                          if (result != null && result is String && mounted) {
+                            await context.read<CompanyProvider>().loadCompanies();
+                            setState(() {
+                              _selectedCompanyId = result; // Auto-select the new company
+                            });
+                          }
+                        },
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: Colors.grey[300]!),

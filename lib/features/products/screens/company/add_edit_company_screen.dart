@@ -59,14 +59,25 @@ class _AddEditCompanyScreenState extends State<AddEditCompanyScreen> {
       );
 
       bool success = false;
+      String? newCompanyId;
+
       if (_isEditMode) {
         success = await provider.updateCompany(company);
       } else {
         success = await provider.addCompany(company);
+        // Get the newly created company ID from the provider
+        if (success) {
+          final newCompany = provider.companies.firstWhere(
+            (c) => c.name == company.name,
+            orElse: () => company,
+          );
+          newCompanyId = newCompany.id;
+        }
       }
 
       if (success && mounted) {
-        Navigator.of(context).pop();
+        // Pop with the new company ID (for add mode) or true (for edit mode)
+        Navigator.of(context).pop(_isEditMode ? true : newCompanyId);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_isEditMode ? 'Đã cập nhật nhà cung cấp thành công' : 'Đã thêm nhà cung cấp thành công'),

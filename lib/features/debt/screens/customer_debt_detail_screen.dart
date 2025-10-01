@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -343,6 +344,14 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       color: Colors.white,
       child: InkWell(
         onTap: onTap,
+        onLongPress: () {
+          if (isDebtEntry && debt?.transactionId != null) {
+            Clipboard.setData(ClipboardData(text: debt!.transactionId!));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Đã sao chép Mã Giao Dịch'), backgroundColor: Colors.green),
+            );
+          }
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -396,7 +405,7 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
           Consumer<DebtProvider>(
             builder: (context, provider, _) {
               final summary = provider.debtSummary;
-              final remaining = summary?['remaining_debt']?.toDouble() ?? 0.0;
+              final remaining = summary?['total_remaining']?.toDouble() ?? 0.0;
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

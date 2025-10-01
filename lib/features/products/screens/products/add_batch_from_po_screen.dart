@@ -9,6 +9,7 @@ import '../../providers/product_provider.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/services/base_service.dart';
 import 'receive_po_items_screen.dart';
+import '../purchase_order/create_po_screen.dart';
 
 /// Màn hình chọn PO để nhận hàng
 /// Hiển thị danh sách PO thông minh: Mã PO + Nhà cung cấp + Ngày đặt
@@ -112,6 +113,23 @@ class _AddBatchFromPOScreenState extends State<AddBatchFromPOScreen> {
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
         elevation: 0,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final result = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const CreatePurchaseOrderScreen(),
+            ),
+          );
+          // Reload POs if a new one was created
+          if (result == true && mounted) {
+            await _loadData();
+          }
+        },
+        backgroundColor: Colors.orange,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Tạo Đơn Mới'),
       ),
       body: Column(
         children: [

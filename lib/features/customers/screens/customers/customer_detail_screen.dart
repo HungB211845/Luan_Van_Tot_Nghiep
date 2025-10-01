@@ -308,10 +308,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Consumer<CustomerProvider>(
-              builder: (context, customerProvider, child) {
+            Consumer2<CustomerProvider, DebtProvider>(
+              builder: (context, customerProvider, debtProvider, child) {
                 final stats = customerProvider.customerStatistics;
-                final isLoading = customerProvider.loadingStatistics;
+                final isLoading = customerProvider.loadingStatistics || debtProvider.isLoading;
+                // Calculate remaining debt directly from DebtProvider (same as Debt List Screen)
+                final customerDebts = debtProvider.debts
+                    .where((debt) => debt.customerId == widget.customer.id)
+                    .toList();
+                final outstandingDebt = customerDebts
+                    .fold<double>(0, (sum, debt) => sum + debt.remainingAmount);
+
+                print('🔍 DEBUG Customer Detail - Customer ID: ${widget.customer.id}');
+                print('🔍 DEBUG Total debts in provider: ${debtProvider.debts.length}');
+                print('🔍 DEBUG Customer debts: ${customerDebts.length}');
+                print('🔍 DEBUG Outstanding debt: $outstandingDebt');
                 return Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -345,9 +356,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               Expanded(
                                 child: _buildStatCard(
                                   icon: Icons.money_off,
-                                  title: 'Tổng Nợ',
-                                  value: AppFormatter.formatCurrency(
-                                      stats?['outstanding_debt']?.toDouble() ?? 0.0),
+                                  title: 'Nợ Còn Lại',
+                                  value: AppFormatter.formatCurrency(outstandingDebt),
                                   onTap: () => _navigateToDebtManagement(),
                                 ),
                               ),
@@ -368,26 +378,26 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     );
   }
 
-  // New method to build the debt list card
+  // New method to build the debt list card - iOS style collapsible
   Widget _buildDebtListCard() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Chi Tiết Công Nợ',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Icon(Icons.receipt_long, color: Colors.orange),
+          title: Text(
+            'Chi Tiết Công Nợ',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
             ),
-            const SizedBox(height: 8),
-            const Divider(),
+          ),
+          children: [
             Consumer<DebtProvider>(
               builder: (context, debtProvider, child) {
                 if (debtProvider.isLoading) {
@@ -399,7 +409,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 if (debtProvider.errorMessage.isNotEmpty) {
                   return Center(child: Text(debtProvider.errorMessage));
                 }
-                // CORRECTED: Use the 'debts' getter
                 if (debtProvider.debts.isEmpty) {
                   return const Center(
                     child: Padding(
@@ -410,7 +419,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 }
 
                 return Column(
-                  // CORRECTED: Use the 'debts' getter
                   children: debtProvider.debts
                       .map((debt) => _buildDebtItem(debt))
                       .toList(),
