@@ -23,19 +23,23 @@ temperature: 0.3
 
 Đây là những sai lầm tao đã mắc phải và tuyệt đối không được lặp lại.
 
-1.  **Cấm Giả Định, Phải Kiểm Tra:** Không được tự ý giả định tên hàm, tên thuộc tính, hay tham số của bất kỳ class hay widget nào. Trước khi dùng, phải đọc file gốc hoặc tài liệu của nó. Sai lầm đã mắc phải: Gọi `handleSortOption` không tồn tại, dùng `itemExtent` cho `AzListView`, dùng `size` cho `LoadingWidget`.
+1.  **Cấm Giả Định, Phải Kiểm Tra:** Không được tự ý giả định tên hàm, tên thuộc tính, hay tham số của bất kỳ class hay widget nào. Trước khi dùng, phải đọc file gốc. Sai lầm đã mắc phải: Gọi `handleSortOption` không tồn tại, dùng `itemExtent` cho `AzListView`, dùng `size` cho `LoadingWidget`.
 
-2.  **Cấm `setState` trong `build`:** Tuyệt đối không được gọi `setState` hoặc một hàm có chứa `setState` từ bên trong một phương thức `build`. Nó gây ra lỗi 'setState() called during build'. Sai lầm đã mắc phải: Gọi hàm xử lý dữ liệu (có `setState`) trong `builder` của `Consumer`.
+2.  **Cấm `setState` trong `build`:** Tuyệt đối không được gọi `setState` hoặc một hàm có chứa `setState` từ bên trong một phương thức `build`. Nó gây ra lỗi 'setState() called during build'.
 
-3.  **Cẩn Trọng Tuyệt Đối với `const`:** Từ khóa `const` là để tối ưu, nhưng dùng sai sẽ gây lỗi biên dịch. Nếu một widget con không phải là `const`, thì widget cha và danh sách `children` chứa nó cũng không thể là `const`. Sai lầm đã mắc phải: Dùng `const` cho `Column` chứa `LoadingWidget`.
+3.  **Cẩn Trọng Tuyệt Đối với `const`:** Dùng sai `const` sẽ gây lỗi biên dịch. Nếu một widget con không phải là `const`, thì widget cha và danh sách `children` chứa nó cũng không thể là `const`.
 
-4.  **Luôn Kiểm Tra `import`:** Mỗi khi thêm một widget hoặc một provider mới vào file, phải tự kiểm tra xem đã `import` đủ chưa. Lỗi 'isn't a type' hầu hết là do thiếu `import`. Sai lầm đã mắc phải: Quên import `LoadingWidget`, `CustomerProvider`.
+4.  **Luôn Kiểm Tra `import`:** Mỗi khi thêm một widget hoặc một provider mới vào file, phải tự kiểm tra xem đã `import` đủ chưa. Lỗi 'isn't a type' hầu hết là do thiếu `import`.
 
-5.  **`write_file` Phải Đầy Đủ:** Khi dùng `write_file` để refactor code, tuyệt đối cấm dùng comment placeholder (`//...`) thay cho implementation của một hàm. Phải copy lại toàn bộ code đầy đủ của các hàm không thay đổi. Sai lầm đã mắc phải: Xóa implementation của các hàm `_build...` và `_FilterSheet` khi refactor `customer_debt_detail_screen`.
+5.  **`write_file` Phải Đầy Đủ (OLD RULE - DEPRECATED):** Khi dùng `write_file` để refactor code, tuyệt đối cấm dùng comment placeholder (`//...`) thay cho implementation của một hàm.
 
-6.  **Hiểu Rõ Ngữ Cảnh Thực Thi:** Phải nhận thức rõ code đang chạy ở đâu. Code Dart ở client và code SQL trong SQL Editor có ngữ cảnh khác nhau. `auth.uid()` hoạt động trên client (thông qua RLS) nhưng trả về `NULL` trong SQL Editor. Sai lầm đã mắc phải: Đưa lệnh `INSERT` có `auth.uid()` để người dùng chạy trên SQL Editor.
+6.  **Hiểu Rõ Ngữ Cảnh Thực Thi:** Phải nhận thức rõ code đang chạy ở đâu. Code Dart ở client và code SQL trong SQL Editor có ngữ cảnh khác nhau. `auth.uid()` trả về `NULL` trong SQL Editor.
+
+7.  **QUY TẮC TỐI THƯỢNG: Cấm Tái Tạo Code Từ Trí Nhớ:** Khi refactor một file, **cấm tuyệt đối** việc viết lại toàn bộ file bằng `write_file` dựa trên trí nhớ. Quy trình đúng và duy nhất là: **1. Đọc file gốc. 2. Dùng lệnh `replace` để thay thế chính xác và duy nhất phần code cần sửa. 3. Giữ nguyên toàn bộ phần còn lại.** Quy tắc này được đặt ra để chống lại sai lầm nghiêm trọng và có hệ thống là vô tình xóa đi các hàm helper, gây ra lỗi biên dịch liên tục.
 
 # Context (Phần Bối Cảnh Dự Án)
+
+(Phần còn lại của file giữ nguyên)
 
 Dự án này là AgriPOS, một ứng dụng POS quản lý vật tư nông nghiệp, được xây dựng bằng Flutter và Supabase.
 
