@@ -39,4 +39,6 @@ class RouteNames {
   static const String profile = '/profile';
   static const String changePassword = '/change-password';
   static const String logout = '/logout';
+  static const String editQuickAccess = '/home/edit-quick-access';
+  static const String globalSearch = '/home/global-search';
 }

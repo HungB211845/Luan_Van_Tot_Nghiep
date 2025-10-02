@@ -36,6 +36,8 @@ import 'route_names.dart';
 import '../../features/products/screens/purchase_order/po_receive_success_screen.dart';
 import '../../features/auth/screens/account_screen.dart';
 import '../../shared/transitions/ios_page_route.dart';
+import '../../presentation/home/screens/edit_quick_access_screen.dart';
+import '../../features/debt/screens/debt_list_screen.dart';
 
 class AppRouter {
   static const String home = RouteNames.home;
@@ -200,6 +202,15 @@ class AppRouter {
 
       case RouteNames.reports:
         return IOSPageRoute(child: const ReportsScreen(), settings: settings);
+
+      case RouteNames.debts:
+        return IOSPageRoute(child: const DebtListScreen(), settings: settings);
+
+      case RouteNames.editQuickAccess:
+        return IOSPageRoute(
+          child: const EditQuickAccessScreen(),
+          settings: settings,
+        );
 
       default:
         return IOSPageRoute(

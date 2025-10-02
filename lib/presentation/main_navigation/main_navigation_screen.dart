@@ -16,6 +16,7 @@ import '../../features/products/screens/products/product_list_screen.dart';
 import '../../features/pos/providers/transaction_provider.dart';
 import '../../features/customers/providers/customer_provider.dart';
 import '../../features/products/providers/product_edit_mode_provider.dart';
+import '../../core/providers/navigation_provider.dart';
 
 // Tab Navigator
 import 'tab_navigator.dart';
@@ -28,7 +29,6 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
   late final AuthProvider _authProvider;
 
   // Navigator keys to maintain state for each tab
@@ -78,7 +78,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Future<bool> _onWillPop() async {
-    final key = _navigatorKeys[_currentIndex];
+    final navigationProvider = context.read<NavigationProvider>();
+    final key = _navigatorKeys[navigationProvider.currentIndex];
     if (key.currentState?.canPop() ?? false) {
       key.currentState?.pop();
       return false; // Don't exit app
@@ -86,47 +87,36 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return true; // Exit app
   }
 
-  void _onTabTapped(int index) {
-    if (_currentIndex == index) {
-      // If tapping the current tab, pop to the first route
-      _navigatorKeys[index].currentState?.popUntil((route) => route.isFirst);
-    } else {
-      // Switch to the new tab
-      setState(() {
-        _currentIndex = index;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Consumer<ProductEditModeProvider>(
-      builder: (context, editModeProvider, child) {
+    return Consumer2<ProductEditModeProvider, NavigationProvider>(
+      builder: (context, editModeProvider, navigationProvider, child) {
         final hideBottomNav = editModeProvider.isEditMode;
+        final currentIndex = navigationProvider.currentIndex;
 
         return WillPopScope(
           onWillPop: _onWillPop,
           child: Scaffold(
             body: IndexedStack(
-              index: _currentIndex,
+              index: currentIndex,
               children: <Widget>[
-                _buildOffstageNavigator(0, const HomeScreen()),
-                _buildOffstageNavigator(1, const TransactionListScreen()),
-                _buildOffstageNavigator(2, const POSScreen()),
-                _buildOffstageNavigator(3, const ProductListScreen()),
-                _buildOffstageNavigator(4, const ProfileScreen()),
+                _buildOffstageNavigator(0, const HomeScreen(), currentIndex),
+                _buildOffstageNavigator(1, const TransactionListScreen(), currentIndex),
+                _buildOffstageNavigator(2, const POSScreen(), currentIndex),
+                _buildOffstageNavigator(3, const ProductListScreen(), currentIndex),
+                _buildOffstageNavigator(4, const ProfileScreen(), currentIndex),
               ],
             ),
-            bottomNavigationBar: hideBottomNav ? null : _buildFlatIOSBottomNav(),
+            bottomNavigationBar: hideBottomNav ? null : _buildFlatIOSBottomNav(currentIndex, navigationProvider),
           ),
         );
       },
     );
   }
 
-  Widget _buildOffstageNavigator(int index, Widget initialScreen) {
+  Widget _buildOffstageNavigator(int index, Widget initialScreen, int currentIndex) {
     return Offstage(
-      offstage: _currentIndex != index,
+      offstage: currentIndex != index,
       child: TabNavigator(
         navigatorKey: _navigatorKeys[index],
         initialScreen: initialScreen,
@@ -134,14 +124,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-  Widget _buildFlatIOSBottomNav() {
+  Widget _buildFlatIOSBottomNav(int currentIndex, NavigationProvider navigationProvider) {
     return Container(
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: Colors.grey[300]!, width: 0.5)),
       ),
       child: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
+        currentIndex: currentIndex,
+        onTap: (index) => navigationProvider.changeTab(index),
         
         // iOS-style configuration
         type: BottomNavigationBarType.fixed,

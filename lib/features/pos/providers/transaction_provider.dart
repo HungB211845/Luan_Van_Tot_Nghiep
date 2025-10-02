@@ -93,13 +93,13 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   /// The main method to fetch transactions, called on initial load and when filters change.
-  Future<void> loadTransactions() async {
+  Future<void> loadTransactions({int? limit}) async {
     _currentPage = 1;
     _transactions = [];
     _hasMore = true;
     _status = TransactionStatus.loading;
     notifyListeners();
-    await _fetchTransactions();
+    await _fetchTransactions(limit: limit);
   }
 
   /// Fetches the next page of transactions.
@@ -114,7 +114,7 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   /// The private workhorse method that calls the service.
-  Future<void> _fetchTransactions({bool isLoadMore = false}) async {
+  Future<void> _fetchTransactions({bool isLoadMore = false, int? limit}) async {
     try {
       final result = await _service.searchTransactions(
         searchText: _filter.searchText,
@@ -126,7 +126,7 @@ class TransactionProvider extends ChangeNotifier {
         customerIds: _filter.customerIds.toList(),
         debtStatus: _filter.debtStatus,
         page: _currentPage,
-        pageSize: _pageSize,
+        pageSize: limit ?? _pageSize, // Use limit if provided, otherwise use _pageSize
       );
 
       if (isLoadMore) {

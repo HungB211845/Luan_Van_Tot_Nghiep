@@ -11,6 +11,9 @@ import '../../features/auth/providers/permission_provider.dart';
 import '../../features/auth/providers/store_provider.dart';
 import '../../features/auth/providers/session_provider.dart';
 import '../../features/debt/providers/debt_provider.dart';
+import '../../presentation/home/providers/quick_access_provider.dart';
+import '../../presentation/home/providers/dashboard_provider.dart';
+import '../providers/navigation_provider.dart';
 
 class AppProviders {
   static List<SingleChildWidget> get list => [
@@ -29,6 +32,9 @@ class AppProviders {
           ),
         ),
         ChangeNotifierProvider(create: (_) => DebtProvider()),
+        ChangeNotifierProvider(create: (_) => QuickAccessProvider()),
+        ChangeNotifierProvider(create: (_) => DashboardProvider()),
+        ChangeNotifierProvider(create: (_) => NavigationProvider()),
         // Dễ dàng thêm providers mới ở đây
       ];
 }

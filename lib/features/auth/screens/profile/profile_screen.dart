@@ -1,5 +1,7 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../../../core/routing/route_names.dart';
 
@@ -9,193 +11,251 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: CupertinoColors.systemGroupedBackground,
       appBar: AppBar(
         title: const Text('Tài khoản'),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
-        automaticallyImplyLeading: false, // Remove back button since this is a tab
       ),
       body: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
           final user = authProvider.currentUser;
           final store = authProvider.currentStore;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // User Info Card
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        const CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.green,
-                          child: Icon(Icons.person, size: 50, color: Colors.white),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          user?.fullName ?? 'Người dùng',
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          user?.role.value ?? 'STAFF',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                        ),
-                        if (user?.phone != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            user!.phone!,
-                            style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+          return ListView(
+            children: [
+              const SizedBox(height: 20),
+
+              // Group 1: User Profile (Tappable)
+              _buildGroupedList([
+                _buildUserProfileTile(
+                  context,
+                  name: user?.fullName ?? 'Người dùng',
+                  email: Supabase.instance.client.auth.currentUser?.email ?? '',
+                  onTap: () {
+                    // TODO: Navigate to edit profile screen
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Chỉnh sửa thông tin cá nhân')),
+                    );
+                  },
                 ),
+              ]),
 
-                const SizedBox(height: 16),
+              const SizedBox(height: 35),
 
-                // Store Info Card
-                if (store != null) ...[
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Thông tin cửa hàng',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          const Divider(height: 24),
-                          _buildInfoRow('Tên cửa hàng:', store.storeName),
-                          const SizedBox(height: 8),
-                          _buildInfoRow('Mã cửa hàng:', store.storeCode),
-                          const SizedBox(height: 8),
-                          _buildInfoRow('Chủ cửa hàng:', store.ownerName ?? 'N/A'),
-                          if (store.phone != null) ...[
-                            const SizedBox(height: 8),
-                            _buildInfoRow('Điện thoại:', store.phone!),
-                          ],
-                          if (store.email != null) ...[
-                            const SizedBox(height: 8),
-                            _buildInfoRow('Email:', store.email!),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Menu Options
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Column(
-                    children: [
-                      // Biometric Toggle
-                      _buildBiometricToggle(context, authProvider),
-                      const Divider(height: 1),
-                      _buildMenuTile(
-                        icon: Icons.lock_outline,
-                        title: 'Đổi mật khẩu',
-                        onTap: () => Navigator.pushNamed(context, RouteNames.changePassword),
-                      ),
-                      const Divider(height: 1),
-                      _buildMenuTile(
-                        icon: Icons.settings_outlined,
-                        title: 'Cài đặt',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Tính năng cài đặt sẽ được phát triển')),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      _buildMenuTile(
-                        icon: Icons.help_outline,
-                        title: 'Hỗ trợ',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Tính năng hỗ trợ sẽ được phát triển')),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      _buildMenuTile(
-                        icon: Icons.info_outline,
-                        title: 'Thông tin ứng dụng',
-                        onTap: () {
-                          showAboutDialog(
-                            context: context,
-                            applicationName: 'Agricultural POS',
-                            applicationVersion: '1.0.0',
-                            children: [
-                              const Text('Hệ thống quản lý bán hàng nông nghiệp'),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+              // Group 2: Store Management
+              _buildSectionHeader('CỬA HÀNG'),
+              _buildGroupedList([
+                _buildMenuTile(
+                  icon: CupertinoIcons.building_2_fill,
+                  title: 'Thông tin cửa hàng',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Cửa hàng: ${store?.storeName ?? 'N/A'}')),
+                    );
+                  },
                 ),
-
-                const SizedBox(height: 24),
-
-                // Logout Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Đăng xuất'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => _showLogoutActionSheet(context),
-                  ),
+                _buildDivider(),
+                _buildMenuTile(
+                  icon: CupertinoIcons.person_2_fill,
+                  title: 'Quản lý nhân viên',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Quản lý nhân viên')),
+                    );
+                  },
                 ),
-              ],
-            ),
+                _buildDivider(),
+                _buildMenuTile(
+                  icon: CupertinoIcons.doc_text_fill,
+                  title: 'Cài đặt hóa đơn & Thuế',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cài đặt hóa đơn & Thuế')),
+                    );
+                  },
+                ),
+              ]),
+
+              const SizedBox(height: 35),
+
+              // Group 3: Settings & Security
+              _buildSectionHeader('CÀI ĐẶT & BẢO MẬT'),
+              _buildGroupedList([
+                _buildBiometricToggle(context, authProvider),
+                _buildDivider(),
+                _buildEmailToggle(context, authProvider),
+                _buildDivider(),
+                _buildMenuTile(
+                  icon: CupertinoIcons.lock_fill,
+                  title: 'Đổi mật khẩu',
+                  onTap: () => Navigator.pushNamed(context, RouteNames.changePassword),
+                ),
+              ]),
+
+              const SizedBox(height: 35),
+
+              // Group 4: Actions (Logout & Switch Store)
+              _buildGroupedList([
+                _buildActionTile(
+                  title: 'Đăng xuất',
+                  color: Colors.red,
+                  onTap: () => _handleLogout(context, authProvider),
+                ),
+                _buildDivider(),
+                _buildActionTile(
+                  title: 'Chuyển cửa hàng khác',
+                  color: Colors.green,
+                  onTap: () => _handleSwitchStore(context, authProvider),
+                ),
+              ]),
+
+              const SizedBox(height: 30),
+            ],
           );
         },
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: TextStyle(color: Colors.grey[600], fontSize: 14),
-          ),
+  // Section Header (like "CỬA HÀNG", "CÀI ĐẶT & BẢO MẬT")
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: CupertinoColors.systemGrey,
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
+  // Grouped List Container (white background with rounded corners)
+  Widget _buildGroupedList(List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  // Divider between list items
+  Widget _buildDivider() {
+    return Container(
+      margin: const EdgeInsets.only(left: 16),
+      height: 0.5,
+      color: CupertinoColors.separator,
+    );
+  }
+
+  // User Profile Tile (with avatar, name, email, chevron)
+  Widget _buildUserProfileTile(
+    BuildContext context, {
+    required String name,
+    required String email,
+    required VoidCallback onTap,
+  }) {
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              // Avatar
+              CircleAvatar(
+                radius: 30,
+                backgroundColor: Colors.green,
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Name & Email
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      email,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: CupertinoColors.systemGrey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Chevron
+              const Icon(
+                CupertinoIcons.chevron_right,
+                color: CupertinoColors.systemGrey3,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Menu Tile (with icon, title, chevron)
+  Widget _buildMenuTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.green, size: 24),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 17),
+                ),
+              ),
+              const Icon(
+                CupertinoIcons.chevron_right,
+                color: CupertinoColors.systemGrey3,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Biometric Toggle
   Widget _buildBiometricToggle(BuildContext context, AuthProvider authProvider) {
     final user = authProvider.currentUser;
     final isEnabled = user?.biometricEnabled ?? false;
@@ -206,135 +266,193 @@ class ProfileScreen extends StatelessWidget {
         final isAvailable = snapshot.data ?? false;
         final isLoading = authProvider.state.isLoading;
 
-        return ListTile(
-          leading: Icon(
-            Icons.fingerprint,
-            color: isAvailable ? Colors.green : Colors.grey[600],
-          ),
-          title: const Text('Đăng nhập Face ID'),
-          subtitle: Text(
-            isAvailable
-              ? 'Đăng nhập nhanh bằng sinh trắc học'
-              : 'Thiết bị không hỗ trợ hoặc chưa thiết lập',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
-          ),
-          trailing: isLoading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Switch(
-                  value: isEnabled,
-                  onChanged: isLoading ? null : (value) async {
-                    if (value) {
-                      final success = await authProvider.enableBiometric();
-                      if (context.mounted && success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Đã kích hoạt đăng nhập Face ID'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      } else if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(authProvider.state.errorMessage ?? 'Không thể kích hoạt Face ID'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    } else {
-                      final success = await authProvider.disableBiometric();
-                      if (context.mounted && success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Đã tắt đăng nhập Face ID'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                      } else if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(authProvider.state.errorMessage ?? 'Không thể tắt Face ID'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.lock_shield_fill,
+                color: Colors.green,
+                size: 24,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Đăng nhập bằng Face/Touch ID',
+                      style: TextStyle(fontSize: 17),
+                    ),
+                    Text(
+                      isAvailable
+                          ? 'Bật để cho phép đăng nhập nhanh trên thiết bị này'
+                          : 'Thiết bị không hỗ trợ hoặc chưa thiết lập',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: CupertinoColors.systemGrey,
+                      ),
+                    ),
+                  ],
                 ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMenuTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey[600]),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap,
-    );
-  }
-
-  void _showLogoutActionSheet(BuildContext context) {
-    final authProvider = context.read<AuthProvider>();
-    final storeName = authProvider.currentStore?.storeName ?? 'hiện tại';
-
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext bc) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.logout),
-                title: Text('Đăng xuất khỏi Cửa hàng "$storeName"'),
-                onTap: () async {
-                  Navigator.of(bc).pop(); // Dismiss the sheet
-                  await authProvider.signOut();
-                  // Navigate to login screen using root navigator (escape tab navigator)
-                  if (context.mounted) {
-                    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
-                      RouteNames.login,
-                      (route) => false,
-                    );
-                  }
-                },
               ),
-              ListTile(
-                leading: const Icon(Icons.swap_horiz),
-                title: const Text('Chuyển cửa hàng khác'),
-                onTap: () async {
-                  Navigator.of(bc).pop(); // Dismiss the sheet
-                  await authProvider.switchStore();
-                  // Navigate to store code screen using root navigator (escape tab navigator)
-                  if (context.mounted) {
-                    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
-                      RouteNames.storeCode,
-                      (route) => false,
-                    );
-                  }
-                },
-              ),
-              const Divider(thickness: 1),
-              ListTile(
-                leading: const Icon(Icons.cancel_outlined),
-                title: const Text('Hủy'),
-                onTap: () => Navigator.of(bc).pop(),
-              ),
+              const SizedBox(width: 8),
+              isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : CupertinoSwitch(
+                      value: isEnabled,
+                      onChanged: isLoading
+                          ? null
+                          : (value) async {
+                              if (value) {
+                                await authProvider.enableBiometric();
+                              } else {
+                                await authProvider.disableBiometric();
+                              }
+                            },
+                    ),
             ],
           ),
         );
       },
     );
+  }
+
+  // Email Toggle
+  Widget _buildEmailToggle(BuildContext context, AuthProvider authProvider) {
+    // TODO: Implement email persistence toggle
+    final isRememberEmail = false; // Placeholder
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(
+            CupertinoIcons.envelope_fill,
+            color: Colors.green,
+            size: 24,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Ghi nhớ email đăng nhập',
+                  style: TextStyle(fontSize: 17),
+                ),
+                Text(
+                  'Lưu email để tự điền ở màn Đăng nhập',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: CupertinoColors.systemGrey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          CupertinoSwitch(
+            value: isRememberEmail,
+            onChanged: (value) {
+              // TODO: Implement email persistence
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Action Tile (centered text, colored)
+  Widget _buildActionTile({
+    required String title,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          alignment: Alignment.center,
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 17,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Handle Logout
+  Future<void> _handleLogout(BuildContext context, AuthProvider authProvider) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Đăng xuất'),
+        content: const Text('Bạn có chắc muốn đăng xuất?'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: const Text('Đăng xuất'),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await authProvider.signOut();
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+          RouteNames.login,
+          (route) => false,
+        );
+      }
+    }
+  }
+
+  // Handle Switch Store
+  Future<void> _handleSwitchStore(BuildContext context, AuthProvider authProvider) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Chuyển cửa hàng'),
+        content: const Text('Bạn sẽ được đưa về màn hình nhập mã cửa hàng'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          CupertinoDialogAction(
+            child: const Text('Chuyển cửa hàng'),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await authProvider.switchStore();
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+          RouteNames.storeCode,
+          (route) => false,
+        );
+      }
+    }
   }
 }
