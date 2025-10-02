@@ -34,9 +34,15 @@ class RouteNames {
       '/transaction-success'; // Thêm route cho TransactionSuccessScreen
   static const String transactionList =
       '/transaction-list'; // Transaction history screen
+  static const String transactionDetail = '/transaction-detail';
+  static const String customerDetail = '/customer-detail';
   static const String reports = '/reports';
   static const String debts = '/debts'; // Debt management screen
   static const String profile = '/profile';
+  static const String editProfile = '/edit-profile';
+  static const String editStoreInfo = '/edit-store-info';
+  static const String employeeManagement = '/employee-management';
+  static const String invoiceSettings = '/invoice-settings';
   static const String changePassword = '/change-password';
   static const String logout = '/logout';
   static const String editQuickAccess = '/home/edit-quick-access';

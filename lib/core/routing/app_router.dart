@@ -3,6 +3,8 @@ import '../../features/customers/screens/customers/customer_list_screen.dart';
 import '../../features/products/models/company.dart';
 import '../../features/products/models/purchase_order.dart';
 import '../../features/products/models/product.dart';
+import '../../features/pos/models/transaction.dart';
+import '../../features/customers/models/customer.dart';
 import '../../features/products/screens/products/product_list_screen.dart';
 import '../../features/products/screens/products/product_detail_screen.dart';
 import '../../features/products/screens/products/add_product_step1_screen.dart';
@@ -35,15 +37,24 @@ import '../../presentation/main_navigation/main_navigation_screen.dart';
 import 'route_names.dart';
 import '../../features/products/screens/purchase_order/po_receive_success_screen.dart';
 import '../../features/auth/screens/account_screen.dart';
+import '../../features/auth/screens/profile/profile_screen.dart';
+import '../../features/auth/screens/edit_profile_screen.dart';
+import '../../features/auth/screens/edit_store_info_screen.dart';
+import '../../features/auth/screens/employee_management_screen.dart';
+import '../../features/auth/screens/invoice_settings_screen.dart';
+import '../../features/auth/screens/change_password_screen.dart';
 import '../../shared/transitions/ios_page_route.dart';
 import '../../presentation/home/screens/edit_quick_access_screen.dart';
 import '../../presentation/home/screens/global_search_screen.dart';
 import '../../features/debt/screens/debt_list_screen.dart';
+import '../../features/pos/screens/transaction/transaction_detail_screen.dart';
+import '../../features/customers/screens/customers/customer_detail_screen.dart';
 
 class AppRouter {
   static const String home = RouteNames.home;
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
+    debugPrint('🔍 ROUTER DEBUG: Generating route for: ${settings.name}');
     switch (settings.name) {
       case RouteNames.splash:
         return IOSPageRoute(child: const SplashScreen(), settings: settings);
@@ -85,7 +96,7 @@ class AppRouter {
           settings: settings,
         );
       case RouteNames.profile:
-        return IOSPageRoute(child: const AccountScreen(), settings: settings);
+        return IOSPageRoute(child: const ProfileScreen(), settings: settings);
 
       case RouteNames.customers:
         return IOSPageRoute(child: CustomerListScreen(), settings: settings);
@@ -216,6 +227,50 @@ class AppRouter {
       case RouteNames.globalSearch:
         return IOSPageRoute(
           child: const GlobalSearchScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.editProfile:
+        return IOSPageRoute(
+          child: const EditProfileScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.editStoreInfo:
+        return IOSPageRoute(
+          child: const EditStoreInfoScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.employeeManagement:
+        return IOSPageRoute(
+          child: const EmployeeManagementScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.invoiceSettings:
+        return IOSPageRoute(
+          child: const InvoiceSettingsScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.changePassword:
+        return IOSPageRoute(
+          child: const ChangePasswordScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.transactionDetail:
+        final transaction = settings.arguments as Transaction;
+        return IOSPageRoute(
+          child: TransactionDetailScreen(transaction: transaction),
+          settings: settings,
+        );
+
+      case RouteNames.customerDetail:
+        final customer = settings.arguments as Customer;
+        return IOSPageRoute(
+          child: CustomerDetailScreen(customer: customer),
           settings: settings,
         );
 

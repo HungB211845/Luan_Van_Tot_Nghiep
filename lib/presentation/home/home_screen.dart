@@ -117,9 +117,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildGreetingWidget(),
                 const SizedBox(height: 16),
 
-                // Global Search Bar
-                _buildSearchBar(),
-                const SizedBox(height: 24),
 
                 // Revenue Chart Widget
                 _buildRevenueChartWidget(),

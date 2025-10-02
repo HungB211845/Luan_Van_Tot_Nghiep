@@ -33,10 +33,8 @@ class ProfileScreen extends StatelessWidget {
                   name: user?.fullName ?? 'Người dùng',
                   email: Supabase.instance.client.auth.currentUser?.email ?? '',
                   onTap: () {
-                    // TODO: Navigate to edit profile screen
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Chỉnh sửa thông tin cá nhân')),
-                    );
+                    debugPrint('🔍 DEBUG: Navigating to editProfile: ${RouteNames.editProfile}');
+                    Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.editProfile);
                   },
                 ),
               ]),
@@ -50,9 +48,8 @@ class ProfileScreen extends StatelessWidget {
                   icon: CupertinoIcons.building_2_fill,
                   title: 'Thông tin cửa hàng',
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Cửa hàng: ${store?.storeName ?? 'N/A'}')),
-                    );
+                    debugPrint('🔍 DEBUG: Navigating to editStoreInfo: ${RouteNames.editStoreInfo}');
+                    Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.editStoreInfo);
                   },
                 ),
                 _buildDivider(),
@@ -60,9 +57,8 @@ class ProfileScreen extends StatelessWidget {
                   icon: CupertinoIcons.person_2_fill,
                   title: 'Quản lý nhân viên',
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Quản lý nhân viên')),
-                    );
+                    debugPrint('🔍 DEBUG: Navigating to employeeManagement: ${RouteNames.employeeManagement}');
+                    Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.employeeManagement);
                   },
                 ),
                 _buildDivider(),
@@ -70,9 +66,8 @@ class ProfileScreen extends StatelessWidget {
                   icon: CupertinoIcons.doc_text_fill,
                   title: 'Cài đặt hóa đơn & Thuế',
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Cài đặt hóa đơn & Thuế')),
-                    );
+                    debugPrint('🔍 DEBUG: Navigating to invoiceSettings: ${RouteNames.invoiceSettings}');
+                    Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.invoiceSettings);
                   },
                 ),
               ]),
@@ -89,7 +84,7 @@ class ProfileScreen extends StatelessWidget {
                 _buildMenuTile(
                   icon: CupertinoIcons.lock_fill,
                   title: 'Đổi mật khẩu',
-                  onTap: () => Navigator.pushNamed(context, RouteNames.changePassword),
+                  onTap: () => Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.changePassword),
                 ),
               ]),
 

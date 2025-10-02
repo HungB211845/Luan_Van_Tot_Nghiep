@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../features/products/models/product.dart';
 import '../../../features/pos/models/transaction.dart';
 import '../../../features/customers/models/customer.dart';
@@ -29,6 +31,12 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   List<Customer> _customerResults = [];
   bool _isLoading = false;
 
+  // Recent searches and suggestions
+  List<String> _recentSearches = [];
+  List<Product> _recentProducts = [];
+  List<Customer> _recentCustomers = [];
+  List<Transaction> _recentTransactions = [];
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +50,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
     // Listen to search input with debouncing
     _searchController.addListener(_onSearchChanged);
+
+    // Load suggestions for empty state
+    _loadSuggestions();
   }
 
   @override
@@ -82,6 +93,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
     debugPrint('🔍 SEARCH: Starting search for: "$query"');
     setState(() => _isLoading = true);
+
+    // Save search to recent searches
+    _saveRecentSearch(query);
 
     try {
       // Search in parallel for better performance
@@ -171,11 +185,82 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     }
   }
 
+  /// Load suggestions for empty state
+  Future<void> _loadSuggestions() async {
+    try {
+      // Load recent searches from local storage (simplified with hardcoded data for now)
+      _recentSearches = ['anh 3', 'NPK', 'công nợ', 'hóa đơn tháng 9'];
+
+      // Load recent/suggested items
+      final productProvider = context.read<ProductProvider>();
+      final customerProvider = context.read<CustomerProvider>();
+      final transactionProvider = context.read<TransactionProvider>();
+
+      // Get recent products (first 3)
+      if (productProvider.products.isNotEmpty) {
+        _recentProducts = productProvider.products.take(3).toList();
+      }
+
+      // Get recent customers (first 3)
+      if (customerProvider.customers.isNotEmpty) {
+        _recentCustomers = customerProvider.customers.take(3).toList();
+      }
+
+      // Get recent transactions (first 3)
+      if (transactionProvider.transactions.isNotEmpty) {
+        _recentTransactions = transactionProvider.transactions.take(3).toList();
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('🚨 SUGGESTIONS ERROR: Failed to load suggestions: $e');
+    }
+  }
+
+  /// Save search query to recent searches
+  void _saveRecentSearch(String query) {
+    if (query.trim().isEmpty) return;
+
+    // Remove if already exists to avoid duplicates
+    _recentSearches.remove(query);
+
+    // Add to beginning of list
+    _recentSearches.insert(0, query);
+
+    // Keep only last 5 searches
+    if (_recentSearches.length > 5) {
+      _recentSearches = _recentSearches.take(5).toList();
+    }
+
+    // TODO: Save to SharedPreferences for persistence
+  }
+
+  /// Handle tap on recent search
+  void _onRecentSearchTap(String query) {
+    _searchController.text = query;
+    _performSearch(query);
+  }
+
+  /// Clear all recent searches
+  void _clearRecentSearches() {
+    setState(() {
+      _recentSearches.clear();
+    });
+    // TODO: Clear from SharedPreferences as well
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarIconBrightness: Brightness.dark, // Dark icons on green background
+        statusBarBrightness: Brightness.light, // For Android compatibility
+      ),
+      child: Scaffold(
+        backgroundColor: CupertinoColors.systemGroupedBackground,
+        body: SafeArea(
         child: Column(
           children: [
             // Search Header with Hero Animation
@@ -187,24 +272,17 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
   }
 
   Widget _buildSearchHeader() {
     return Container(
-      color: Colors.white,
+      color: Colors.green,
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          // Back button
-          IconButton(
-            icon: const Icon(CupertinoIcons.back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-
-          const SizedBox(width: 8),
-
           // Search field with Hero animation
           Expanded(
             child: Hero(
@@ -249,6 +327,21 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Cancel button
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Hủy',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -306,35 +399,44 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            CupertinoIcons.search,
-            size: 64,
-            color: Colors.grey,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Tìm kiếm toàn bộ ứng dụng',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Sản phẩm, giao dịch, khách hàng và nhiều hơn nữa',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
-            textAlign: TextAlign.center,
-          ),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Recent Searches Section
+        if (_recentSearches.isNotEmpty) ...[
+          _buildRecentSearchesHeader(),
+          const SizedBox(height: 12),
+          ..._recentSearches.map(_buildRecentSearchItem),
+          const SizedBox(height: 32),
         ],
-      ),
+
+        // Suggestions Section
+        _buildSectionTitle('Gợi ý cho bạn'),
+        const SizedBox(height: 12),
+
+        // Recent Products
+        if (_recentProducts.isNotEmpty) ...[
+          _buildSubSectionTitle('Sản phẩm'),
+          const SizedBox(height: 8),
+          ..._recentProducts.map(_buildSuggestionProductItem),
+          const SizedBox(height: 20),
+        ],
+
+        // Recent Customers
+        if (_recentCustomers.isNotEmpty) ...[
+          _buildSubSectionTitle('Khách hàng'),
+          const SizedBox(height: 8),
+          ..._recentCustomers.map(_buildSuggestionCustomerItem),
+          const SizedBox(height: 20),
+        ],
+
+        // Recent Transactions
+        if (_recentTransactions.isNotEmpty) ...[
+          _buildSubSectionTitle('Giao dịch gần đây'),
+          const SizedBox(height: 8),
+          ..._recentTransactions.take(2).map(_buildSuggestionTransactionItem),
+        ],
+      ],
     );
   }
 
@@ -491,8 +593,12 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           ],
         ),
         onTap: () {
-          // TODO: Navigate to transaction detail
+          // Navigate to transaction detail screen
           Navigator.of(context).pop();
+          Navigator.of(context).pushNamed(
+            RouteNames.transactionDetail,
+            arguments: transaction,
+          );
         },
       ),
     );
@@ -535,8 +641,242 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           size: 20,
         ),
         onTap: () {
-          // TODO: Navigate to customer detail
+          // Navigate to customer detail screen
           Navigator.of(context).pop();
+          Navigator.of(context).pushNamed(
+            RouteNames.customerDetail,
+            arguments: customer,
+          );
+        },
+      ),
+    );
+  }
+
+  // Helper methods for empty state UI components
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade600,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentSearchesHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'TÌM KIẾM GẦN ĐÂY',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade600,
+            letterSpacing: 0.5,
+          ),
+        ),
+        GestureDetector(
+          onTap: _clearRecentSearches,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade400,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              CupertinoIcons.clear,
+              color: Colors.white,
+              size: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentSearchItem(String query) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListTile(
+        leading: const Icon(
+          CupertinoIcons.clock,
+          color: Colors.grey,
+          size: 20,
+        ),
+        title: Text(
+          query,
+          style: const TextStyle(fontSize: 16),
+        ),
+        onTap: () => _onRecentSearchTap(query),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionProductItem(Product product) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Icon(
+            CupertinoIcons.cube_box,
+            color: Colors.green,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          product.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          AppFormatter.formatCurrency(product.currentPrice ?? 0),
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 13,
+          ),
+        ),
+        trailing: const Icon(
+          CupertinoIcons.chevron_right,
+          color: Colors.grey,
+          size: 16,
+        ),
+        onTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).pushNamed(
+            RouteNames.productDetail,
+            arguments: product,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSuggestionCustomerItem(Customer customer) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Icon(
+            CupertinoIcons.person,
+            color: Colors.orange,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          customer.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          customer.phone ?? 'Chưa có SĐT',
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 13,
+          ),
+        ),
+        trailing: const Icon(
+          CupertinoIcons.chevron_right,
+          color: Colors.grey,
+          size: 16,
+        ),
+        onTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).pushNamed(
+            RouteNames.customerDetail,
+            arguments: customer,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSuggestionTransactionItem(Transaction transaction) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Icon(
+            CupertinoIcons.doc_text,
+            color: Colors.blue,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          'Giao dịch #${transaction.id.substring(0, 8)}',
+          style: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          AppFormatter.formatCurrency(transaction.totalAmount),
+          style: const TextStyle(
+            color: Colors.green,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        trailing: const Icon(
+          CupertinoIcons.chevron_right,
+          color: Colors.grey,
+          size: 16,
+        ),
+        onTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).pushNamed(
+            RouteNames.transactionDetail,
+            arguments: transaction,
+          );
         },
       ),
     );
