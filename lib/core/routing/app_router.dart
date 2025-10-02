@@ -37,6 +37,7 @@ import '../../features/products/screens/purchase_order/po_receive_success_screen
 import '../../features/auth/screens/account_screen.dart';
 import '../../shared/transitions/ios_page_route.dart';
 import '../../presentation/home/screens/edit_quick_access_screen.dart';
+import '../../presentation/home/screens/global_search_screen.dart';
 import '../../features/debt/screens/debt_list_screen.dart';
 
 class AppRouter {
@@ -209,6 +210,12 @@ class AppRouter {
       case RouteNames.editQuickAccess:
         return IOSPageRoute(
           child: const EditQuickAccessScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.globalSearch:
+        return IOSPageRoute(
+          child: const GlobalSearchScreen(),
           settings: settings,
         );
 

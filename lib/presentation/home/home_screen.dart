@@ -21,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+
   Future<void> _refreshData() async {
     final productProvider = context.read<ProductProvider>();
     await Future.wait([
@@ -45,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<DashboardProvider>().fetchRevenueData(),
     ]);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +87,13 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             actions: [
+              IconButton(
+                icon: const Icon(CupertinoIcons.search),
+                onPressed: () {
+                  Navigator.of(context, rootNavigator: true)
+                      .pushNamed(RouteNames.globalSearch);
+                },
+              ),
               IconButton(
                 icon: const Icon(CupertinoIcons.bell),
                 onPressed: () {
