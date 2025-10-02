@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import '../../../core/routing/route_names.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../services/secure_storage_service.dart';
-import '../models/auth_state.dart';
 import '../../../shared/widgets/grouped_text_fields.dart';
+import '../../../shared/utils/responsive.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -90,112 +90,191 @@ class _LoginScreenState extends State<LoginScreen> {
  @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
-                child: IntrinsicHeight(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          // Top spacer for 3:5 ratio
-                          const Spacer(flex: 3),
+    
+    // 🎯 SỬ DỤNG RESPONSIVE AUTH WRAPPER
+    return ResponsiveAuthScaffold(
+      title: 'Đăng nhập',
+      child: _buildLoginForm(auth),
+    );
+  }
 
-                          // Main content block
-                          const Icon(Icons.store_mall_directory, color: Colors.green, size: 50),
-                          const SizedBox(height: 24),
-                          Text(
-                            _storeName != null ? 'Cửa hàng $_storeName' : 'Đăng Nhập',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(fontSize: 32, fontWeight: titleWeight, color: primaryTextColor, height: 1.2),
-                          ),
-                          const SizedBox(height: 32),
-                          GroupedTextFields(
-                            topController: _emailController,
-                            bottomController: _passwordController,
-                            bottomFocusNode: _passwordFocusNode,
-                            isBottomObscured: _obscure,
-                            onTopFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                            onBottomFieldSubmitted: (_) => _handleLogin(), // Login on enter
-                            topValidator: (v) => (v == null || !v.contains('@')) ? 'Email không hợp lệ' : null,
-                            bottomValidator: (v) => (v == null || v.length < 6) ? 'Mật khẩu phải có ít nhất 6 ký tự' : null,
-                            bottomSuffixIcon: FutureBuilder<bool>(
-                              future: context.read<AuthProvider>().isBiometricAvailableAndEnabled(),
-                              builder: (context, snapshot) {
-                                final bool biometricAvailable = snapshot.data ?? false;
-                                return Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (biometricAvailable)
-                                      IconButton(
-                                        icon: const Icon(Icons.fingerprint, color: Colors.green),
-                                        onPressed: _handleBiometricLogin,
-                                      ),
-                                    IconButton(
-                                      onPressed: () => setState(() => _obscure = !_obscure),
-                                      icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: Colors.grey[500]),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
-                          if (auth.state.errorMessage != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16.0),
-                              child: Center(child: Text(auth.state.errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red))),
-                            ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            height: 52,
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: auth.state.isLoading ? null : _handleLogin,
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                              child: auth.state.isLoading
-                                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                                  : Text('Đăng nhập', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
-                            ),
-                          ),
-
-                          // Bottom spacer for 3:5 ratio
-                          const Spacer(flex: 5),
-
-                          // Bottom-pinned action links
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
-                            child: Text('Quên mật khẩu?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('Chưa có tài khoản?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pushNamed(RouteNames.signupStep1),
-                                child: Text('Tạo cửa hàng mới', style: GoogleFonts.inter(color: Colors.green.withOpacity(0.9), fontWeight: FontWeight.w600)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16), // Padding from bottom
-                        ],
+  Widget _buildLoginForm(AuthProvider auth) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Padding(
+                // RESPONSIVE PADDING: Tự động điều chỉnh theo device
+                padding: EdgeInsets.symmetric(horizontal: context.sectionPadding),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    // RESPONSIVE ALIGNMENT: Tự động center trên tablet/desktop
+                    crossAxisAlignment: context.formAlignment,
+                    children: [
+                      // RESPONSIVE SPACING: Tự động điều chỉnh spacer
+                      context.adaptiveWidget(
+                        mobile: const Spacer(flex: 3),
+                        tablet: const Spacer(flex: 2),
+                        desktop: const SizedBox(height: 60),
                       ),
-                    ),
+
+                      // Logo và title
+                      const Icon(Icons.store_mall_directory, color: Colors.green, size: 50),
+                      SizedBox(height: context.cardSpacing * 3),
+
+                      // RESPONSIVE CONTAINER: Tự động constrain width trên desktop
+                      Container(
+                        constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                        child: Column(
+                          crossAxisAlignment: context.formAlignment,
+                          children: [
+                            Text(
+                              _storeName != null ? 'Cửa hàng $_storeName' : 'Đăng Nhập',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: context.adaptiveValue(
+                                  mobile: 28.0,
+                                  tablet: 32.0,
+                                  desktop: 36.0,
+                                ),
+                                fontWeight: titleWeight,
+                                color: primaryTextColor,
+                                height: 1.2,
+                              ),
+                            ),
+                            SizedBox(height: context.cardSpacing * 4),
+
+                            GroupedTextFields(
+                              topController: _emailController,
+                              bottomController: _passwordController,
+                              bottomFocusNode: _passwordFocusNode,
+                              isBottomObscured: _obscure,
+                              onTopFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                              onBottomFieldSubmitted: (_) => _handleLogin(),
+                              topValidator: (v) => (v == null || !v.contains('@')) ? 'Email không hợp lệ' : null,
+                              bottomValidator: (v) => (v == null || v.length < 6) ? 'Mật khẩu phải có ít nhất 6 ký tự' : null,
+                              bottomSuffixIcon: FutureBuilder<bool>(
+                                future: context.read<AuthProvider>().isBiometricAvailableAndEnabled(),
+                                builder: (context, snapshot) {
+                                  final bool biometricAvailable = snapshot.data ?? false;
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // CONDITIONAL BIOMETRIC: Chỉ hiện trên mobile device
+                                      if (biometricAvailable && context.shouldShowBiometric)
+                                        IconButton(
+                                          icon: const Icon(Icons.fingerprint, color: Colors.green),
+                                          onPressed: _handleBiometricLogin,
+                                        ),
+                                      IconButton(
+                                        onPressed: () => setState(() => _obscure = !_obscure),
+                                        icon: Icon(
+                                          _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+
+                            if (auth.state.errorMessage != null)
+                              Padding(
+                                padding: EdgeInsets.only(top: context.cardSpacing * 2),
+                                child: Center(
+                                  child: Text(
+                                    auth.state.errorMessage!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ),
+
+                            SizedBox(height: context.cardSpacing * 3),
+
+                            SizedBox(
+                              height: 52,
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: auth.state.isLoading ? null : _handleLogin,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: auth.state.isLoading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                                      )
+                                    : Text(
+                                        'Đăng nhập',
+                                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // RESPONSIVE SPACING: Tự động điều chỉnh bottom spacer
+                      context.adaptiveWidget(
+                        mobile: const Spacer(flex: 5),
+                        tablet: const Spacer(flex: 3),
+                        desktop: const SizedBox(height: 60),
+                      ),
+
+                      // CONDITIONAL BOTTOM ACTIONS: Khác nhau giữa mobile/desktop
+                      if (!context.isDesktop) ...[
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
+                          child: Text('Quên mật khẩu?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Chưa có tài khoản?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pushNamed(RouteNames.signupStep1),
+                              child: Text('Tạo cửa hàng mới', style: GoogleFonts.inter(color: Colors.green.withOpacity(0.9), fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: context.cardSpacing * 2),
+                      ],
+
+                      // Desktop-specific bottom actions (horizontal layout)
+                      if (context.isDesktop) ...[
+                        const SizedBox(height: 24),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
+                              child: Text('Quên mật khẩu?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
+                            ),
+                            const Text(' • '),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pushNamed(RouteNames.signupStep1),
+                              child: Text('Tạo cửa hàng mới', style: GoogleFonts.inter(color: Colors.green.withOpacity(0.9), fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

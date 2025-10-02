@@ -18,29 +18,14 @@ class TabNavigator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Navigator(
       key: navigatorKey,
-      initialRoute: '/',
-      onGenerateRoute: (RouteSettings settings) {
-        // Root route cho tab này
-        if (settings.name == '/') {
-          return MaterialPageRoute(
-            builder: (context) => initialScreen,
-            settings: settings,
-          );
-        }
-
-        // Custom routes cho tab này (nếu có)
-        if (routes != null && routes!.containsKey(settings.name)) {
-          return MaterialPageRoute(
-            builder: routes![settings.name]!,
-            settings: settings,
-          );
-        }
-
-        // Fallback
-        return MaterialPageRoute(
-          builder: (context) => initialScreen,
-          settings: settings,
-        );
+      pages: [
+        MaterialPage(
+          key: const ValueKey('/'),
+          child: initialScreen,
+        ),
+      ],
+      onDidRemovePage: (page) {
+        // Handle page removal if needed
       },
     );
   }

@@ -2,6 +2,7 @@ import 'package:agricultural_pos/features/auth/models/auth_state.dart';
 import 'package:agricultural_pos/features/auth/providers/auth_provider.dart';
 import 'package:agricultural_pos/features/auth/services/secure_storage_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 
 // Screens for each tab
@@ -18,8 +19,9 @@ import '../../features/customers/providers/customer_provider.dart';
 import '../../features/products/providers/product_edit_mode_provider.dart';
 import '../../core/providers/navigation_provider.dart';
 
-// Tab Navigator
+// Tab Navigator + Responsive
 import 'tab_navigator.dart';
+import '../../shared/utils/responsive.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -94,20 +96,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         final hideBottomNav = editModeProvider.isEditMode;
         final currentIndex = navigationProvider.currentIndex;
 
+
+
         return WillPopScope(
           onWillPop: _onWillPop,
-          child: Scaffold(
-            body: IndexedStack(
-              index: currentIndex,
-              children: <Widget>[
-                _buildOffstageNavigator(0, const HomeScreen(), currentIndex),
-                _buildOffstageNavigator(1, const TransactionListScreen(), currentIndex),
-                _buildOffstageNavigator(2, const POSScreen(), currentIndex),
-                _buildOffstageNavigator(3, const ProductListScreen(), currentIndex),
-                _buildOffstageNavigator(4, const ProfileScreen(), currentIndex),
-              ],
-            ),
-            bottomNavigationBar: hideBottomNav ? null : _buildFlatIOSBottomNav(currentIndex, navigationProvider),
+          child: context.adaptiveWidget(
+            mobile: _buildMobileLayout(currentIndex, navigationProvider, hideBottomNav),
+            tablet: _buildTabletLayout(currentIndex, navigationProvider),
+            desktop: _buildDesktopLayout(currentIndex, navigationProvider),
           ),
         );
       },
@@ -169,6 +165,139 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Tài khoản',
           ),
         ],
+      ),
+    );
+  }
+  
+  // 🎯 RESPONSIVE LAYOUTS
+  
+  Widget _buildMobileLayout(int currentIndex, NavigationProvider navigationProvider, bool hideBottomNav) {
+    return Scaffold(
+      body: _buildIndexedStack(currentIndex),
+      bottomNavigationBar: hideBottomNav ? null : _buildFlatIOSBottomNav(currentIndex, navigationProvider),
+    );
+  }
+  
+  Widget _buildTabletLayout(int currentIndex, NavigationProvider navigationProvider) {
+    return Scaffold(
+      body: Row(
+        children: [
+          _buildSideNavigation(currentIndex, navigationProvider),
+          const VerticalDivider(width: 1),
+          Expanded(child: _buildIndexedStack(currentIndex)),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildDesktopLayout(int currentIndex, NavigationProvider navigationProvider) {
+    return Scaffold(
+      body: Row(
+        children: [
+          _buildSideNavigation(currentIndex, navigationProvider, isDesktop: true),
+          Expanded(child: _buildIndexedStack(currentIndex)),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildIndexedStack(int currentIndex) {
+    return IndexedStack(
+      index: currentIndex,
+      children: <Widget>[
+        _buildOffstageNavigator(0, const HomeScreen(), currentIndex),
+        _buildOffstageNavigator(1, const TransactionListScreen(), currentIndex),
+        _buildOffstageNavigator(2, const POSScreen(), currentIndex),
+        _buildOffstageNavigator(3, const ProductListScreen(), currentIndex),
+        _buildOffstageNavigator(4, const ProfileScreen(), currentIndex),
+      ],
+    );
+  }
+  
+  Widget _buildSideNavigation(int currentIndex, NavigationProvider navigationProvider, {bool isDesktop = false}) {
+    return Container(
+      width: 280,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: isDesktop ? [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(2, 0),
+          ),
+        ] : null,
+        border: !isDesktop ? Border(right: BorderSide(color: Colors.grey[300]!)) : null,
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.green,
+              border: Border(bottom: BorderSide(color: Colors.green[700]!)),
+            ),
+            child: const Center(
+              child: Text(
+                'Agricultural POS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          // Navigation Items
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              children: [
+                _buildSideNavItem(0, Icons.home, 'Trang chủ', currentIndex, navigationProvider),
+                _buildSideNavItem(1, Icons.receipt_long, 'Giao dịch', currentIndex, navigationProvider),
+                _buildSideNavItem(2, Icons.point_of_sale, 'Bán hàng', currentIndex, navigationProvider),
+                _buildSideNavItem(3, Icons.inventory_2, 'Sản phẩm', currentIndex, navigationProvider),
+                _buildSideNavItem(4, Icons.account_circle, 'Tài khoản', currentIndex, navigationProvider),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildSideNavItem(int index, IconData icon, String title, int currentIndex, NavigationProvider navigationProvider) {
+    final isSelected = index == currentIndex;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Material(
+        color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => navigationProvider.changeTab(index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? Colors.green : Colors.grey[600],
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isSelected ? Colors.green : Colors.grey[700],
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

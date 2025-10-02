@@ -5,6 +5,7 @@ import '../../models/product.dart';
 import '../../providers/product_provider.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/responsive.dart';
 import 'add_product_dialog.dart';
 import 'product_detail_screen.dart';
 
@@ -162,54 +163,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const double tabletBreakpoint = 600;
-        if (constraints.maxWidth >= tabletBreakpoint) {
-          return _buildDesktopLayout();
-        }
-        return _buildMobileLayout();
-      },
-    );
-  }
-
-  Widget _buildDesktopLayout() {
-    return Scaffold(
-      appBar: _buildAppBar(),
-      body: Row(
-        children: [
-          Expanded(
-            flex: 4,
-            child: Column(
-              children: [
-                _buildSegmentedControl(),
-                Expanded(child: _buildProductList(isMasterDetail: true)),
-              ],
-            ),
-          ),
-          const VerticalDivider(width: 1, thickness: 1),
-          Expanded(
-            flex: 6,
-            child: Consumer<ProductProvider>(
-              builder: (context, provider, child) {
-                if (provider.selectedProduct == null) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text('Chọn một sản phẩm để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                      ],
-                    ),
-                  );
-                }
-                return const ProductDetailScreen();
-              },
-            ),
-          ),
-        ],
-      ),
+    return context.adaptiveWidget(
+      mobile: _buildMobileLayout(),
+      tablet: _buildDesktopLayout(), // Tablet uses desktop layout
+      desktop: _buildDesktopLayout(),
     );
   }
 
@@ -220,6 +177,48 @@ class _ProductListScreenState extends State<ProductListScreen> {
         children: [
           _buildSegmentedControl(),
           Expanded(child: _buildProductList(isMasterDetail: false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildDesktopToolbar(),
+          _buildSegmentedControl(),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: _buildProductList(isMasterDetail: true),
+                ),
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(
+                  flex: 6,
+                  child: Consumer<ProductProvider>(
+                    builder: (context, provider, child) {
+                      if (provider.selectedProduct == null) {
+                        return const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text('Chọn một sản phẩm để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                            ],
+                          ),
+                        );
+                      }
+                      return const ProductDetailScreen();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -299,26 +298,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              const double tabletBreakpoint = 600;
-              final screenWidth = MediaQuery.of(context).size.width;
-
-              if (screenWidth >= tabletBreakpoint) {
-                showDialog(
-                  context: context,
-                  builder: (context) => const AddProductDialog(),
-                ).then((success) {
-                  if (success == true) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Thêm sản phẩm thành công!'), backgroundColor: Colors.green),
-                    );
-                    context.read<ProductProvider>().loadProducts();
-                  }
-                });
-              } else {
-                Navigator.of(context, rootNavigator: true).pushNamed('/add-product-step1');
-              }
-            },
+            onPressed: _showAddProductDialog,
             tooltip: 'Thêm sản phẩm',
           ),
         ],
@@ -326,10 +306,127 @@ class _ProductListScreenState extends State<ProductListScreen> {
     );
   }
 
+  Widget _buildDesktopToolbar() {
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: context.sectionPadding),
+          Text(
+            _isSelectionMode ? '${_selectedProductIds.length} đã chọn' : 'Quản Lý Sản Phẩm',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          if (_isSelectionMode) ...[
+            const SizedBox(width: 16),
+            TextButton.icon(
+              onPressed: () => _toggleSelectionMode(),
+              icon: const Icon(Icons.close),
+              label: const Text('Hủy chọn'),
+            ),
+          ],
+          const Spacer(),
+          if (_isSelectionMode)
+            ElevatedButton.icon(
+              onPressed: _selectedProductIds.isEmpty ? null : _deleteSelectedProducts,
+              icon: const Icon(Icons.delete),
+              label: const Text('Xóa'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+            )
+          else ...[
+            PopupMenuButton<dynamic>(
+              icon: const Icon(CupertinoIcons.line_horizontal_3_decrease),
+              tooltip: 'Lọc và Sắp xếp',
+              onSelected: (value) {
+                if (value is ProductSortOption) {
+                  _applySortOption(value);
+                } else if (value is StockFilterOption) {
+                  setState(() => _stockFilter = value);
+                }
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<dynamic>>[
+                PopupMenuItem(
+                  enabled: false,
+                  child: Text(
+                    'SẮP XẾP THEO',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ),
+                ...ProductSortOption.values.map((option) => PopupMenuItem<ProductSortOption>(
+                  value: option,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(option.displayName),
+                      if (_sortOption == option) const Icon(Icons.check, color: Colors.green, size: 20),
+                    ],
+                  ),
+                )),
+                const PopupMenuDivider(height: 1),
+                PopupMenuItem(
+                  enabled: false,
+                  child: Text(
+                    'LỌC THEO TRẠNG THÁI',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ),
+                ...StockFilterOption.values.map((option) => PopupMenuItem<StockFilterOption>(
+                  value: option,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(option.displayName),
+                      if (_stockFilter == option) const Icon(Icons.check, color: Colors.green, size: 20),
+                    ],
+                  ),
+                )),
+              ],
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: _showAddProductDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('Thêm sản phẩm'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+          SizedBox(width: context.sectionPadding),
+        ],
+      ),
+    );
+  }
+
   void _applySortOption(ProductSortOption option) {
     setState(() {
       _sortOption = option;
     });
+  }
+
+  void _showAddProductDialog() {
+    if (context.isDesktop) {
+      showDialog(
+        context: context,
+        builder: (context) => const AddProductDialog(),
+      ).then((success) {
+        if (success == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Thêm sản phẩm thành công!'), backgroundColor: Colors.green),
+          );
+          context.read<ProductProvider>().loadProducts();
+        }
+      });
+    } else {
+      Navigator.of(context, rootNavigator: true).pushNamed('/add-product-step1');
+    }
   }
 
   List<Product> _filterAndSortProducts(List<Product> products, ProductProvider provider) {
@@ -393,7 +490,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   Widget _buildSegmentedControl() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: context.sectionPadding, vertical: 12),
       child: CupertinoSlidingSegmentedControl<int>(
         groupValue: _selectedCategory == null ? 0 : (_selectedCategory!.index + 1),
         backgroundColor: CupertinoColors.systemGrey6,
@@ -456,7 +553,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                padding: EdgeInsets.fromLTRB(context.sectionPadding, 8, context.sectionPadding, 8),
                 child: CupertinoSearchTextField(
                   controller: _searchController,
                   placeholder: 'Tìm theo tên, SKU, nhà cung cấp...',
@@ -510,7 +607,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 }
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: EdgeInsets.symmetric(horizontal: context.sectionPadding, vertical: 12),
                 child: Row(
                   children: [
                     if (_isSelectionMode)

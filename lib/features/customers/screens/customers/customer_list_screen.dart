@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/customer.dart';
 import '../../providers/customer_provider.dart';
+import '../../../../shared/utils/responsive.dart';
 import 'add_customer_screen.dart';
 import 'customer_detail_screen.dart';
 import 'customer_list_viewmodel.dart';
@@ -65,15 +66,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Consistent breakpoint: 600px
-        const double tabletBreakpoint = 600;
-        if (constraints.maxWidth >= tabletBreakpoint && !widget.isSelectionMode) {
-          return _buildDesktopLayout();
-        }
-        return _buildMobileLayout();
-      },
+    return context.adaptiveWidget(
+      mobile: _buildMobileLayout(),
+      tablet: _buildTabletLayout(),
+      desktop: _buildDesktopLayout(),
     );
   }
 
@@ -94,7 +90,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
-  Widget _buildDesktopLayout() {
+  Widget _buildTabletLayout() {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản Lý Khách Hàng'),
@@ -139,11 +135,83 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
+  Widget _buildDesktopLayout() {
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildDesktopToolbar(),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: _buildListContent(isMasterDetail: true),
+                ),
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(
+                  flex: 6,
+                  child: Consumer<CustomerProvider>(
+                    builder: (context, provider, child) {
+                      if (provider.selectedCustomer == null) {
+                        return const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text('Chọn một khách hàng để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                            ],
+                          ),
+                        );
+                      }
+                      return CustomerDetailScreen(customer: provider.selectedCustomer!);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🎯 RESPONSIVE: Desktop toolbar (replaces AppBar on desktop)
+  Widget _buildDesktopToolbar() {
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: context.sectionPadding),
+          const Text(
+            'Quản Lý Khách Hàng',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const Spacer(),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddCustomerScreen())),
+            icon: const Icon(Icons.add),
+            label: const Text('Thêm khách hàng'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          SizedBox(width: context.sectionPadding),
+        ],
+      ),
+    );
+  }
+
   Widget _buildListContent({required bool isMasterDetail}) {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(context.sectionPadding),
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(

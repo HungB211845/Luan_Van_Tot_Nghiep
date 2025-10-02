@@ -84,4 +84,13 @@ class CustomerListViewModel {
 
     return null;
   }
+
+  // 🎯 RESPONSIVE: Additional methods needed for customer list
+  Customer? getSelectedCustomer() {
+    return customerProvider.selectedCustomer;
+  }
+
+  void selectCustomer(Customer customer) {
+    customerProvider.selectCustomer(customer);
+  }
 }

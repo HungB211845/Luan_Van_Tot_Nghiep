@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/routing/route_names.dart';
@@ -10,6 +11,7 @@ import '../../features/debt/providers/debt_provider.dart';
 import '../../features/pos/providers/transaction_provider.dart';
 import '../../shared/utils/formatter.dart';
 import '../../shared/utils/datetime_helpers.dart';
+import '../../shared/utils/responsive.dart';
 import 'providers/quick_access_provider.dart';
 import 'providers/dashboard_provider.dart';
 
@@ -51,11 +53,147 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 🎯 HomeScreen has CUSTOM responsive behavior, NOT using ResponsiveScaffold
+    return context.adaptiveWidget(
+      mobile: _buildMobileScaffold(),
+      tablet: _buildTabletScaffold(),
+      desktop: _buildDesktopScaffold(),
+    );
+  }
+
+  Widget _buildMobileScaffold() {
     return Scaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: CustomScrollView(
-        slivers: [
-          // Minimal AppBar - Clean Navigation Bar
+      body: _buildHomeContent(),
+      drawer: _buildNavigationDrawer(),
+    );
+  }
+
+  Widget _buildTabletScaffold() {
+    return Scaffold(
+      backgroundColor: CupertinoColors.systemGroupedBackground,
+      body: Row(
+        children: [
+          Container(
+            width: 280,
+            child: _buildNavigationDrawer(),
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(child: _buildHomeContent()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopScaffold() {
+    return Scaffold(
+      backgroundColor: CupertinoColors.systemGroupedBackground,
+      body: Row(
+        children: [
+          Container(
+            width: 280,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(2, 0),
+                ),
+              ],
+            ),
+            child: _buildNavigationDrawer(),
+          ),
+          Expanded(child: _buildHomeContent()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationDrawer() {
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(color: Colors.green),
+            accountName: Consumer<AuthProvider>(
+              builder: (context, auth, child) {
+                return Text(auth.currentUser?.fullName ?? 'User');
+              },
+            ),
+            accountEmail: Consumer<AuthProvider>(
+              builder: (context, auth, child) {
+                return Text('ID: ${auth.currentUser?.id.substring(0, 8) ?? 'N/A'}...');
+              },
+            ),
+            currentAccountPicture: Consumer<AuthProvider>(
+              builder: (context, auth, child) {
+                final initial = (auth.currentUser?.fullName ?? 'U')
+                    .substring(0, 1)
+                    .toUpperCase();
+                return CircleAvatar(
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.home),
+            title: const Text('Trang chủ'),
+            onTap: () => Navigator.pop(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.point_of_sale),
+            title: const Text('Bán hàng'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, RouteNames.pos);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.people),
+            title: const Text('Khách hàng'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, RouteNames.customers);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.inventory),
+            title: const Text('Sản phẩm'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, RouteNames.products);
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Cài đặt'),
+            onTap: () {
+              Navigator.pop(context);
+              context.read<NavigationProvider>().goToProfile();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeContent() {
+
+    
+    return CustomScrollView(
+      slivers: [
+        // Mobile AppBar with search
+        if (context.isMobile) ...[
           SliverAppBar(
             floating: false,
             pinned: true,
@@ -86,14 +224,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(CupertinoIcons.search),
-                onPressed: () {
-                  Navigator.of(context, rootNavigator: true)
-                      .pushNamed(RouteNames.globalSearch);
-                },
+            title: GestureDetector(
+              onTap: () {
+                Navigator.of(context, rootNavigator: true)
+                    .pushNamed(RouteNames.globalSearch);
+              },
+              child: Container(
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      CupertinoIcons.search,
+                      color: Colors.grey.shade600,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Tìm kiếm...',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ),
+            actions: [
               IconButton(
                 icon: const Icon(CupertinoIcons.bell),
                 onPressed: () {
@@ -102,37 +264,90 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+        ],
 
-          // Pull to refresh
-          CupertinoSliverRefreshControl(
-            onRefresh: _refreshData,
+        // Pull to refresh
+        CupertinoSliverRefreshControl(
+          onRefresh: _refreshData,
+        ),
+
+        // Dashboard Content với responsive padding
+        SliverPadding(
+          padding: EdgeInsets.all(context.sectionPadding),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              // Dynamic Greeting Widget
+              _buildGreetingWidget(),
+              SizedBox(height: context.cardSpacing * 2),
+
+              // Desktop search bar (not in AppBar)
+              if (context.isDesktop) ...[
+                _buildDesktopSearchBar(),
+                SizedBox(height: context.cardSpacing * 2),
+              ],
+
+              // Revenue Chart Widget
+              _buildRevenueChartWidget(),
+              SizedBox(height: context.cardSpacing * 2),
+
+              // Smart "For You" Widget
+              _buildForYouWidget(),
+              SizedBox(height: context.cardSpacing * 2),
+
+              // RESPONSIVE Quick Actions Grid  
+              _buildQuickActionsWidget(),
+              SizedBox(height: context.sectionPadding * 2),
+            ]),
           ),
+        ),
+      ],
+    );
+  }
 
-          // Widget Dashboard Content
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Dynamic Greeting Widget
-                _buildGreetingWidget(),
-                const SizedBox(height: 16),
-
-
-                // Revenue Chart Widget
-                _buildRevenueChartWidget(),
-                const SizedBox(height: 16),
-
-                // Smart "For You" Widget (Alerts + Recent Activity)
-                _buildForYouWidget(),
-                const SizedBox(height: 16),
-
-                // Customizable Quick Actions Grid
-                _buildQuickActionsWidget(),
-                const SizedBox(height: 32),
-              ]),
-            ),
+  // 🔍 Desktop Search Bar
+  Widget _buildDesktopSearchBar() {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context, rootNavigator: true)
+                .pushNamed(RouteNames.globalSearch);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.search,
+                  color: Colors.grey.shade600,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Tìm kiếm sản phẩm, giao dịch, khách hàng...',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -164,47 +379,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         );
       },
-    );
-  }
-
-  // 🔍 Global Search Bar
-  Widget _buildSearchBar() {
-    return Hero(
-      tag: 'global_search',
-      child: Material(
-        color: Colors.transparent,
-        child: GestureDetector(
-          onTap: () {
-            Navigator.of(context, rootNavigator: true)
-                .pushNamed(RouteNames.globalSearch);
-          },
-          child: Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Icon(
-                  CupertinoIcons.search,
-                  color: Colors.grey.shade600,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Tìm kiếm sản phẩm, giao dịch...',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -712,11 +886,15 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               return GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.5,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: context.gridColumns, // ← RESPONSIVE COLUMNS
+                  crossAxisSpacing: context.cardSpacing,
+                  mainAxisSpacing: context.cardSpacing,
+                  childAspectRatio: context.adaptiveValue(
+                    mobile: 1.5,
+                    tablet: 1.3,
+                    desktop: 1.2,
+                  ),
                 ),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),

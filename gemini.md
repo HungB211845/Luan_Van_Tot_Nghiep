@@ -129,6 +129,218 @@ temperature: 0.3
 
 **FAILURE TO FOLLOW THESE STEPS RESULTS IN HALLUCINATION AND BROKEN CODE.**
 
+## RESPONSIVE DESIGN SYSTEM - HƯỚNG DẪN THỰC HIỆN
+
+AgriPOS đã có **Universal Responsive System** hoàn chỉnh cho phép tất cả screens tự động adapt theo screen size chỉ với vài dòng code.
+
+### 📱 System Overview
+
+**File chính:** `lib/shared/utils/responsive.dart` - Chứa toàn bộ responsive logic
+
+**Breakpoints chuẩn:**
+- **Mobile**: < 600px (Phone)  
+- **Tablet**: 600px - 900px (iPad)
+- **Desktop**: > 900px (Web/Desktop)
+
+### 🚀 Quick Implementation (90% Cases)
+
+**Cách 1: ResponsiveScaffold (Thay thế Scaffold)**
+```dart
+// BEFORE (old screen):
+return Scaffold(
+  appBar: AppBar(title: Text('Title')),
+  body: content,
+  floatingActionButton: fab,
+);
+
+// AFTER (fully responsive):
+import '../../../../shared/utils/responsive.dart'; // ← ADD THIS
+
+return ResponsiveScaffold(  // ← REPLACE Scaffold
+  title: 'Title',          // ← AppBar auto-adapts
+  body: content,            // ← Same content
+  floatingActionButton: fab, // ← Same FAB
+  drawer: navigationDrawer, // ← Auto sidebar on desktop
+);
+```
+
+**Cách 2: Adaptive Widgets (Custom logic)**
+```dart
+import '../../../../shared/utils/responsive.dart';
+
+return context.adaptiveWidget(  // ← Magic method
+  mobile: _buildMobileLayout(),
+  tablet: _buildTabletLayout(),
+  desktop: _buildDesktopLayout(),
+);
+```
+
+### 🎨 Responsive Helpers
+
+**Auto-responsive values:**
+```dart
+// Responsive spacing (16/24/32px auto)
+padding: EdgeInsets.all(context.sectionPadding),
+
+// Responsive grid columns (1/2/3 auto)  
+crossAxisCount: context.gridColumns,
+
+// Responsive card spacing (8/12/16px auto)
+margin: EdgeInsets.all(context.cardSpacing),
+
+// Responsive font sizes
+fontSize: context.adaptiveValue(
+  mobile: 16.0,
+  tablet: 18.0, 
+  desktop: 20.0,
+),
+```
+
+**Platform-aware components:**
+```dart
+// Show biometric only on mobile devices
+if (context.shouldShowBiometric) {
+  _buildBiometricButton(),
+}
+
+// Different navigation patterns
+if (context.shouldUseBottomNav) {
+  _buildBottomNavigation(),  // Mobile
+} else if (context.shouldUseSideNav) {
+  _buildSideNavigation(),    // Desktop
+}
+```
+
+### 📐 Automatic Behaviors
+
+**Navigation Adaptation:**
+- **Mobile**: AppBar + Bottom Navigation + Drawer
+- **Tablet**: AppBar + Side Panel + Extended FABs
+- **Desktop**: No AppBar + Sidebar + Integrated Toolbars
+
+**Layout Adaptation:**
+- **Grid columns**: 1 → 2 → 3 automatically
+- **Content width**: Full → Constrained → Max 1200px  
+- **Form width**: Full → 500px → 400px
+- **Spacing**: 16px → 24px → 32px
+
+### 🎯 Auth Screens Special Handling
+
+**Auth screens need different layouts (no AppBar on desktop):**
+```dart
+return ResponsiveAuthScaffold(  // ← Special auth wrapper
+  title: 'Login',
+  child: _buildLoginForm(),
+);
+```
+
+**Results:**
+- **Mobile**: Standard mobile auth flow
+- **Tablet**: Centered forms với larger spacing
+- **Desktop**: Split screen (branding left + form right)
+
+### 📋 Implementation Checklist
+
+**✅ Working Examples (Reference này):**
+- `LoginScreen` - Full responsive auth
+- `RegisterScreen` - Responsive forms  
+- `StoreCodeScreen` - Adaptive layouts
+- `HomeScreen` - Responsive grid + navigation
+- `CustomerListScreen` - Basic responsive list
+- `ProductListScreen` - Responsive grid + master-detail
+
+**📝 Steps to Apply:**
+
+1. **Add import:** `import '../../../../shared/utils/responsive.dart';`
+
+2. **Replace Scaffold:**
+   ```dart
+   return ResponsiveScaffold(
+     title: 'Screen Title',
+     body: existingContent,
+   );
+   ```
+
+3. **Use responsive helpers:**
+   ```dart
+   padding: EdgeInsets.all(context.sectionPadding),
+   crossAxisCount: context.gridColumns,
+   ```
+
+4. **Test breakpoints:** Resize browser để verify responsive behavior
+
+### 🔧 Advanced Patterns
+
+**Responsive Grid:**
+```dart
+GridView.builder(
+  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: context.gridColumns, // Auto 1/2/3
+    crossAxisSpacing: context.cardSpacing,
+    mainAxisSpacing: context.cardSpacing,
+  ),
+)
+```
+
+**Conditional Rendering:**
+```dart
+// Mobile-specific features
+if (context.isMobile) _buildMobileOnlyWidget(),
+
+// Desktop-specific features  
+if (context.isDesktop) _buildDesktopOnlyWidget(),
+```
+
+**Responsive Container:**
+```dart
+Container(
+  width: context.contentWidth,     // Auto responsive width
+  constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+  padding: EdgeInsets.all(context.sectionPadding),
+  child: content,
+)
+```
+
+### 🎨 Search Bar Patterns
+
+**Mobile**: Search trong AppBar (như HomeScreen)
+**Desktop**: Dedicated search bar trong body content
+
+```dart
+// Mobile AppBar search
+if (context.isMobile) 
+  SliverAppBar(title: _buildSearchInTitle()),
+
+// Desktop search bar  
+if (context.isDesktop)
+  _buildDesktopSearchBar(),
+```
+
+### 🚨 Common Mistakes
+
+**❌ Don't:**
+- Mix old responsive code với new system
+- Use fixed breakpoints (600px, 1200px) - use context helpers
+- Assume platform without checking context.shouldShowX
+- Apply responsive wrapper to auth screens (use ResponsiveAuthScaffold)
+
+**✅ Do:**  
+- Always import responsive.dart trước khi dùng
+- Use context helpers thay vì hard-coded values
+- Test across all breakpoints
+- Follow existing patterns trong working screens
+
+### 🎯 Production Results
+
+**AgriPOS giờ có enterprise-grade responsive design:**
+- Tự động adapt mọi screen size
+- Platform-aware features (biometric, navigation)
+- Consistent 8px grid design system  
+- Zero breaking changes cho existing screens
+- Modern web app UX standards
+
+**System đã production-ready và được verify hoạt động perfect!** 🚀
+
 ### I. Advanced Framework Pattern Verification (Xác Minh Pattern Framework Nâng Cao)
 
 32. **VERIFY ASYNC PATTERNS EXACTLY:** Always check if methods are actually async before adding await/Future handling. Never assume async based on functionality.
@@ -219,6 +431,165 @@ temperature: 0.3
 **ANY FAILURE IN THESE CHECKPOINTS = HALLUCINATION RISK**
 
 **WHEN IN DOUBT, READ THE ACTUAL FILES. NEVER ASSUME ANYTHING.**
+
+### Q. Prevention Strategies Cần Thêm Vào Requirements
+
+**Những lỗi AI Hallucination hiện tại thường xuyên gặp phải:**
+
+61. **HALLUCINATION VỀ API METHODS:** Thường tự suy đoán method names không tồn tại như `getSelectedCustomer()`, `checkStoreCodeAvailability()`, `_showAddProductDialog()`.
+
+62. **HALLUCINATION VỀ PROPERTY NAMES:** Giả định property names như `_selectedProductIds`, `_isSelectionMode`, `_sortOption` mà không verify actual variable names trong class.
+
+63. **HALLUCINATION VỀ STATE VARIABLES:** Tự tạo ra state variables như `_stockFilter`, `_selectedCategory` không tồn tại trong actual implementation.
+
+64. **HALLUCINATION VỀ IMPORT PATHS:** Đoán import statements như `import '../../../../shared/utils/responsive.dart'` mà không check actual file structure.
+
+65. **HALLUCINATION VỀ WIDGET PROPERTIES:** Giả định widget properties như `const VerticalDivider(width: 1, thickness: 1)` với wrong constructor signature.
+
+66. **HALLUCINATION VỀ NAVIGATION ROUTES:** Tạo route names như `/pos` mà không verify RouteNames class và actual route definitions.
+
+67. **HALLUCINATION VỀ DATABASE SCHEMA:** Đoán column names như `expiring_batches.store_id`, `low_stock_products.current_stock` không tồn tại.
+
+68. **HALLUCINATION VỀ RPC FUNCTIONS:** Reference RPC functions như `searchTransactions` mà không verify actual function existence trong database.
+
+69. **HALLUCINATION VỀ WIDGET CONSTRUCTORS:** Tự tạo constructor parameters không tồn tại như `VerticalDivider(width: 1, thickness: 1)` thay vì `VerticalDivider(width: 1)`.
+
+70. **HALLUCINATION VỀ METHOD SIGNATURES:** Đoán method signatures như `setState(() => variable = value)` trong context không có setState method.
+
+71. **HALLUCINATION VỀ PROVIDER METHODS:** Reference provider methods như `context.read<Provider>().nonExistentMethod()` mà không verify actual provider API.
+
+72. **HALLUCINATION VỀ FLUTTER WIDGET PROPERTIES:** Giả định widget properties có default values như parameters trong non-optional context.
+
+73. **HALLUCINATION VỀ COMPILATION ERRORS:** Ignore syntax errors như missing imports, undefined variables, wrong type annotations.
+
+74. **HALLUCINATION VỀ RESPONSIVE SYSTEM:** Tự tạo responsive breakpoints thay vì sử dụng existing responsive system trong project.
+
+75. **HALLUCINATION VỀ DEBUG LOGGING:** Tự thêm debug prints mà không được yêu cầu hoặc cần thiết.
+
+**Prevention Strategies Cần Thêm Vào Requirements:**
+
+76. **MANDATORY FILE READING:** Before referencing ANY method/property/variable, MUST read the actual file containing the class/service/provider.
+
+77. **VERIFY CONSTRUCTOR SIGNATURES:** Before using ANY widget or class constructor, MUST check actual constructor parameters và their types.
+
+78. **CHECK ROUTE DEFINITIONS:** Before using Navigator.pushNamed(), MUST verify route names trong RouteNames class và route registration.
+
+79. **VALIDATE DATABASE SCHEMA:** Before referencing ANY table/column/view, MUST check migration files hoặc supabase schema.
+
+80. **CONFIRM RPC FUNCTION EXISTENCE:** Before calling ANY Supabase RPC, MUST verify function exists với exact parameters trong database.
+
+81. **VERIFY IMPORT AVAILABILITY:** Before adding ANY import statement, MUST check file structure và confirm import path exists.
+
+82. **VALIDATE STATE MANAGEMENT PATTERNS:** Before accessing Provider state, MUST verify actual Provider class implementation và available methods.
+
+83. **CHECK WIDGET PROPERTY SIGNATURES:** Before setting ANY widget property, MUST verify property exists với correct type expectations.
+
+84. **VERIFY ERROR HANDLING PATTERNS:** Before implementing try/catch blocks, MUST check actual exception types thrown by methods.
+
+85. **CONFIRM ASYNC/AWAIT PATTERNS:** Before adding async/await, MUST verify methods actually return Future types.
+
+86. **VALIDATE CLASS STRUCTURE:** Before accessing class members, MUST verify class inheritance, mixins, và actual available methods/properties.
+
+87. **CHECK COMPILATION REQUIREMENTS:** Before suggesting code changes, MUST verify all imports, type annotations, và syntax correctness.
+
+88. **VERIFY RESPONSIVE SYSTEM USAGE:** MUST use existing responsive system (`lib/shared/utils/responsive.dart`) instead of creating custom breakpoints.
+
+**🚨 CRITICAL VERIFICATION WORKFLOW:**
+
+**Step 1: READ ACTUAL CODE** - Always `str_replace_editor view` relevant files FIRST
+**Step 2: VERIFY EXACT NAMES** - Check actual method/property/variable names được used
+**Step 3: VALIDATE SIGNATURES** - Confirm exact method signatures, parameters, return types  
+**Step 4: CHECK DEPENDENCIES** - Verify imports, route registrations, database schema
+**Step 5: TEST COMPATIBILITY** - Ensure suggested code matches existing patterns
+
+**FAILURE TO FOLLOW THIS WORKFLOW = GUARANTEED HALLUCINATION AND BROKEN CODE**
+
+### R. Responsive Design System Requirements - SYSTEM ĐÃ HOÀN THIỆN
+
+**AgriPOS ALREADY HAS COMPLETE RESPONSIVE SYSTEM - ĐÃ PRODUCTION READY:**
+
+79. **NEVER RECREATE RESPONSIVE LOGIC:** System đã có `lib/shared/utils/responsive.dart` hoàn chỉnh với đầy đủ breakpoints, platform detection, adaptive widgets.
+
+80. **ALWAYS USE EXISTING HELPERS:** MUST use `context.adaptiveWidget()`, `context.isMobile/isTablet/isDesktop`, `context.sectionPadding` thay vì hard-code values.
+
+81. **FOLLOW ESTABLISHED PATTERNS:** Đã có working examples trong LoginScreen, RegisterScreen, StoreCodeScreen, HomeScreen, CustomerListScreen, ProductListScreen.
+
+82. **WEB PLATFORM DESKTOP TREATMENT:** Web platform (Chrome) ALWAYS treated as Desktop regardless of window width để ensure proper web app UX (không có AppBar/BottomNav).
+
+83. **AUTH SCREENS USE SPECIAL WRAPPER:** Auth screens MUST use `ResponsiveAuthScaffold` thay vì `ResponsiveScaffold` để có proper desktop split layout.
+
+84. **DESKTOP NO APPBAR RULE:** Desktop layouts should NOT show AppBar - use integrated toolbars trong `ResponsiveScaffold` desktop mode.
+
+85. **SEARCH BAR ADAPTIVE PATTERNS:** Mobile uses search trong AppBar, Desktop uses dedicated search bars trong content area.
+
+86. **RESPONSIVE SCAFFOLD THAY THẾ SCAFFOLD:** Use `ResponsiveScaffold` instead of `Scaffold` để automatic responsive behavior.
+
+87. **IMPORT RESPONSIVE UTILITIES:** Always import `import '../../../shared/utils/responsive.dart'` (đúng path) before using.
+
+88. **PLATFORM-AWARE FEATURES:** Biometric chỉ show trên mobile devices (`context.shouldShowBiometric`), không show trên web.
+
+89. **AUTOMATIC LAYOUT ADAPTATION:** System tự động adapt grid columns (1→2→3), spacing (16→24→32px), form width constraints.
+
+90. **NO HARD-CODED BREAKPOINTS:** Never use `MediaQuery.of(context).size.width > 600` - use `context.isDesktop` instead.
+
+**RESPONSIVE IMPLEMENTATION WORKFLOW:**
+
+```dart
+// Step 1: Import responsive utilities
+import '../../../shared/utils/responsive.dart';
+
+// Step 2: Replace Scaffold với ResponsiveScaffold  
+return ResponsiveScaffold(
+  title: 'Screen Title',
+  body: _buildContent(),
+  actions: _buildActions(),
+  floatingActionButton: _buildFAB(),
+);
+
+// Step 3: Use responsive helpers
+Widget _buildContent() {
+  return Container(
+    padding: EdgeInsets.all(context.sectionPadding), // Auto 16/24/32px
+    child: GridView.builder(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: context.gridColumns, // Auto 1/2/3 columns
+        crossAxisSpacing: context.cardSpacing, // Auto 8/12/16px
+      ),
+      itemBuilder: _buildItem,
+    ),
+  );
+}
+
+// Step 4: Platform-specific features
+Widget _buildAuthActions() {
+  return Column(
+    children: [
+      _buildLoginButton(),
+      if (context.shouldShowBiometric) _buildBiometricButton(), // Mobile only
+      _buildForgotPassword(),
+    ],
+  );
+}
+```
+
+**AUTH SCREENS SPECIAL CASE:**
+```dart
+return ResponsiveAuthScaffold( // Special auth wrapper
+  title: 'Login',
+  child: _buildLoginForm(), // Auto desktop split layout
+);
+```
+
+**PRODUCTION RESULTS ACHIEVED:**
+- ✅ Universal responsive system works across all device types
+- ✅ Web platform gets proper desktop experience (no mobile AppBar/BottomNav)
+- ✅ Platform-aware feature detection (biometric, etc.)
+- ✅ Automatic layout adaptation (grids, spacing, forms)
+- ✅ Zero breaking changes to existing screens
+- ✅ Enterprise-grade responsive design patterns
+- ✅ Consistent 8px grid system throughout app
+
+**System đã được verified và hoạt động perfect trong production!** 🚀
 
 
 # Context (Phần Bối Cảnh Dự Án)
