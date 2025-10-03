@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../../../shared/utils/formatter.dart';
+import '../../../shared/utils/input_formatters.dart';
 
 class KeyMetricsWidget extends StatelessWidget {
   final Product product;
   final double totalStock;
   final double averageCostPrice;
   final double grossProfitPercentage;
+  final bool isEditMode;
+  final TextEditingController? priceController;
+  final VoidCallback? onPriceTap;
 
   const KeyMetricsWidget({
     Key? key,
@@ -14,6 +18,9 @@ class KeyMetricsWidget extends StatelessWidget {
     required this.totalStock,
     required this.averageCostPrice,
     required this.grossProfitPercentage,
+    this.isEditMode = false,
+    this.priceController,
+    this.onPriceTap,
   }) : super(key: key);
 
   @override
@@ -43,18 +50,13 @@ class KeyMetricsWidget extends StatelessWidget {
                         '${AppFormatter.formatNumber(totalStock.toInt())}',
                         product.unit.isNotEmpty ? product.unit : 'đơn vị',
                         Icons.inventory_2,
-                        _getStockColor(totalStock),
+                        Colors.grey[300]!, // Neutral background
+                        Colors.grey[800]!, // Dark text
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _buildMetricCard(
-                        'Giá Bán Hiện Tại',
-                        AppFormatter.formatCompactCurrency(product.currentSellingPrice),
-                        '',
-                        Icons.attach_money,
-                        Colors.blue[600]!,
-                      ),
+                      child: _buildPriceCard(),
                     ),
                   ],
                 ),
@@ -67,7 +69,8 @@ class KeyMetricsWidget extends StatelessWidget {
                         AppFormatter.formatCompactCurrency(averageCostPrice),
                         '',
                         Icons.receipt,
-                        Colors.orange[600]!,
+                        Colors.grey[300]!, // Neutral background
+                        Colors.grey[800]!, // Dark text
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -77,7 +80,8 @@ class KeyMetricsWidget extends StatelessWidget {
                         '${grossProfitPercentage.toStringAsFixed(1)}',
                         '%',
                         Icons.trending_up,
-                        _getProfitColor(grossProfitPercentage),
+                        _getProfitColor(grossProfitPercentage).withOpacity(0.1), // Colored background based on value
+                        _getProfitColor(grossProfitPercentage), // Colored text based on value
                       ),
                     ),
                   ],
@@ -95,13 +99,14 @@ class KeyMetricsWidget extends StatelessWidget {
     String value,
     String unit,
     IconData icon,
-    Color color,
+    Color backgroundColor,
+    Color textColor,
   ) {
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: Colors.grey[400]!.withOpacity(0.3)),
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -109,7 +114,7 @@ class KeyMetricsWidget extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 20),
+              Icon(icon, color: Colors.grey[600], size: 20),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -134,7 +139,7 @@ class KeyMetricsWidget extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: color,
+                    color: textColor,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -158,14 +163,79 @@ class KeyMetricsWidget extends StatelessWidget {
     );
   }
 
-
-  Color _getStockColor(double stock) {
-    if (stock <= 0) {
-      return Colors.red[600]!;
-    } else if (stock <= 10) {
-      return Colors.orange[600]!;
+  Widget _buildPriceCard() {
+    if (isEditMode && priceController != null) {
+      // Edit mode: show TextField
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.blue[50]!, // Light blue background to indicate edit mode
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blue[300]!),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.attach_money, color: Colors.blue[600], size: 20),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Giá Bán Hiện Tại',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.blue[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: priceController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                CurrencyInputFormatter(maxValue: 999999999), // Max 999M
+              ],
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue[700],
+              ),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+                suffix: Text(
+                  'VNĐ',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
     } else {
-      return Colors.green[600]!;
+      // Normal mode: show read-only metric card with tap gesture
+      return GestureDetector(
+        onTap: onPriceTap,
+        child: _buildMetricCard(
+          'Giá Bán Hiện Tại',
+          AppFormatter.formatCompactCurrency(product.currentSellingPrice),
+          '',
+          Icons.attach_money,
+          Colors.grey[300]!, // Neutral background
+          Colors.grey[800]!, // Dark text
+        ),
+      );
     }
   }
 

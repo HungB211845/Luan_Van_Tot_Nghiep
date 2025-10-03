@@ -811,113 +811,126 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ⚡ Customizable Quick Actions Grid
+  // ⚡ iOS-Style Quick Actions Grouped List
   Widget _buildQuickActionsWidget() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Truy cập nhanh',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await Navigator.of(context, rootNavigator: true)
-                      .pushNamed(RouteNames.editQuickAccess);
-                  if (context.mounted) {
-                    context.read<QuickAccessProvider>().loadConfiguration();
-                  }
-                },
-                child: const Text(
-                  'Sửa',
-                  style: TextStyle(
-                    color: Colors.green,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // iOS Section Header
+        _buildSectionHeader('TRUY CẬP NHANH'),
 
-          // Dynamic Grid from QuickAccessProvider
-          Consumer<QuickAccessProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
-                );
-              }
+        // Dynamic Grouped List from QuickAccessProvider
+        Consumer<QuickAccessProvider>(
+          builder: (context, provider, child) {
+            if (provider.isLoading) {
+              return _buildGroupedList([
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ]);
+            }
 
-              final items = provider.visibleItems;
-              if (items.isEmpty) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
+            final items = provider.visibleItems;
+            if (items.isEmpty) {
+              return _buildGroupedList([
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(
                     child: Text(
                       'Chưa có mục nào. Nhấn "Sửa" để thêm.',
                       style: TextStyle(color: Colors.grey),
                     ),
                   ),
-                );
-              }
-
-              return GridView.builder(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: context.gridColumns, // ← RESPONSIVE COLUMNS
-                  crossAxisSpacing: context.cardSpacing,
-                  mainAxisSpacing: context.cardSpacing,
-                  childAspectRatio: context.adaptiveValue(
-                    mobile: 1.5,
-                    tablet: 1.3,
-                    desktop: 1.2,
-                  ),
                 ),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return _buildQuickActionCard(
-                    icon: item.icon,
-                    label: item.label,
-                    color: item.color,
-                    onTap: () => Navigator.of(context, rootNavigator: true)
-                        .pushNamed(item.route),
-                  );
-                },
+              ]);
+            }
+
+            // Build list items with separators
+            final listItems = <Widget>[];
+            for (int i = 0; i < items.length; i++) {
+              final item = items[i];
+              listItems.add(
+                _buildQuickActionRow(
+                  icon: item.icon,
+                  label: item.label,
+                  color: item.color,
+                  onTap: () => Navigator.of(context, rootNavigator: true)
+                      .pushNamed(item.route),
+                ),
               );
+
+              // Add divider between items (not after last item)
+              if (i < items.length - 1) {
+                listItems.add(_buildDivider());
+              }
+            }
+
+            return _buildGroupedList(listItems);
+          },
+        ),
+      ],
+    );
+  }
+
+  // iOS Section Header (like ProfileScreen)
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8, top: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              await Navigator.of(context, rootNavigator: true)
+                  .pushNamed(RouteNames.editQuickAccess);
+              if (context.mounted) {
+                context.read<QuickAccessProvider>().loadConfiguration();
+              }
             },
+            child: const Text(
+              'Sửa',
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 16,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard({
+  // iOS Grouped List Container (like ProfileScreen)
+  Widget _buildGroupedList(List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  // iOS Divider between list items (like ProfileScreen)
+  Widget _buildDivider() {
+    return Container(
+      margin: const EdgeInsets.only(left: 52),
+      height: 0.5,
+      color: CupertinoColors.separator,
+    );
+  }
+
+  Widget _buildQuickActionRow({
     required IconData icon,
     required String label,
     required Color color,
@@ -927,24 +940,36 @@ class _HomeScreenState extends State<HomeScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
             children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: color,
+              // Icon with circular background
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
                 ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              // Label
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              // Chevron
+              const Icon(
+                CupertinoIcons.chevron_right,
+                color: CupertinoColors.systemGrey3,
+                size: 20,
               ),
             ],
           ),

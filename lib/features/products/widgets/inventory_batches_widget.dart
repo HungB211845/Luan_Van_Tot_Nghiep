@@ -4,20 +4,38 @@ import 'package:provider/provider.dart';
 import '../models/product_batch.dart';
 import '../providers/product_provider.dart';
 import '../screens/products/edit_batch_screen.dart';
+import '../screens/products/batch_detail_screen.dart';
 import '../services/inventory_adjustment_service.dart';
 
-class InventoryBatchesWidget extends StatelessWidget {
+class InventoryBatchesWidget extends StatefulWidget {
   final List<ProductBatch> batches;
   final VoidCallback? onBatchUpdated;
+  final bool showTitle;
 
   const InventoryBatchesWidget({
     Key? key,
     required this.batches,
     this.onBatchUpdated,
+    this.showTitle = true,
   }) : super(key: key);
 
   @override
+  State<InventoryBatchesWidget> createState() => _InventoryBatchesWidgetState();
+}
+
+class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
+  // FIXED: Add loading state to prevent multiple taps
+  final Set<String> _loadingBatches = <String>{};
+
+  @override
   Widget build(BuildContext context) {
+    if (!widget.showTitle) {
+      // In full screen mode, just show the batches list without card wrapper
+      return widget.batches.isEmpty
+          ? _buildEmptyState()
+          : _buildBatchesList(context);
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Padding(
@@ -36,7 +54,7 @@ class InventoryBatchesWidget extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  '${batches.length} lô',
+                  '${widget.batches.length} lô',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[600],
@@ -46,7 +64,7 @@ class InventoryBatchesWidget extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            if (batches.isEmpty)
+            if (widget.batches.isEmpty)
               _buildEmptyState()
             else
               _buildBatchesList(context),
@@ -93,10 +111,10 @@ class InventoryBatchesWidget extends StatelessWidget {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: batches.length,
+      itemCount: widget.batches.length,
       separatorBuilder: (context, index) => const Divider(height: 1),
       itemBuilder: (context, index) {
-        final batch = batches[index];
+        final batch = widget.batches[index];
         return _buildBatchItem(context, batch);
       },
     );
@@ -106,6 +124,7 @@ class InventoryBatchesWidget extends StatelessWidget {
     final isExpiringSoon = batch.expiryDate != null &&
         batch.expiryDate!.difference(DateTime.now()).inDays <= 30;
     final isLowStock = batch.quantity <= 10;
+    final isLoading = _loadingBatches.contains(batch.id);
 
     return Slidable(
       key: ValueKey(batch.id),
@@ -113,23 +132,29 @@ class InventoryBatchesWidget extends StatelessWidget {
         motion: const ScrollMotion(),
         children: [
           SlidableAction(
-            onPressed: (context) => _editBatch(context, batch),
-            backgroundColor: Colors.blue,
+            onPressed: isLoading ? null : (context) => _editBatch(context, batch),
+            backgroundColor: isLoading ? Colors.grey : Colors.blue,
             foregroundColor: Colors.white,
-            icon: Icons.edit,
-            label: 'Sửa',
+            icon: isLoading ? Icons.hourglass_empty : Icons.edit,
+            label: isLoading ? 'Đang tải' : 'Sửa',
           ),
           SlidableAction(
-            onPressed: (context) => _deleteBatch(context, batch),
-            backgroundColor: Colors.red,
+            onPressed: isLoading ? null : (context) => _deleteBatch(context, batch),
+            backgroundColor: isLoading ? Colors.grey : Colors.red,
             foregroundColor: Colors.white,
-            icon: Icons.delete,
-            label: 'Xóa',
+            icon: isLoading ? Icons.hourglass_empty : Icons.delete,
+            label: isLoading ? 'Đang tải' : 'Xóa',
           ),
         ],
       ),
       child: InkWell(
-        onTap: () => _showBatchDetails(context, batch),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => BatchDetailScreen(batch: batch),
+            ),
+          );
+        },
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
@@ -218,14 +243,6 @@ class InventoryBatchesWidget extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Vuốt để sửa/xóa',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey[400],
-                    ),
-                  ),
                 ],
               ),
             ],
@@ -292,125 +309,42 @@ class InventoryBatchesWidget extends StatelessWidget {
     }
   }
 
-  void _showBatchDetails(BuildContext context, ProductBatch batch) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Chi Tiết Lô Hàng'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDetailRow('Mã lô:', batch.batchNumber),
-              const SizedBox(height: 8),
-              _buildDetailRow('Số lượng:', '${batch.quantity.toInt()} đơn vị'),
-              const SizedBox(height: 8),
-              _buildDetailRow('Giá vốn:', '${_formatPrice(batch.costPrice)} VNĐ'),
-              const SizedBox(height: 8),
-              if (batch.receivedDate != null) ...[
-                _buildDetailRow('Ngày nhập:', _formatDate(batch.receivedDate!)),
-                const SizedBox(height: 8),
-              ],
-              if (batch.expiryDate != null) ...[
-                _buildDetailRow('Hạn sử dụng:', _formatDate(batch.expiryDate!)),
-                const SizedBox(height: 8),
-              ],
-              _buildDetailRow('Trạng thái:', _getBatchStatus(batch)),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _editBatch(context, batch);
-            },
-            child: const Text('Sửa'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-              color: Colors.grey,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _getBatchStatus(ProductBatch batch) {
-    if (batch.quantity <= 0) {
-      return 'Hết hàng';
-    }
-
-    if (batch.expiryDate != null) {
-      final daysUntilExpiry = batch.expiryDate!.difference(DateTime.now()).inDays;
-      if (daysUntilExpiry <= 0) {
-        return 'Đã hết hạn';
-      } else if (daysUntilExpiry <= 30) {
-        return 'Sắp hết hạn ($daysUntilExpiry ngày)';
-      }
-    }
-
-    if (batch.quantity <= 10) {
-      return 'Tồn kho thấp';
-    }
-
-    return 'Còn hàng';
-  }
-
+  /// FIXED: Add debouncing and loading state to prevent multiple taps
   Future<void> _editBatch(BuildContext context, ProductBatch batch) async {
+    // Prevent multiple simultaneous edit attempts
+    if (_loadingBatches.contains(batch.id)) {
+      return;
+    }
+
+    setState(() {
+      _loadingBatches.add(batch.id);
+    });
+
     final inventoryService = InventoryAdjustmentService();
 
     try {
       final canEdit = await inventoryService.canEditBatch(batch.id);
 
+      if (!mounted) return;
+
       if (!canEdit) {
-        if (context.mounted) {
-          _showCannotEditDialog(context, batch);
-        }
+        _showCannotEditDialog(context, batch);
         return;
       }
 
-      if (context.mounted) {
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EditBatchScreen(batch: batch),
-          ),
-        );
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EditBatchScreen(batch: batch),
+        ),
+      );
 
-        if (result == true) {
-          onBatchUpdated?.call();
-        }
+      if (mounted && result == true) {
+        widget.onBatchUpdated?.call();
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Lỗi kiểm tra quyền sửa: $e'),
@@ -418,33 +352,53 @@ class InventoryBatchesWidget extends StatelessWidget {
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingBatches.remove(batch.id);
+        });
+      }
     }
   }
 
+  /// FIXED: Add debouncing and loading state for delete batch
   Future<void> _deleteBatch(BuildContext context, ProductBatch batch) async {
+    // Prevent multiple simultaneous delete attempts
+    if (_loadingBatches.contains(batch.id)) {
+      return;
+    }
+
+    setState(() {
+      _loadingBatches.add(batch.id);
+    });
+
     final inventoryService = InventoryAdjustmentService();
 
     try {
       final canDelete = await inventoryService.canDeleteBatch(batch.id);
 
+      if (!mounted) return;
+
       if (!canDelete) {
-        if (context.mounted) {
-          _showCannotDeleteDialog(context, batch);
-        }
+        _showCannotDeleteDialog(context, batch);
         return;
       }
 
-      if (context.mounted) {
-        await _showDeleteConfirmation(context, batch);
-      }
+      await _showDeleteConfirmation(context, batch);
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Lỗi kiểm tra quyền xóa: $e'),
             backgroundColor: Colors.red,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingBatches.remove(batch.id);
+        });
       }
     }
   }
@@ -531,7 +485,7 @@ class InventoryBatchesWidget extends StatelessWidget {
 
       if (context.mounted) {
         if (success) {
-          onBatchUpdated?.call();
+          widget.onBatchUpdated?.call();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Hủy lô hàng thành công'),
@@ -565,8 +519,9 @@ class InventoryBatchesWidget extends StatelessWidget {
       final success = await provider.deleteProductBatch(batch.id, batch.productId);
 
       if (context.mounted) {
+      // Find and fix the second onBatchUpdated call in delete method
         if (success) {
-          onBatchUpdated?.call();
+          widget.onBatchUpdated?.call();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Xóa lô hàng thành công'),

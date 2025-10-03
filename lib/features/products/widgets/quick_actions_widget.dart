@@ -30,30 +30,20 @@ class QuickActionsWidget extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionButton(
-                    context,
-                    'Nhập Lô Nhanh',
-                    'Thêm lô hàng mới ngay lập tức',
-                    Icons.add_box,
-                    Colors.blue,
-                    () => _showQuickAddBatchSheet(context),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionButton(
-                    context,
-                    'Tạo Đơn Nhập',
-                    'Tạo đơn nhập hàng cho sản phẩm này',
-                    Icons.shopping_cart_rounded,
-                    Colors.green,
-                    () => _createPurchaseOrder(context),
-                  ),
-                ),
-              ],
+            _buildActionListTile(
+              context,
+              'Nhập Lô Nhanh',
+              'Thêm lô hàng mới ngay lập tức',
+              Icons.add_box,
+              () => _showQuickAddBatchSheet(context),
+            ),
+            const Divider(height: 1),
+            _buildActionListTile(
+              context,
+              'Tạo Đơn Nhập',
+              'Tạo đơn nhập hàng cho sản phẩm này',
+              Icons.shopping_cart_rounded,
+              () => _createPurchaseOrder(context),
             ),
           ],
         ),
@@ -61,55 +51,48 @@ class QuickActionsWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(
+  Widget _buildActionListTile(
     BuildContext context,
     String title,
     String subtitle,
     IconData icon,
-    Color color,
     VoidCallback onTap,
   ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(16),
+    return ListTile(
+      leading: Container(
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: Colors.grey[100],
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
         ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 32,
-              color: color,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+        child: Icon(
+          icon,
+          color: Colors.grey[700],
+          size: 24,
         ),
       ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          fontSize: 14,
+          color: Colors.grey[600],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: const Icon(
+        Icons.chevron_right,
+        color: Colors.grey,
+      ),
+      onTap: onTap,
     );
   }
 
