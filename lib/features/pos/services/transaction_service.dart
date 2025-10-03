@@ -25,18 +25,21 @@ class TransactionService extends BaseService {
     required PaymentMethod paymentMethod,
     String? notes,
     DateTime? debtDueDate, // Due date for debt transactions
+    double surchargeAmount = 0.0, // Phụ phí cho giao dịch ghi nợ
   }) async {
     try {
       ensureAuthenticated();
-      // Tính total amount
-      final totalAmount = items.fold<double>(
+      // Tính base amount từ items và final total amount
+      final baseAmount = items.fold<double>(
         0, (sum, item) => sum + item.subTotal
       );
+      final totalAmount = baseAmount + surchargeAmount;
 
       // Tạo transaction trước
       final transactionData = addStoreId({
         'customer_id': customerId,
         'total_amount': totalAmount,
+        'surcharge_amount': surchargeAmount,
         'is_debt': paymentMethod == PaymentMethod.debt, // Xác định isDebt dựa vào paymentMethod
         'payment_method': paymentMethod.value,
         'notes': notes,

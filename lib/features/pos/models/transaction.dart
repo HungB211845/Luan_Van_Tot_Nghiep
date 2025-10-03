@@ -5,6 +5,7 @@ class Transaction {
   final String storeId;
   final String? customerId;
   final double totalAmount;
+  final double surchargeAmount; // Phụ phí được thêm vào giao dịch
   final DateTime transactionDate;
   final bool isDebt;
   final PaymentMethod paymentMethod;
@@ -21,6 +22,7 @@ class Transaction {
     required this.storeId,
     this.customerId,
     required this.totalAmount,
+    this.surchargeAmount = 0.0, // Default to 0 if not specified
     required this.transactionDate,
     this.isDebt = false,
     this.paymentMethod = PaymentMethod.cash,
@@ -38,6 +40,7 @@ class Transaction {
       storeId: json['store_id'],
       customerId: json['customer_id'],
       totalAmount: (json['total_amount'] as num? ?? 0).toDouble(),
+      surchargeAmount: (json['surcharge_amount'] as num? ?? 0).toDouble(),
       transactionDate: DateTime.parse(json['transaction_date']),
       isDebt: json['is_debt'] ?? false,
       paymentMethod: PaymentMethod.fromString(json['payment_method'] ?? 'CASH'),
@@ -57,6 +60,7 @@ class Transaction {
       storeId: json['store_id'], // Fixed: use correct field name from RPC output
       customerId: json['customer_id'],
       totalAmount: (json['total_amount'] as num? ?? 0).toDouble(),
+      surchargeAmount: (json['surcharge_amount'] as num? ?? 0).toDouble(),
       transactionDate: DateTime.parse(json['transaction_date']),
       isDebt: json['is_debt'] ?? false,
       paymentMethod: PaymentMethod.fromString(json['payment_method'] ?? 'CASH'),
@@ -74,6 +78,7 @@ class Transaction {
       'store_id': storeId,
       'customer_id': customerId,
       'total_amount': totalAmount,
+      'surcharge_amount': surchargeAmount,
       'transaction_date': transactionDate.toIso8601String(),
       'is_debt': isDebt,
       'payment_method': paymentMethod.value,
@@ -89,6 +94,7 @@ class Transaction {
     String? storeId,
     String? customerId,
     double? totalAmount,
+    double? surchargeAmount,
     DateTime? transactionDate,
     bool? isDebt,
     PaymentMethod? paymentMethod,
@@ -103,6 +109,7 @@ class Transaction {
       storeId: storeId ?? this.storeId,
       customerId: customerId ?? this.customerId,
       totalAmount: totalAmount ?? this.totalAmount,
+      surchargeAmount: surchargeAmount ?? this.surchargeAmount,
       transactionDate: transactionDate ?? this.transactionDate,
       isDebt: isDebt ?? this.isDebt,
       paymentMethod: paymentMethod ?? this.paymentMethod,

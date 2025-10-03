@@ -13,6 +13,7 @@ import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../../customers/models/customer.dart';
 import '../../../customers/screens/customers/customer_list_screen.dart';
+import 'confirm_credit_sale_sheet.dart';
 
 class POSScreen extends StatefulWidget {
   const POSScreen({Key? key}) : super(key: key);
@@ -391,11 +392,11 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildCustomerHeader() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.grey[300]!))),
-      child: GestureDetector(
-        onTap: _selectCustomer,
+    return GestureDetector(
+      onTap: _selectCustomer,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.grey[300]!))),
         child: Row(
           children: [
             Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.person, color: Colors.green, size: 20)),
@@ -547,7 +548,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
               Padding(padding: const EdgeInsets.all(16), child: Text('Chọn phương thức thanh toán', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey[800]))),
               const Divider(height: 1),
               _buildPaymentOption(icon: Icons.money, title: 'Tiền mặt', color: Colors.green, onTap: () { Navigator.pop(context); _processPayment('cash'); }),
-              _buildPaymentOption(icon: Icons.credit_card, title: hasCustomer ? 'Ghi nợ cho $customerName' : 'Ghi nợ (Chọn khách hàng trước)', color: Colors.orange, enabled: hasCustomer, onTap: hasCustomer ? () { Navigator.pop(context); _processPayment('debt'); } : null),
+              _buildPaymentOption(icon: Icons.credit_card, title: hasCustomer ? 'Ghi nợ cho $customerName' : 'Ghi nợ (Chọn khách hàng trước)', color: Colors.orange, enabled: hasCustomer, onTap: hasCustomer ? () { Navigator.pop(context); _showCreditSaleConfirmation(); } : null),
               _buildPaymentOption(icon: Icons.account_balance, title: 'Chuyển khoản', color: Colors.blue, onTap: () { Navigator.pop(context); _processPayment('bank'); }),
               const Divider(height: 1),
               InkWell(onTap: () => Navigator.pop(context), child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 16), child: const Text('Hủy', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.red)))),
@@ -636,6 +637,59 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
+    }
+  }
+
+  void _showCreditSaleConfirmation() {
+    final customer = _viewModel?.selectedCustomer;
+    if (customer == null) {
+      _showError('Không có khách hàng được chọn');
+      return;
+    }
+
+    final productProvider = context.read<ProductProvider>();
+    final baseAmount = productProvider.cartTotal;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => ConfirmCreditSaleSheet(
+        customer: customer,
+        baseAmount: baseAmount,
+        onCancel: () => Navigator.pop(context),
+        onConfirm: (surchargeAmount) {
+          Navigator.pop(context);
+          _processCreditSaleWithSurcharge(customer.id, surchargeAmount);
+        },
+      ),
+    );
+  }
+
+  Future<void> _processCreditSaleWithSurcharge(String customerId, double surchargeAmount) async {
+    if (!mounted) return;
+    final productProvider = context.read<ProductProvider>();
+    if (productProvider.cartItems.isEmpty) {
+      _showError('Giỏ hàng trống, không thể thanh toán');
+      return;
+    }
+
+    setState(() => _isProcessingPayment = true);
+    try {
+      final transactionId = await productProvider.finalizeCreditSaleWithSurcharge(
+        customerId: customerId,
+        surchargeAmount: surchargeAmount,
+      );
+
+      if (transactionId != null) {
+        await _handleSuccessfulPayment(transactionId);
+      } else {
+        _showError(productProvider.errorMessage.isNotEmpty ? productProvider.errorMessage : 'Lỗi không xác định');
+      }
+    } catch (e) {
+      _showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _isProcessingPayment = false);
     }
   }
 }
