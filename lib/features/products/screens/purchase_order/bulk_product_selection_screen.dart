@@ -43,9 +43,10 @@ class _BulkProductSelectionScreenState
       _localCartItems[item.product.id] = item;
     }
 
-    // Load products for this supplier
+    // Load products for this supplier ONLY
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProductProvider>().loadProducts();
+      // FIXED: Load products filtered by supplier instead of all products
+      context.read<ProductProvider>().loadProductsByCompany(widget.supplierId);
     });
   }
 
@@ -65,6 +66,11 @@ class _BulkProductSelectionScreenState
     setState(() {
       _selectedCategory = category;
     });
+    // FIXED: Reload products with both company and category filters
+    context.read<ProductProvider>().loadProductsByCompany(
+      widget.supplierId,
+      category: category,
+    );
   }
 
   void _showProductEntrySheet(
@@ -133,25 +139,19 @@ class _BulkProductSelectionScreenState
   }
 
   List<Product> _getFilteredProducts(List<Product> products) {
-    var filtered = products.where((product) {
-      // Filter by search query
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        if (!product.name.toLowerCase().contains(query) &&
-            !(product.sku?.toLowerCase().contains(query) ?? false)) {
-          return false;
-        }
-      }
+    // NOTE: Company/supplier and category filtering are now done server-side
+    // Only client-side search query filtering remains
 
-      // Filter by category
-      if (_selectedCategory != null && product.category != _selectedCategory) {
-        return false;
-      }
+    if (_searchQuery.isEmpty) {
+      return products; // No search query, return all server-filtered products
+    }
 
-      return true;
+    // Filter by search query only
+    return products.where((product) {
+      final query = _searchQuery.toLowerCase();
+      return product.name.toLowerCase().contains(query) ||
+          (product.sku?.toLowerCase().contains(query) ?? false);
     }).toList();
-
-    return filtered;
   }
 
   double _getLocalCartTotal() {

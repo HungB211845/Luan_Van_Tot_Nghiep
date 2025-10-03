@@ -37,6 +37,8 @@ class Product {
   final int minStockLevel;
   final int? availableStock;
   final double? currentPrice;
+  final double currentSellingPrice;
+  final String unit;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? npkRatio;
@@ -58,6 +60,8 @@ class Product {
     required this.storeId,
     this.availableStock,
     this.currentPrice,
+    this.currentSellingPrice = 0,
+    this.unit = '',
     required this.createdAt,
     required this.updatedAt,
     this.npkRatio,
@@ -85,6 +89,8 @@ class Product {
       minStockLevel: json['min_stock_level'] as int? ?? 0,
       availableStock: (json['available_stock'] as num?)?.toInt(),
       currentPrice: (json['current_price'] as num?)?.toDouble(),
+      currentSellingPrice: (json['current_selling_price'] as num?)?.toDouble() ?? 0.0,
+      unit: json['unit'] as String? ?? '',
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
       npkRatio: json['npk_ratio'],
@@ -107,6 +113,8 @@ class Product {
       'description': description,
       'store_id': storeId.isEmpty ? null : storeId,
       'min_stock_level': minStockLevel,
+      'current_selling_price': currentSellingPrice,
+      'unit': unit,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -158,6 +166,8 @@ class Product {
     int? minStockLevel,
     int? availableStock,
     double? currentPrice,
+    double? currentSellingPrice,
+    String? unit,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? npkRatio,
@@ -179,6 +189,8 @@ class Product {
       minStockLevel: minStockLevel ?? this.minStockLevel,
       availableStock: availableStock ?? this.availableStock,
       currentPrice: currentPrice ?? this.currentPrice,
+      currentSellingPrice: currentSellingPrice ?? this.currentSellingPrice,
+      unit: unit ?? this.unit,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       npkRatio: npkRatio ?? this.npkRatio,

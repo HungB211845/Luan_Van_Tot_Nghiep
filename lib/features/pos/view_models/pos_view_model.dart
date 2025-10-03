@@ -22,9 +22,9 @@ class POSViewModel {
   });
 
   // Hàm khởi tạo, tải các dữ liệu cần thiết
-  Future<void> initialize() async {
-    // Tải danh sách sản phẩm và khách hàng nếu cần
-    if (productProvider.products.isEmpty) {
+  Future<void> initialize({bool forceRefresh = false}) async {
+    // FIXED: Always refresh products to get latest prices and stock
+    if (productProvider.products.isEmpty || forceRefresh) {
       await productProvider.loadProducts();
     }
     if (customerProvider.customers.isEmpty) {
@@ -185,6 +185,11 @@ class POSViewModel {
       productProvider.refresh(),
       customerProvider.refresh(),
     ]);
+  }
+
+  // FIXED: Force refresh products and customers (useful for POS)
+  Future<void> forceRefresh() async {
+    await initialize(forceRefresh: true);
   }
 
   // Refresh chỉ sản phẩm

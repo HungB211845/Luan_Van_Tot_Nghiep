@@ -37,6 +37,22 @@ class AppFormatter {
     return format.format(number);
   }
 
+  /// Định dạng currency compact cho UI nhỏ.
+  ///
+  /// Ví dụ:
+  /// - formatCompactCurrency(1000000) => "1M"
+  /// - formatCompactCurrency(50000) => "50K"
+  /// - formatCompactCurrency(999) => "999"
+  static String formatCompactCurrency(num price) {
+    if (price >= 1000000) {
+      return '${(price / 1000000).toStringAsFixed(1)}M';
+    } else if (price >= 1000) {
+      return '${(price / 1000).toStringAsFixed(0)}K';
+    } else {
+      return price.toStringAsFixed(0);
+    }
+  }
+
   /// Định dạng DateTime thành chuỗi ngày (dd/MM/yyyy).
   ///
   /// Ví dụ: formatDate(DateTime(2024, 07, 28)) => "28/07/2024"

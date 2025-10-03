@@ -4,6 +4,7 @@ import '../models/product.dart';
 import '../models/product_batch.dart';
 import '../models/seasonal_price.dart';
 import '../models/banned_substance.dart';
+import '../widgets/price_history_widget.dart';
 import '../../pos/models/transaction.dart';
 import '../../pos/models/transaction_item.dart';
 import '../../pos/models/transaction_item_details.dart';
@@ -164,7 +165,13 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       // Update stock and price maps
       for (final product in _products) {
         _stockMap[product.id] = product.availableStock ?? 0;
-        _currentPrices[product.id] = product.currentPrice ?? 0.0;
+        
+        // FIXED: Sync price from history if current_selling_price is 0
+        double finalPrice = product.currentSellingPrice;
+        if (finalPrice == 0) {
+          finalPrice = await _syncPriceFromHistory(product.id);
+        }
+        _currentPrices[product.id] = finalPrice;
       }
 
       // Clear old search state
@@ -202,7 +209,13 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       // Update stock and price maps for new products
       for (final product in nextPage.items) {
         _stockMap[product.id] = product.availableStock ?? 0;
-        _currentPrices[product.id] = product.currentPrice ?? 0.0;
+        
+        // FIXED: Sync price from history if current_selling_price is 0
+        double finalPrice = product.currentSellingPrice;
+        if (finalPrice == 0) {
+          finalPrice = await _syncPriceFromHistory(product.id);
+        }
+        _currentPrices[product.id] = finalPrice;
       }
 
       _isLoadingMore = false;
@@ -318,10 +331,16 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       _selectedCategory = category;
 
       // 2. Nạp dữ liệu vào _stockMap và _currentPrices từ danh sách vừa lấy
-      //    Không cần gọi thêm API nào nữa!
+      //    FIXED: Add price sync from history if needed
       for (final product in _products) {
         _stockMap[product.id] = product.availableStock ?? 0;
-        _currentPrices[product.id] = product.currentPrice ?? 0.0;
+        
+        // FIXED: Sync price from history if current_selling_price is 0
+        double finalPrice = product.currentSellingPrice;
+        if (finalPrice == 0) {
+          finalPrice = await _syncPriceFromHistory(product.id);
+        }
+        _currentPrices[product.id] = finalPrice;
       }
 
       // 3. Xóa bộ lọc cũ (nếu có)
@@ -372,6 +391,42 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     } catch (e) {
       _posSearchResults = [];
       _setError('Lỗi tìm kiếm: ${e.toString()}');
+    }
+  }
+
+  /// Load products filtered by company (for PO creation and supplier-specific operations)
+  Future<void> loadProductsByCompany(String? companyId, {ProductCategory? category}) async {
+    _setStatus(ProductStatus.loading);
+    try {
+      // FIXED: Use ProductService method to get products by company
+      _products = await _productService.getProductsByCompany(companyId);
+      _selectedCategory = category;
+
+      // Filter by category if specified  
+      if (category != null) {
+        _products = _products.where((product) => product.category == category).toList();
+      }
+
+      // Update stock and price maps
+      for (final product in _products) {
+        _stockMap[product.id] = product.availableStock ?? 0;
+        
+        // FIXED: Sync price from history if current_selling_price is 0
+        double finalPrice = product.currentSellingPrice;
+        if (finalPrice == 0) {
+          finalPrice = await _syncPriceFromHistory(product.id);
+        }
+        _currentPrices[product.id] = finalPrice;
+      }
+
+      // Clear old search state
+      _filteredProducts = [];
+      _searchQuery = '';
+
+      _setStatus(ProductStatus.success);
+      _clearError();
+    } catch (e) {
+      _setError(e.toString());
     }
   }
 
@@ -734,9 +789,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       await _productService.deleteSeasonalPrice(priceId);
       _seasonalPrices.removeWhere((p) => p.id == priceId);
 
-      // Reload current price for this product
-      final currentPrice = await _productService.getCurrentPrice(productId);
-      _currentPrices[productId] = currentPrice;
+      // FIXED: Get current price from products.current_selling_price
+      final product = _products.firstWhere((p) => p.id == productId);
+      _currentPrices[productId] = product.currentSellingPrice;
 
       _setStatus(ProductStatus.success);
       return true;
@@ -1066,6 +1121,35 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
+  /// FIXED: Sync price from price history if current selling price is 0
+  Future<double> _syncPriceFromHistory(String productId) async {
+    try {
+      // Get price history for this product
+      final rawHistory = await _productService.getPriceHistory(productId, limit: 1);
+      
+      if (rawHistory.isNotEmpty) {
+        final latestPrice = (rawHistory.first['new_price'] as num).toDouble();
+        
+        if (latestPrice > 0) {
+          // Update database with synced price
+          await _productService.updateCurrentSellingPrice(
+            productId,
+            latestPrice,
+            reason: 'Auto-sync from price history on ProductProvider load'
+          );
+          
+          print('DEBUG: Synced price $latestPrice from history for product $productId');
+          return latestPrice;
+        }
+      }
+      
+      return 0.0; // No valid price found
+    } catch (e) {
+      print('Warning: Failed to sync price from history for $productId: $e');
+      return 0.0;
+    }
+  }
+
   void _calculateCartTotal() {
     _cartTotal = _cartItems.fold(0.0, (sum, item) => sum + item.subTotal);
   }
@@ -1259,6 +1343,156 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       'total_calculated_items': _calculateTotalItems(),
     };
   }
+
+  /// Calculate average cost price for a product from all batches
+  Future<double> calculateAverageCostPrice(String productId) async {
+    try {
+      return await _productService.calculateAverageCostPrice(productId);
+    } catch (e) {
+      _setError('Lỗi tính giá vốn trung bình: $e');
+      return 0.0;
+    }
+  }
+
+  /// Calculate gross profit percentage for a product
+  Future<double> calculateGrossProfitPercentage(String productId) async {
+    try {
+      return await _productService.calculateGrossProfitPercentage(productId);
+    } catch (e) {
+      _setError('Lỗi tính lợi nhuận gộp: $e');
+      return 0.0;
+    }
+  }
+
+  /// Update current selling price for a product
+  Future<bool> updateCurrentSellingPrice(
+    String productId,
+    double newPrice, {
+    String reason = 'Manual price update',
+  }) async {
+    try {
+      _setStatus(ProductStatus.loading);
+
+      final success = await _productService.updateCurrentSellingPrice(
+        productId,
+        newPrice,
+        reason: reason,
+      );
+
+      if (success) {
+        // Update local product cache
+        final productIndex = _products.indexWhere((p) => p.id == productId);
+        if (productIndex != -1) {
+          _products[productIndex] = _products[productIndex].copyWith(
+            currentSellingPrice: newPrice,
+          );
+        }
+
+        // Update selected product if it's the same
+        if (_selectedProduct?.id == productId) {
+          _selectedProduct = _selectedProduct!.copyWith(
+            currentSellingPrice: newPrice,
+          );
+        }
+
+        // FIXED: Update _currentPrices cache for POS
+        _currentPrices[productId] = newPrice;
+
+        _setStatus(ProductStatus.success);
+        notifyListeners();
+      } else {
+        _setError('Không thể cập nhật giá bán');
+      }
+
+      return success;
+    } catch (e) {
+      _setError('Lỗi cập nhật giá bán: $e');
+      return false;
+    }
+  }
+
+  /// Quick add batch with new selling price
+  Future<bool> quickAddBatch({
+    required String productId,
+    required int quantity,
+    required double costPrice,
+    required double newSellingPrice,
+  }) async {
+    try {
+      _setStatus(ProductStatus.loading);
+
+      final batchId = await _productService.quickAddBatch(
+        productId: productId,
+        quantity: quantity,
+        costPrice: costPrice,
+        newSellingPrice: newSellingPrice,
+      );
+
+      if (batchId.isNotEmpty) {
+        // Reload batches for this product
+        await loadProductBatches(productId);
+
+        // FIXED: Update stock after adding batch
+        await _updateProductStock(productId);
+
+        // Update selling price in local cache
+        final productIndex = _products.indexWhere((p) => p.id == productId);
+        if (productIndex != -1) {
+          _products[productIndex] = _products[productIndex].copyWith(
+            currentSellingPrice: newSellingPrice,
+            // FIXED: Also update availableStock in the model if available
+            availableStock: _stockMap[productId],
+          );
+        }
+
+        if (_selectedProduct?.id == productId) {
+          _selectedProduct = _selectedProduct!.copyWith(
+            currentSellingPrice: newSellingPrice,
+            availableStock: _stockMap[productId],
+          );
+        }
+
+        // FIXED: Update _currentPrices cache for POS
+        _currentPrices[productId] = newSellingPrice;
+
+        _setStatus(ProductStatus.success);
+        notifyListeners();
+        return true;
+      } else {
+        _setError('Không thể thêm lô hàng');
+        return false;
+      }
+    } catch (e) {
+      _setError('Lỗi thêm lô hàng nhanh: $e');
+      return false;
+    }
+  }
+
+  /// Lấy lịch sử thay đổi giá của một sản phẩm
+  Future<List<PriceHistoryItem>> getPriceHistory(String productId) async {
+    try {
+      final rawHistory = await _productService.getPriceHistory(productId);
+
+      return rawHistory.map((json) {
+        final profiles = json['profiles'] as Map<String, dynamic>?;
+        final displayName = profiles?['display_name'] as String?;
+
+        return PriceHistoryItem(
+          id: json['id'] as String,
+          newPrice: (json['new_price'] as num).toDouble(),
+          oldPrice: json['old_price'] != null
+              ? (json['old_price'] as num).toDouble()
+              : null,
+          changedAt: DateTime.parse(json['changed_at'] as String),
+          reason: json['reason'] as String?,
+          userWhoChanged: displayName ?? 'Người dùng không xác định',
+        );
+      }).toList();
+    } catch (e) {
+      _setError('Lỗi lấy lịch sử giá: $e');
+      return [];
+    }
+  }
 }
 
 // =====================================================
@@ -1364,4 +1598,3 @@ class ProductListViewModel {
     return null;
   }
 }
-

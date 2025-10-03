@@ -768,6 +768,152 @@ class ProductService extends BaseService {
     }
   }
 
+  // =====================================================
+  // DASHBOARD PRICING METHODS
+  // =====================================================
+
+  /// Update current selling price for a product
+  Future<bool> updateCurrentSellingPrice(String productId, double newPrice, {String reason = 'Manual price update'}) async {
+    try {
+      ensureAuthenticated();
+
+      // Call the stored procedure to update price with history
+      await _supabase.rpc('update_product_selling_price', params: {
+        'p_product_id': productId,
+        'p_new_price': newPrice,
+        'p_user_id': _supabase.auth.currentUser?.id,
+        'p_reason': reason,
+      });
+
+      return true;
+    } catch (e) {
+      throw Exception('Lỗi cập nhật giá bán: $e');
+    }
+  }
+
+  /// Calculate average cost price for a product
+  Future<double> calculateAverageCostPrice(String productId) async {
+    try {
+      final result = await _supabase.rpc('get_average_cost_price', params: {
+        'p_product_id': productId,
+      });
+
+      return (result ?? 0).toDouble();
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// Calculate gross profit percentage for a product
+  Future<double> calculateGrossProfitPercentage(String productId) async {
+    try {
+      final result = await _supabase.rpc('get_gross_profit_percentage', params: {
+        'p_product_id': productId,
+      });
+
+      return (result ?? 0).toDouble();
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// Get price history for a product
+  Future<List<Map<String, dynamic>>> getPriceHistory(String productId, {int limit = 20}) async {
+    try {
+      ensureAuthenticated();
+
+      final response = await addStoreFilter(_supabase
+          .from('price_history')
+          .select('*')
+          .eq('product_id', productId))
+          .order('changed_at', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('Lỗi lấy lịch sử giá: $e');
+    }
+  }
+
+  /// Quick add batch with automatic price update
+  Future<String> quickAddBatch({
+    required String productId,
+    required int quantity,
+    required double costPrice,
+    required double newSellingPrice,
+    String? batchNumber,
+    DateTime? expiryDate,
+  }) async {
+    try {
+      ensureAuthenticated();
+
+      // Generate batch number if not provided
+      final finalBatchNumber = batchNumber ?? _generateBatchNumber();
+
+      // Create the batch
+      final batchData = addStoreId({
+        'product_id': productId,
+        'batch_number': finalBatchNumber,
+        'quantity': quantity,
+        'cost_price': costPrice,
+        'received_date': DateTime.now().toIso8601String(),
+        'expiry_date': expiryDate?.toIso8601String(),
+        'sales_count': 0,
+        'is_deleted': false,
+      });
+
+      final batchResponse = await _supabase
+          .from('product_batches')
+          .insert(batchData)
+          .select()
+          .single();
+
+      final batchId = batchResponse['id'];
+
+      // Update product selling price
+      await updateCurrentSellingPrice(
+        productId,
+        newSellingPrice,
+        reason: 'Price updated via Quick Add Batch'
+      );
+
+      // Update product stock (this should be done via trigger, but fallback)
+      await _updateProductStockFromBatches(productId);
+
+      return batchId;
+    } catch (e) {
+      throw Exception('Lỗi nhập nhanh lô hàng: $e');
+    }
+  }
+
+  /// Helper method to generate batch number
+  String _generateBatchNumber() {
+    final now = DateTime.now();
+    return 'BATCH-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(8)}';
+  }
+
+  /// Update product stock from batches (fallback method)
+  /// FIXED: Don't update products.available_stock since it doesn't exist
+  /// Stock is calculated via views and RPC functions
+  Future<void> _updateProductStockFromBatches(String productId) async {
+    try {
+      // FIXED: Just refresh the ProductProvider stock cache
+      // The actual stock calculation is done via get_available_stock RPC
+      // No need to update products table since available_stock is computed
+      
+      // Optionally call RPC to verify stock calculation
+      final stockResult = await _supabase
+          .rpc('get_available_stock', params: {'product_uuid': productId});
+      
+      // Log for debugging (remove in production)
+      print('DEBUG: Product $productId stock updated to: $stockResult');
+      
+    } catch (e) {
+      // Ignore errors in fallback method since stock is calculated via views
+      print('Warning: Stock calculation via RPC: $e');
+    }
+  }
+
   /// Lấy tất cả seasonal prices của product
   Future<List<SeasonalPrice>> getSeasonalPrices(String productId) async {
     try {
@@ -987,4 +1133,5 @@ class ProductService extends BaseService {
       throw Exception('Lỗi sắp xếp sản phẩm: $e');
     }
   }
+
 }

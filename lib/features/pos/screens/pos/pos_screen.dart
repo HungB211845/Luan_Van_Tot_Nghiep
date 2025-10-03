@@ -3,6 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/formatter.dart';
 import '../../../products/models/product.dart';
 import '../../models/payment_method.dart';
 import '../../../products/providers/product_provider.dart';
@@ -338,7 +341,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    '${_viewModel!.productProvider.getCurrentPrice(product.id).toStringAsFixed(0)} VND',
+                    AppFormatter.formatCurrency(_viewModel!.productProvider.getCurrentPrice(product.id)),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green),
                   ),
                 ],
@@ -463,7 +466,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
               children: [
                 Text(item.productName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text('${item.priceAtSale.toStringAsFixed(0)} VND', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(AppFormatter.formatCurrency(item.priceAtSale), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
               ],
             ),
           ),
@@ -512,7 +515,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Tổng cộng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey[700])),
-              Flexible(child: Text('${total.toStringAsFixed(0)} VND', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green), overflow: TextOverflow.ellipsis)),
+              Flexible(child: Text(AppFormatter.formatCurrency(total), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green), overflow: TextOverflow.ellipsis)),
             ],
           ),
           const SizedBox(height: 16),

@@ -57,7 +57,7 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chỉnh Sửa Lô Hàng'),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: Colors.green,
         foregroundColor: Colors.white,
       ),
       body: Form(
@@ -71,7 +71,7 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
               const SizedBox(height: 24),
               _buildBatchForm(),
               const SizedBox(height: 32),
-              _buildSaveButton(),
+              _buildActionButtons(),
             ],
           ),
         ),
@@ -95,19 +95,24 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
   }
 
   Widget _buildBatchForm() {
-    // ... (Giữ nguyên layout form từ AddBatchScreen)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextFormField(
           controller: _batchNumberController,
-          decoration: const InputDecoration(labelText: 'Mã lô *'),
+          decoration: const InputDecoration(
+            labelText: 'Mã lô *',
+            border: OutlineInputBorder(),
+          ),
           validator: (value) => (value?.isEmpty ?? true) ? 'Vui lòng nhập mã lô' : null,
         ),
         const SizedBox(height: 16),
         TextFormField(
           controller: _quantityController,
-          decoration: const InputDecoration(labelText: 'Số lượng *'),
+          decoration: const InputDecoration(
+            labelText: 'Số lượng *',
+            border: OutlineInputBorder(),
+          ),
           keyboardType: TextInputType.number,
           validator: (value) {
             if (value == null || int.tryParse(value) == null || int.parse(value) <= 0) {
@@ -119,8 +124,11 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
         const SizedBox(height: 16),
         TextFormField(
           controller: _costPriceController,
-          decoration: const InputDecoration(labelText: 'Giá vốn *'),
-          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Giá vốn *',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           validator: (value) {
             if (value == null || double.tryParse(value) == null || double.parse(value) <= 0) {
               return 'Giá vốn phải là số dương';
@@ -129,15 +137,121 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
           },
         ),
         const SizedBox(height: 16),
-        // ... Các trường date và optional fields khác
+        // Received Date
+        InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _receivedDate,
+              firstDate: DateTime(2000),
+              lastDate: DateTime.now(),
+            );
+            if (picked != null) {
+              setState(() => _receivedDate = picked);
+            }
+          },
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Ngày nhập *',
+              border: OutlineInputBorder(),
+              suffixIcon: Icon(Icons.calendar_today),
+            ),
+            child: Text('${_receivedDate.day}/${_receivedDate.month}/${_receivedDate.year}'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Expiry Date
+        InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _expiryDate ?? DateTime.now().add(const Duration(days: 365)),
+              firstDate: DateTime.now(),
+              lastDate: DateTime(2030),
+            );
+            if (picked != null) {
+              setState(() => _expiryDate = picked);
+            }
+          },
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Hạn sử dụng (tùy chọn)',
+              border: OutlineInputBorder(),
+              suffixIcon: Icon(Icons.calendar_today),
+            ),
+            child: Text(_expiryDate == null
+              ? 'Chọn ngày hết hạn'
+              : '${_expiryDate!.day}/${_expiryDate!.month}/${_expiryDate!.year}'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _supplierBatchIdController,
+          decoration: const InputDecoration(
+            labelText: 'Mã lô nhà cung cấp (tùy chọn)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _notesController,
+          decoration: const InputDecoration(
+            labelText: 'Ghi chú (tùy chọn)',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
       ],
     );
   }
 
-  Widget _buildSaveButton() {
-    return ElevatedButton(
-      onPressed: _isLoading ? null : _updateBatch,
-      child: _isLoading ? const CircularProgressIndicator() : const Text('Lưu Thay Đổi'),
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        // Nút Xóa (50%)
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _deleteBatch,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Xóa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ),
+        const SizedBox(width: 16),
+        // Nút Lưu Thay Đổi (50%)
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _updateBatch,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Lưu Thay Đổi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ],
     );
   }
 
@@ -165,6 +279,60 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Cập nhật lô hàng thành công'), backgroundColor: Colors.green),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(provider.errorMessage), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _deleteBatch() async {
+    // Xác nhận xóa với dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xác nhận xóa'),
+        content: Text('Bạn có chắc muốn xóa lô hàng "${widget.batch.batchNumber}"?\n\nHành động này không thể hoàn tác.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final provider = context.read<ProductProvider>();
+      final success = await provider.deleteProductBatch(widget.batch.id, widget.batch.productId);
+
+      if (mounted) {
+        if (success) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Xóa lô hàng thành công'), backgroundColor: Colors.green),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
