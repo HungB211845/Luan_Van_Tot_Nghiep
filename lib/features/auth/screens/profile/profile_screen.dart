@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../services/secure_storage_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -303,10 +304,40 @@ class ProfileScreen extends StatelessWidget {
                       onChanged: isLoading
                           ? null
                           : (value) async {
-                              final success = value
-                                  ? await authProvider.enableBiometric()
-                                  : await authProvider.disableBiometric();
-                              
+                              bool success = false;
+
+                              if (value) {
+                                // Enable Face ID - need password verification
+                                final password = await _showPasswordDialog(context);
+                                if (password != null && context.mounted) {
+                                  // Get current credentials
+                                  final secureStorage = SecureStorageService();
+                                  final email = Supabase.instance.client.auth.currentUser?.email;
+                                  final storeCode = await secureStorage.getLastStoreCode();
+
+                                  if (email != null && storeCode != null) {
+                                    success = await authProvider.enableBiometricWithPassword(
+                                      email: email,
+                                      password: password,
+                                      storeCode: storeCode,
+                                    );
+                                  } else {
+                                    success = false;
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Không thể lấy thông tin tài khoản. Vui lòng đăng nhập lại.'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              } else {
+                                // Disable Face ID - direct call
+                                success = await authProvider.disableBiometric();
+                              }
+
                               if (context.mounted) {
                                 if (success) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -315,7 +346,7 @@ class ProfileScreen extends StatelessWidget {
                                       backgroundColor: Colors.green,
                                     ),
                                   );
-                                } else {
+                                } else if (authProvider.state.errorMessage != null) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text('Lỗi: ${authProvider.state.errorMessage}'),
@@ -400,6 +431,50 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // Show Password Dialog for Face ID Setup
+  Future<String?> _showPasswordDialog(BuildContext context) async {
+    final passwordController = TextEditingController();
+
+    return showCupertinoDialog<String>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Thiết lập Face ID'),
+        content: Column(
+          children: [
+            const SizedBox(height: 16),
+            const Text(
+              'Nhập mật khẩu để xác thực thiết lập Face ID',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            CupertinoTextField(
+              controller: passwordController,
+              placeholder: 'Mật khẩu',
+              obscureText: true,
+              autocorrect: false,
+              enableSuggestions: false,
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(context, null),
+          ),
+          CupertinoDialogAction(
+            child: const Text('Xác nhận'),
+            onPressed: () {
+              final password = passwordController.text.trim();
+              if (password.isNotEmpty) {
+                Navigator.pop(context, password);
+              }
+            },
+          ),
+        ],
       ),
     );
   }

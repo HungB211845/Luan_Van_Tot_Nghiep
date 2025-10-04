@@ -10,6 +10,12 @@ class SecureStorageService {
   static const _keyLastStoreId = 'last_store_id';
   static const _keyLastStoreName = 'last_store_name';
 
+  // NEW: Separate biometric credential storage
+  static const _keyBiometricEmail = 'biometric_email';
+  static const _keyBiometricPassword = 'biometric_password';
+  static const _keyBiometricStoreCode = 'biometric_store_code';
+  static const _keyBiometricEnabled = 'biometric_enabled';
+
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   // Secure storage with biometric access control for Face ID/Touch ID
@@ -92,6 +98,43 @@ class SecureStorageService {
       // If any error occurs, fallback to safe behavior
       return false;
     }
+  }
+
+  // NEW: Biometric credential storage (independent of Supabase session tokens)
+  Future<void> storeBiometricCredentials({
+    required String email,
+    required String password,
+    required String storeCode,
+  }) async {
+    await write(_keyBiometricEmail, email);
+    await write(_keyBiometricPassword, password);
+    await write(_keyBiometricStoreCode, storeCode);
+    await write(_keyBiometricEnabled, '1');
+  }
+
+  Future<Map<String, String?>> getBiometricCredentials() async {
+    return {
+      'email': await read(_keyBiometricEmail),
+      'password': await read(_keyBiometricPassword),
+      'storeCode': await read(_keyBiometricStoreCode),
+    };
+  }
+
+  Future<bool> isBiometricCredentialsStored() async {
+    final enabled = await read(_keyBiometricEnabled);
+    if (enabled != '1') return false;
+
+    final credentials = await getBiometricCredentials();
+    return credentials['email'] != null &&
+           credentials['password'] != null &&
+           credentials['storeCode'] != null;
+  }
+
+  Future<void> deleteBiometricCredentials() async {
+    await delete(_keyBiometricEmail);
+    await delete(_keyBiometricPassword);
+    await delete(_keyBiometricStoreCode);
+    await delete(_keyBiometricEnabled);
   }
 
   // Biometric payload per user (if needed later)

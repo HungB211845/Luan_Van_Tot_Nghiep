@@ -15,8 +15,10 @@ class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
   final SessionService _sessionService = SessionService();
   StreamSubscription<AuthState>? _authSub;
+  Timer? _biometricSessionTimer;
 
   auth.AuthState _state = const auth.AuthState(status: auth.AuthStatus.initial, isLoading: false);
+  bool _isRecentBiometricLogin = false;
 
   auth.AuthState get state => _state;
   bool get isAuthenticated => _state.isAuthenticated;
@@ -31,6 +33,16 @@ class AuthProvider extends ChangeNotifier {
 
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
+        // CRITICAL: Validate refresh token format before trusting the session
+        final isValidToken = await _authService.isValidRefreshToken(session.refreshToken);
+
+        if (!isValidToken) {
+          print('🚨 DEBUG: Detected corrupted refresh token, clearing storage...');
+          await _authService.clearCorruptedStorage();
+          _setState(const auth.AuthState(status: auth.AuthStatus.unauthenticated, isLoading: false));
+          return;
+        }
+
         final valid = await _sessionService.validateSession();
         if (valid) {
           // load profile & store
@@ -54,10 +66,16 @@ class AuthProvider extends ChangeNotifier {
 
       // fallback: biometric available and enabled on this device
       final canBio = await BiometricService.isAvailable();
-      final enabledOnThisDevice = await _sessionService.isBiometricEnabledOnThisDevice();
-      if (canBio && enabledOnThisDevice) {
+      final hasBiometricToken = await _authService.isBiometricAvailableAndEnabled();
+      if (canBio && hasBiometricToken) {
+        print('🔍 DEBUG: Biometric available and has stored token - showing biometric option');
         _setState(_state.copyWith(status: auth.AuthStatus.biometricAvailable, isLoading: false));
       } else {
+        if (canBio) {
+          print('🔍 DEBUG: Device supports biometric but no stored token');
+        } else {
+          print('🔍 DEBUG: Device does not support biometric');
+        }
         _setState(_state.copyWith(status: auth.AuthStatus.unauthenticated, isLoading: false));
       }
     } catch (e) {
@@ -119,8 +137,13 @@ class AuthProvider extends ChangeNotifier {
             print('AuthProvider: Detected valid refresh token on UserUpdated event. Saving for biometric...');
             await _authService.saveRefreshTokenForBiometric(token);
           } else {
-            print('AuthProvider: Invalid or short refresh token on UserUpdated event. Deleting any old biometric token.');
-            await _authService.disableBiometric(); // This will clear the stored token
+            print('AuthProvider: Invalid or short refresh token on UserUpdated event. Checking if recent biometric login...');
+            if (_isRecentBiometricLogin) {
+              print('AuthProvider: Skipping biometric cleanup - recent biometric login detected');
+            } else {
+              print('AuthProvider: Proceeding with biometric cleanup - no recent biometric login');
+              await _authService.disableBiometric(); // This will clear the stored token
+            }
           }
         }
         // Also refresh the user profile in the state, as it might have changed
@@ -189,18 +212,64 @@ class AuthProvider extends ChangeNotifier {
   /// NEW: Store-aware biometric authentication
   Future<bool> signInWithBiometric() async {
     _setState(_state.copyWith(isLoading: true, errorMessage: null));
+
+    // Set protection flag BEFORE login to prevent race condition with auth events
+    _isRecentBiometricLogin = true;
+    _biometricSessionTimer?.cancel();
+    _biometricSessionTimer = Timer(const Duration(seconds: 15), () {
+      _isRecentBiometricLogin = false;
+      print('🔍 DEBUG: Biometric session flag reset');
+    });
+    print('🔍 DEBUG: Set biometric protection flag BEFORE login attempt (15 seconds)');
+
     final result = await _authService.signInWithBiometric();
     if (result.isSuccess && result.profile != null) {
       BaseService.setCurrentUserProfile(result.profile);
       BaseService.setCurrentUserStoreId(result.profile!.storeId);
+
+      print('🔍 DEBUG: Biometric login successful - protection flag remains active');
       _setState(auth.AuthState(status: auth.AuthStatus.authenticated, userProfile: result.profile, store: result.store, isLoading: false));
+      return true;
+    } else {
+      // Failed - clear protection flag immediately
+      _isRecentBiometricLogin = false;
+      _biometricSessionTimer?.cancel();
+      print('🔍 DEBUG: Biometric login failed - cleared protection flag immediately');
+    }
+    _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
+    return false;
+  }
+
+  /// Enable biometric authentication with password verification
+  Future<bool> enableBiometricWithPassword({
+    required String email,
+    required String password,
+    required String storeCode,
+  }) async {
+    _setState(_state.copyWith(isLoading: true, errorMessage: null));
+    final result = await _authService.enableBiometricWithPassword(
+      email: email,
+      password: password,
+      storeCode: storeCode,
+    );
+    if (result.isSuccess) {
+      // Refresh user profile to get updated biometric_enabled status
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        final profile = await _authService.getUserProfile(session.user.id);
+        if (profile != null) {
+          _setState(_state.copyWith(userProfile: profile, isLoading: false));
+        }
+      }
+      _setState(_state.copyWith(isLoading: false));
       return true;
     }
     _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
     return false;
   }
 
-  /// Enable biometric authentication for current user
+  /// Enable biometric authentication for current user (legacy method)
+  @Deprecated('Use enableBiometricWithPassword() instead')
   Future<bool> enableBiometric() async {
     _setState(_state.copyWith(isLoading: true, errorMessage: null));
     final result = await _authService.enableBiometric();
@@ -316,6 +385,7 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _authSub?.cancel();
+    _biometricSessionTimer?.cancel();
     super.dispose();
   }
 }
