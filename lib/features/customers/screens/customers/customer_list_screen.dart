@@ -68,7 +68,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   Widget build(BuildContext context) {
     return context.adaptiveWidget(
       mobile: _buildMobileLayout(),
-      tablet: _buildTabletLayout(),
+      // On tablet, if in selection mode, use the mobile layout which supports popping.
+      // Otherwise, use the master-detail layout for management.
+      tablet: widget.isSelectionMode ? _buildMobileLayout() : _buildTabletLayout(),
       desktop: _buildDesktopLayout(),
     );
   }

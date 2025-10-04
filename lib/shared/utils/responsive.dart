@@ -24,11 +24,11 @@ class ResponsiveBreakpoints {
   
   // Get device type from width
   static ResponsiveDeviceType getDeviceType(double width) {
-    // 🎯 FORCE DESKTOP on Web platform (Chrome, etc.) regardless of width
-    if (PlatformInfo.isWeb && width >= mobile) {
+    // 🎯 FORCE DESKTOP on Web platform (Chrome, etc.) ALWAYS regardless of width
+    if (PlatformInfo.isWeb) {
       return ResponsiveDeviceType.desktop;
     }
-    
+
     if (width < mobile) return ResponsiveDeviceType.mobile;
     if (width < desktop) return ResponsiveDeviceType.tablet;
     return ResponsiveDeviceType.desktop;

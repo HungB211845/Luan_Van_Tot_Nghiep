@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/input_formatters.dart';
+import '../../../../shared/utils/responsive.dart';
 import '../../models/product.dart';
 import '../../providers/product_provider.dart';
 import '../../widgets/key_metrics_widget.dart';
@@ -185,7 +186,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final totalStock = batches.fold<int>(0, (sum, batch) => sum + batch.quantity);
 
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
+          margin: context.isDesktop ? EdgeInsets.zero : EdgeInsets.symmetric(horizontal: context.sectionPadding),
           child: ExpansionTile(
             leading: Container(
               width: 40,
@@ -281,7 +282,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final recentChanges = _priceHistory.take(3).length;
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: context.isDesktop ? EdgeInsets.zero : EdgeInsets.symmetric(horizontal: context.sectionPadding),
       child: ExpansionTile(
         title: Text(
           'Lịch Sử Giá',
@@ -528,30 +529,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     final product = context.watch<ProductProvider>().selectedProduct;
 
     if (product == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Chi Tiết Sản Phẩm')),
-        body: const Center(child: Text('Không tìm thấy sản phẩm')),
+      return context.adaptiveWidget(
+        mobile: _buildMobileNotFound(),
+        tablet: _buildTabletNotFound(),
+        desktop: _buildDesktopNotFound(),
       );
     }
 
     if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(product.name),
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-        ),
-        body: const Center(child: LoadingWidget()),
+      return context.adaptiveWidget(
+        mobile: _buildMobileLoading(product),
+        tablet: _buildTabletLoading(product),
+        desktop: _buildDesktopLoading(product),
       );
     }
 
+    return context.adaptiveWidget(
+      mobile: _buildMobileLayout(product),
+      tablet: _buildTabletLayout(product),
+      desktop: _buildDesktopLayout(product),
+    );
+  }
+
+  // Mobile layout (traditional single column)
+  Widget _buildMobileLayout(Product product) {
+    debugPrint('Building ProductDetailScreen Mobile Layout');
     return Scaffold(
       appBar: AppBar(
         title: Center(
@@ -568,81 +575,377 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        actions: _isEditMode ? [
-          // Cancel button
-          TextButton(
-            onPressed: _exitEditMode,
-            child: const Text(
-              'Hủy',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          // Done button
-          TextButton(
-            onPressed: _savePrice,
-            child: const Text(
-              'Xong',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ] : [
-          IconButton(
-            icon: const Icon(Icons.settings, size: 24),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => EditProductScreen(product: product),
-                ),
-              );
-            },
-            tooltip: 'Cài đặt sản phẩm',
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit, size: 24),
-            onPressed: _enterEditMode,
-            tooltip: 'Chỉnh sửa giá bán',
-          ),
-        ],
+        actions: _buildAppBarActions(product),
       ),
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              KeyMetricsWidget(
-                product: product,
-                totalStock: _totalStock,
-                averageCostPrice: _averageCostPrice,
-                grossProfitPercentage: _grossProfitPercentage,
-                isEditMode: _isEditMode,
-                priceController: _priceController,
-                onPriceTap: _enterEditMode,
-              ),
-              const SizedBox(height: 8),
-              QuickActionsWidget(
-                product: product,
-                onBatchAdded: _loadDashboardData,
-              ),
-              const SizedBox(height: 8),
-              _buildInventoryExpansionTile(),
-              const SizedBox(height: 8),
-              _buildPriceHistoryExpansionTile(),
-              const SizedBox(height: 16),
-            ],
+          padding: EdgeInsets.all(context.sectionPadding),
+          child: _buildMainContent(product),
+        ),
+      ),
+    );
+  }
+
+  // Tablet layout (optimized spacing)
+  Widget _buildTabletLayout(Product product) {
+    debugPrint('Building ProductDetailScreen Tablet Layout');
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          product.name,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: _buildAppBarActions(product),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadDashboardData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.all(context.sectionPadding),
+          child: Center(
+            child: Container(
+              constraints: BoxConstraints(maxWidth: context.contentWidth),
+              child: _buildMainContent(product),
+            ),
           ),
         ),
       ),
     );
   }
 
+  // Desktop layout (two-column master-detail)
+  Widget _buildDesktopLayout(Product product) {
+    debugPrint('Building ProductDetailScreen Desktop Layout');
+    return Scaffold(
+      body: Column(
+        children: [
+          // Desktop header toolbar
+          Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.green,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    product.name,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                ..._buildAppBarActions(product),
+                const SizedBox(width: 16),
+              ],
+            ),
+          ),
+          // Main content area
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _loadDashboardData,
+                                child: Padding(
+                              padding: EdgeInsets.all(context.sectionPadding),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Hàng 1: Key Metrics
+                                  KeyMetricsWidget(
+                                    product: product,
+                                    totalStock: _totalStock,
+                                    averageCostPrice: _averageCostPrice,
+                                    grossProfitPercentage: _grossProfitPercentage,
+                                    isEditMode: _isEditMode,
+                                    priceController: _priceController,
+                                    onPriceTap: _enterEditMode,
+                                  ),
+              
+                                  SizedBox(height: context.cardSpacing), // Khoảng trống
+              
+                                  // Hàng 2: Bố cục 2 cột chính
+                                  Expanded(
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Cột trái cho danh sách lô hàng
+                                        Expanded(
+                                          flex: 6, // Chiếm 60% không gian
+                                          child: SingleChildScrollView(
+                                            child: _buildInventoryExpansionTile(),
+                                          ),
+                                        ),
+              
+                                        SizedBox(width: context.cardSpacing), // Khoảng trống giữa 2 cột
+              
+                                        // Cột phải cho các widget còn lại
+                                        Expanded(
+                                          flex: 4, // Chiếm 40% không gian
+                                          child: SingleChildScrollView(
+                                            child: Column(
+                                              children: [
+                                                QuickActionsWidget(
+                                                  product: product,
+                                                  onBatchAdded: _loadDashboardData,
+                                                ),
+                                                SizedBox(height: context.cardSpacing),
+                                                _buildPriceHistoryExpansionTile(),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),            ),
+          ),
+        ],
+      ),
+    );
+  }
 
+  // Shared content builder
+  Widget _buildMainContent(Product product) {
+    return Column(
+      children: [
+        KeyMetricsWidget(
+          product: product,
+          totalStock: _totalStock,
+          averageCostPrice: _averageCostPrice,
+          grossProfitPercentage: _grossProfitPercentage,
+          isEditMode: _isEditMode,
+          priceController: _priceController,
+          onPriceTap: _enterEditMode,
+        ),
+        SizedBox(height: context.cardSpacing),
+        QuickActionsWidget(
+          product: product,
+          onBatchAdded: _loadDashboardData,
+        ),
+        SizedBox(height: context.cardSpacing),
+        _buildInventoryExpansionTile(),
+        SizedBox(height: context.cardSpacing),
+        _buildPriceHistoryExpansionTile(),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  // Shared AppBar actions
+  List<Widget> _buildAppBarActions(Product product) {
+    if (_isEditMode) {
+      return [
+        TextButton(
+          onPressed: _exitEditMode,
+          child: const Text(
+            'Hủy',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: _savePrice,
+          child: const Text(
+            'Xong',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ];
+    } else {
+      return [
+        IconButton(
+          icon: const Icon(Icons.settings, size: 24),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => EditProductScreen(product: product),
+              ),
+            );
+          },
+          tooltip: 'Cài đặt sản phẩm',
+        ),
+        IconButton(
+          icon: const Icon(Icons.edit, size: 24),
+          onPressed: _enterEditMode,
+          tooltip: 'Chỉnh sửa giá bán',
+        ),
+      ];
+    }
+  }
+
+  // Error state layouts
+  Widget _buildMobileNotFound() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Chi Tiết Sản Phẩm'),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+      ),
+      body: const Center(child: Text('Không tìm thấy sản phẩm')),
+    );
+  }
+
+  Widget _buildTabletNotFound() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Chi Tiết Sản Phẩm'),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
+        child: Container(
+          constraints: BoxConstraints(maxWidth: context.contentWidth),
+          padding: EdgeInsets.all(context.sectionPadding),
+          child: const Text(
+            'Không tìm thấy sản phẩm',
+            style: TextStyle(fontSize: 18),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopNotFound() {
+    return Scaffold(
+      body: Column(
+        children: [
+          Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.green,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(width: 16),
+                const Text(
+                  'Chi Tiết Sản Phẩm',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Expanded(
+            child: Center(
+              child: Text(
+                'Không tìm thấy sản phẩm',
+                style: TextStyle(fontSize: 20),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Loading state layouts
+  Widget _buildMobileLoading(Product product) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(product.name),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+      ),
+      body: const Center(child: LoadingWidget()),
+    );
+  }
+
+  Widget _buildTabletLoading(Product product) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(product.name),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
+        child: Container(
+          constraints: BoxConstraints(maxWidth: context.contentWidth),
+          child: const LoadingWidget(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLoading(Product product) {
+    return Scaffold(
+      body: Column(
+        children: [
+          Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.green,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  product.name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Expanded(
+            child: Center(child: LoadingWidget()),
+          ),
+        ],
+      ),
+    );
+  }
 }

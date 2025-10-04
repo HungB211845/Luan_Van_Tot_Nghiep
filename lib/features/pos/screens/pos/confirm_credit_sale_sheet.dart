@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../customers/models/customer.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/input_formatters.dart';
 
 class ConfirmCreditSaleSheet extends StatefulWidget {
   final Customer customer;
@@ -22,7 +23,7 @@ class ConfirmCreditSaleSheet extends StatefulWidget {
 }
 
 class _ConfirmCreditSaleSheetState extends State<ConfirmCreditSaleSheet> {
-  final TextEditingController _surchargeController = TextEditingController(text: '0');
+  final TextEditingController _surchargeController = TextEditingController();
   double _surchargeAmount = 0.0;
   double get _finalDebtAmount => widget.baseAmount + _surchargeAmount;
 
@@ -40,17 +41,18 @@ class _ConfirmCreditSaleSheetState extends State<ConfirmCreditSaleSheet> {
   }
 
   void _onSurchargeChanged() {
-    final text = _surchargeController.text;
-    final value = double.tryParse(text) ?? 0.0;
+    final value = InputFormatterHelper.extractNumber(_surchargeController.text) ?? 0.0;
     if (value >= 0) {
-      setState(() {
-        _surchargeAmount = value;
-      });
+      if (_surchargeAmount != value) {
+        setState(() {
+          _surchargeAmount = value;
+        });
+      }
     }
   }
 
   void _handleConfirm() {
-    final surcharge = double.tryParse(_surchargeController.text) ?? 0.0;
+    final surcharge = InputFormatterHelper.extractNumber(_surchargeController.text) ?? 0.0;
     if (surcharge < 0) {
       _showError('Phụ phí không thể âm');
       return;
@@ -59,6 +61,7 @@ class _ConfirmCreditSaleSheetState extends State<ConfirmCreditSaleSheet> {
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -137,14 +140,15 @@ class _ConfirmCreditSaleSheetState extends State<ConfirmCreditSaleSheet> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
+                  TextFormField(
                     controller: _surchargeController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: TextInputType.number,
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                      FilteringTextInputFormatter.digitsOnly,
+                      CurrencyInputFormatter(),
                     ],
                     decoration: InputDecoration(
-                      hintText: '0',
+                      hintText: 'Nhập phụ phí',
                       suffixText: 'VND',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),

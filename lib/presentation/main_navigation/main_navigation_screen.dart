@@ -102,7 +102,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           onWillPop: _onWillPop,
           child: context.adaptiveWidget(
             mobile: _buildMobileLayout(currentIndex, navigationProvider, hideBottomNav),
-            tablet: _buildTabletLayout(currentIndex, navigationProvider),
+            tablet: _buildMobileLayout(currentIndex, navigationProvider, hideBottomNav),
             desktop: _buildDesktopLayout(currentIndex, navigationProvider),
           ),
         );
@@ -178,23 +178,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
   
-  Widget _buildTabletLayout(int currentIndex, NavigationProvider navigationProvider) {
-    return Scaffold(
-      body: Row(
-        children: [
-          _buildSideNavigation(currentIndex, navigationProvider),
-          const VerticalDivider(width: 1),
-          Expanded(child: _buildIndexedStack(currentIndex)),
-        ],
-      ),
-    );
-  }
-  
   Widget _buildDesktopLayout(int currentIndex, NavigationProvider navigationProvider) {
     return Scaffold(
-      body: Row(
+      body: Column(
         children: [
-          _buildSideNavigation(currentIndex, navigationProvider, isDesktop: true),
+          _buildWebHeaderNavigation(currentIndex, navigationProvider),
           Expanded(child: _buildIndexedStack(currentIndex)),
         ],
       ),
@@ -292,6 +280,99 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   style: TextStyle(
                     color: isSelected ? Colors.green : Colors.grey[700],
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebHeaderNavigation(int currentIndex, NavigationProvider navigationProvider) {
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Logo/Brand
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Icon(Icons.agriculture, color: Colors.green, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  'Agricultural POS',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 32),
+          // Navigation Items
+          Expanded(
+            child: Row(
+              children: [
+                _buildHeaderNavItem(0, Icons.home, 'Trang chủ', currentIndex, navigationProvider),
+                _buildHeaderNavItem(1, Icons.receipt_long, 'Giao dịch', currentIndex, navigationProvider),
+                _buildHeaderNavItem(2, Icons.point_of_sale, 'Bán hàng', currentIndex, navigationProvider),
+                _buildHeaderNavItem(3, Icons.inventory_2, 'Sản phẩm', currentIndex, navigationProvider),
+                _buildHeaderNavItem(4, Icons.account_circle, 'Tài khoản', currentIndex, navigationProvider),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderNavItem(int index, IconData icon, String title, int currentIndex, NavigationProvider navigationProvider) {
+    final isSelected = index == currentIndex;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => navigationProvider.changeTab(index),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isSelected ? Border.all(color: Colors.green.withOpacity(0.3)) : null,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? Colors.green : Colors.grey[600],
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isSelected ? Colors.green : Colors.grey[700],
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 14,
                   ),
                 ),
               ],

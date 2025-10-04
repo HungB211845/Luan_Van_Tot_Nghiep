@@ -54,10 +54,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     // 🎯 HomeScreen has CUSTOM responsive behavior, NOT using ResponsiveScaffold
+    // On tablet/desktop, only render content since MainNavigationScreen already has sidebar
     return context.adaptiveWidget(
       mobile: _buildMobileScaffold(),
-      tablet: _buildTabletScaffold(),
-      desktop: _buildDesktopScaffold(),
+      tablet: _buildTabletDashboard(),
+      desktop: _buildDesktopDashboard(),
     );
   }
 
@@ -69,44 +70,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTabletScaffold() {
+  Widget _buildTabletDashboard() {
     return Scaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: Row(
-        children: [
-          Container(
-            width: 280,
-            child: _buildNavigationDrawer(),
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: _buildHomeContent()),
-        ],
-      ),
+      body: _buildTabletContent(),
     );
   }
 
-  Widget _buildDesktopScaffold() {
+  Widget _buildDesktopDashboard() {
     return Scaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: Row(
-        children: [
-          Container(
-            width: 280,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(2, 0),
-                ),
-              ],
-            ),
-            child: _buildNavigationDrawer(),
-          ),
-          Expanded(child: _buildHomeContent()),
-        ],
-      ),
+      body: _buildDesktopContent(),
     );
   }
 
@@ -183,6 +157,104 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  // 📱 Tablet: 2-Column Dashboard Layout
+  Widget _buildTabletContent() {
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(context.sectionPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Section - Full Width
+            _buildGreetingWidget(),
+            SizedBox(height: context.cardSpacing * 2),
+
+            // Search Bar - Full Width
+            _buildDesktopSearchBar(),
+            SizedBox(height: context.cardSpacing * 2),
+
+            // Two-Column Layout
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left Column (40%) - Revenue Chart
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    children: [
+                      _buildRevenueChartWidget(),
+                      SizedBox(height: context.cardSpacing * 2),
+                      _buildForYouWidget(),
+                    ],
+                  ),
+                ),
+                SizedBox(width: context.cardSpacing * 2),
+                // Right Column (60%) - Quick Actions
+                Expanded(
+                  flex: 3,
+                  child: _buildQuickActionsWidget(),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🖥️ Desktop: 3-Column Dashboard Layout
+  Widget _buildDesktopContent() {
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(context.sectionPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Section - Full Width
+            Row(
+              children: [
+                Expanded(child: _buildGreetingWidget()),
+                const SizedBox(width: 24),
+                // Right-aligned search bar on desktop
+                Container(
+                  width: 400,
+                  child: _buildDesktopSearchBar(),
+                ),
+              ],
+            ),
+            SizedBox(height: context.cardSpacing * 3),
+
+            // Three-Column Layout
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left Column (35%) - Revenue Chart
+                Expanded(
+                  flex: 35,
+                  child: _buildRevenueChartWidget(),
+                ),
+                SizedBox(width: context.cardSpacing * 2),
+                // Middle Column (30%) - For You Insights
+                Expanded(
+                  flex: 30,
+                  child: _buildForYouWidget(),
+                ),
+                SizedBox(width: context.cardSpacing * 2),
+                // Right Column (35%) - Quick Actions
+                Expanded(
+                  flex: 35,
+                  child: _buildQuickActionsWidget(),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -337,11 +409,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   size: 20,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Tìm kiếm sản phẩm, giao dịch, khách hàng...',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 16,
+                Expanded(
+                  child: Text(
+                    'Tìm kiếm sản phẩm, giao dịch, khách hàng...',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 16,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -598,7 +673,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         .pushNamed(RouteNames.reports);
                   },
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'Tổng tuần này',
@@ -607,12 +681,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontSize: 14,
                         ),
                       ),
-                      Text(
-                        AppFormatter.formatCurrency(dashboard.weekTotalRevenue),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      const Spacer(),
+                      Flexible(
+                        child: Text(
+                          AppFormatter.formatCurrency(dashboard.weekTotalRevenue),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
                         ),
                       ),
                     ],

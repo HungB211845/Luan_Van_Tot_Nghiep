@@ -303,10 +303,26 @@ class ProfileScreen extends StatelessWidget {
                       onChanged: isLoading
                           ? null
                           : (value) async {
-                              if (value) {
-                                await authProvider.enableBiometric();
-                              } else {
-                                await authProvider.disableBiometric();
+                              final success = value
+                                  ? await authProvider.enableBiometric()
+                                  : await authProvider.disableBiometric();
+                              
+                              if (context.mounted) {
+                                if (success) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(value ? 'Đã bật đăng nhập sinh trắc học' : 'Đã tắt đăng nhập sinh trắc học'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Lỗi: ${authProvider.state.errorMessage}'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
                               }
                             },
                     ),

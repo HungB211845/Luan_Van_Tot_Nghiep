@@ -387,6 +387,21 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
       child: Column(
         children: [
           _buildCustomerHeader(),
+          // Toolbar for the invoice list
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("  Sản phẩm đã chọn", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CupertinoColors.systemGrey)),
+                if (_viewModel?.selectedCustomer != null || (_viewModel?.cartItems.isNotEmpty ?? false))
+                  IconButton(
+                    icon: const Icon(CupertinoIcons.trash, color: Colors.red),
+                                            onPressed: _showClearConfirmationDialog,                    tooltip: 'Xóa hết',
+                  ),
+              ],
+            ),
+          ),
           Expanded(child: _buildInvoiceItemsList()),
           _buildTotalAndPaymentSection(),
         ],
@@ -427,6 +442,33 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     );
     if (selectedCustomer != null) {
       setState(() => _viewModel?.selectedCustomer = selectedCustomer);
+    }
+  }
+
+  Future<void> _showClearConfirmationDialog() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Xác nhận xóa'),
+        content: const Text('Bạn có chắc muốn xóa toàn bộ đơn hàng hiện tại và làm lại từ đầu?'),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      HapticFeedback.heavyImpact();
+      _resetForNextCustomer();
     }
   }
 

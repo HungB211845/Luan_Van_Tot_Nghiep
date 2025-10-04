@@ -66,9 +66,27 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _handleAuthChange(AuthState data) async {
+    final event = data.event;
+    final session = data.session;
+    
+    // 🚀🚀🚀 ADDING EXTENSIVE LOGGING 🚀🚀🚀
+    print('Auth Event Fired: ${event.name}');
+    if (session != null) {
+      print('  - Session User: ${session.user.id}');
+      final token = session.refreshToken;
+      print('  - Refresh Token Exists: ${token != null}');
+      if (token != null) {
+        print('  - Refresh Token Length: ${token.length}');
+        print('  - Refresh Token is JWT: ${token.length > 50 && token.split('.').length == 3}');
+      }
+    } else {
+      print('  - Session is NULL');
+    }
+    // 🚀🚀🚀 END OF LOGGING 🚀🚀🚀
+
     switch (data.event) {
       case AuthChangeEvent.signedIn:
-      case AuthChangeEvent.tokenRefreshed:
+        // Don't save token here, wait for userUpdated event after metadata is set
         final session = data.session;
         if (session?.user != null) {
           try {
@@ -90,6 +108,44 @@ class AuthProvider extends ChangeNotifier {
           }
         }
         break;
+      
+      case AuthChangeEvent.userUpdated:
+        // This event fires after updateUserMetadata. This is the reliable time to save the token.
+        print('AuthProvider: UserUpdated event detected. Checking for valid refresh token...');
+        final session = data.session;
+        if (session?.refreshToken != null) {
+          final token = session!.refreshToken!;
+          if (token.length > 50 && token.split('.').length == 3) {
+            print('AuthProvider: Detected valid refresh token on UserUpdated event. Saving for biometric...');
+            await _authService.saveRefreshTokenForBiometric(token);
+          } else {
+            print('AuthProvider: Invalid or short refresh token on UserUpdated event. Deleting any old biometric token.');
+            await _authService.disableBiometric(); // This will clear the stored token
+          }
+        }
+        // Also refresh the user profile in the state, as it might have changed
+        if (session?.user != null) {
+          final profile = await _authService.getUserProfile(session!.user.id);
+          _setState(_state.copyWith(userProfile: profile));
+        }
+        break;
+
+      case AuthChangeEvent.tokenRefreshed:
+        // This is also a good place to re-save the token
+        final session = data.session;
+        if (session?.refreshToken != null) {
+          final token = session!.refreshToken!;
+          if (token.length > 50 && token.split('.').length == 3) {
+            print('AuthProvider: Detected valid refresh token on TokenRefreshed event. Saving for biometric...');
+            await _authService.saveRefreshTokenForBiometric(token);
+          }
+        }
+        if (session?.user != null) {
+           final profile = await _authService.getUserProfile(session!.user.id);
+           _setState(_state.copyWith(userProfile: profile));
+        }
+        break;
+
       case AuthChangeEvent.signedOut:
         _setState(const auth.AuthState(status: auth.AuthStatus.unauthenticated, isLoading: false));
         break;

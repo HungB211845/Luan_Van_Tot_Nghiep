@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -163,6 +164,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 🔍 DEBUG: Check responsive detection on web
+    if (kDebugMode) {
+      print('🔍 ProductListScreen responsive: ${context.responsive.deviceType}');
+      print('🔍 Is Desktop: ${context.isDesktop}');
+      print('🔍 Is Web: ${PlatformInfo.isWeb}');
+    }
+
     return context.adaptiveWidget(
       mobile: _buildMobileLayout(),
       tablet: _buildDesktopLayout(), // Tablet uses desktop layout
@@ -171,6 +179,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Widget _buildMobileLayout() {
+    debugPrint('Building ProductListScreen Mobile Layout');
     return Scaffold(
       appBar: _buildAppBar(),
       body: Column(
@@ -183,6 +192,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Widget _buildDesktopLayout() {
+    debugPrint('Building ProductListScreen Desktop Layout');
     return Scaffold(
       body: Column(
         children: [
@@ -192,28 +202,31 @@ class _ProductListScreenState extends State<ProductListScreen> {
             child: Row(
               children: [
                 Expanded(
-                  flex: 4,
+                  flex: 3, // Master pane (list) - narrower
                   child: _buildProductList(isMasterDetail: true),
                 ),
-                const VerticalDivider(width: 1, thickness: 1),
+                const VerticalDivider(width: 1, thickness: 1, color: Colors.grey), // More prominent divider
                 Expanded(
-                  flex: 6,
-                  child: Consumer<ProductProvider>(
-                    builder: (context, provider, child) {
-                      if (provider.selectedProduct == null) {
-                        return const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
-                              SizedBox(height: 16),
-                              Text('Chọn một sản phẩm để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                            ],
-                          ),
-                        );
-                      }
-                      return const ProductDetailScreen();
-                    },
+                  flex: 7, // Detail pane - wider
+                  child: Container(
+                    color: Colors.grey[50], // Subtle background for separation
+                    child: Consumer<ProductProvider>(
+                      builder: (context, provider, child) {
+                        if (provider.selectedProduct == null) {
+                          return const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+                                SizedBox(height: 16),
+                                Text('Chọn một sản phẩm để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                              ],
+                            ),
+                          );
+                        }
+                        return ProductDetailScreen(key: ValueKey(provider.selectedProduct!.id));
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -674,7 +687,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                         ],
                       ),
                     ),
-                    if (!_isSelectionMode)
+                    // Apple HIG: Chevron indicator (only show in normal mode)
+                    if (!_isSelectionMode && !isMasterDetail)
                       const Icon(
                         CupertinoIcons.chevron_right,
                         color: CupertinoColors.systemGrey3,
@@ -685,8 +699,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
               ),
             ),
           ),
+          // Apple HIG: Separator line (inset from left)
           Container(
-            margin: const EdgeInsets.only(left: 78),
+            margin: EdgeInsets.only(left: context.responsive.isMobile ? 78 : 16), // Align with text, not thumbnail
             height: 0.5,
             color: CupertinoColors.separator,
           ),

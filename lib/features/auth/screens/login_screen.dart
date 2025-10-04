@@ -6,6 +6,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../services/secure_storage_service.dart';
 import '../../../shared/widgets/grouped_text_fields.dart';
 import '../../../shared/utils/responsive.dart';
+import '../models/auth_state.dart' as auth;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -106,26 +107,19 @@ class _LoginScreenState extends State<LoginScreen> {
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: IntrinsicHeight(
               child: Padding(
-                // RESPONSIVE PADDING: Tự động điều chỉnh theo device
                 padding: EdgeInsets.symmetric(horizontal: context.sectionPadding),
                 child: Form(
                   key: _formKey,
                   child: Column(
-                    // RESPONSIVE ALIGNMENT: Tự động center trên tablet/desktop
                     crossAxisAlignment: context.formAlignment,
                     children: [
-                      // RESPONSIVE SPACING: Tự động điều chỉnh spacer
                       context.adaptiveWidget(
                         mobile: const Spacer(flex: 3),
                         tablet: const Spacer(flex: 2),
                         desktop: const SizedBox(height: 60),
                       ),
-
-                      // Logo và title
                       const Icon(Icons.store_mall_directory, color: Colors.green, size: 50),
                       SizedBox(height: context.cardSpacing * 3),
-
-                      // RESPONSIVE CONTAINER: Tự động constrain width trên desktop
                       Container(
                         constraints: BoxConstraints(maxWidth: context.maxFormWidth),
                         child: Column(
@@ -146,7 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             SizedBox(height: context.cardSpacing * 4),
-
                             GroupedTextFields(
                               topController: _emailController,
                               bottomController: _passwordController,
@@ -163,7 +156,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   return Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      // CONDITIONAL BIOMETRIC: Chỉ hiện trên mobile device
                                       if (biometricAvailable && context.shouldShowBiometric)
                                         IconButton(
                                           icon: const Icon(Icons.fingerprint, color: Colors.green),
@@ -181,7 +173,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 },
                               ),
                             ),
-
                             if (auth.state.errorMessage != null)
                               Padding(
                                 padding: EdgeInsets.only(top: context.cardSpacing * 2),
@@ -193,9 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-
                             SizedBox(height: context.cardSpacing * 3),
-
                             SizedBox(
                               height: 52,
                               width: double.infinity,
@@ -221,15 +210,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                       ),
-
-                      // RESPONSIVE SPACING: Tự động điều chỉnh bottom spacer
                       context.adaptiveWidget(
                         mobile: const Spacer(flex: 5),
                         tablet: const Spacer(flex: 3),
                         desktop: const SizedBox(height: 60),
                       ),
-
-                      // CONDITIONAL BOTTOM ACTIONS: Khác nhau giữa mobile/desktop
                       if (!context.isDesktop) ...[
                         TextButton(
                           onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
@@ -247,8 +232,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         SizedBox(height: context.cardSpacing * 2),
                       ],
-
-                      // Desktop-specific bottom actions (horizontal layout)
                       if (context.isDesktop) ...[
                         const SizedBox(height: 24),
                         Wrap(
