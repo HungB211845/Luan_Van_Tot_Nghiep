@@ -532,12 +532,11 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _supabase.auth.signOut();
-      // Clear sensitive data but keep store context, refresh token AND biometric credentials for Face ID
-      await _secure.delete('remember_email');
-      await _secure.setRememberFlag(false);
-      // Keep refresh_token, last_store_code, last_store_id and biometric_credentials for persistent Face ID
-      // This is the key change - biometric credentials survive logout!
-      print('🔍 DEBUG: Sign out complete, preserved refresh token, store context AND biometric credentials for persistent Face ID');
+      // Clear sensitive data but keep store context, refresh token, biometric credentials AND remember email preferences
+      // IMPORTANT: DO NOT clear remember_email or remember_flag - these are user preferences that should persist
+      // Keep refresh_token, last_store_code, last_store_id, biometric_credentials, remember_email and remember_flag
+      // This preserves Face ID AND Remember Email across logout/login cycles
+      print('🔍 DEBUG: Sign out complete, preserved refresh token, store context, biometric credentials AND remember email preferences');
     } catch (e) {
       print('Error during sign out: $e');
       rethrow;
