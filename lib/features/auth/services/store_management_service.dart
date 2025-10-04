@@ -196,7 +196,7 @@ class StoreManagementService {
 
       return UserRole.values.firstWhere(
         (role) => role.toString().split('.').last == profile!.role,
-        orElse: () => UserRole.CASHIER,
+        orElse: () => UserRole.cashier,
       );
     } catch (e) {
       return null;
@@ -222,5 +222,10 @@ class StoreManagementService {
     } catch (e) {
       return false;
     }
+  }
+
+  /// Get current user's store information
+  Future<Store?> getCurrentUserStore() async {
+    return await _authService.getCurrentUserStore();
   }
 }

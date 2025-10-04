@@ -77,10 +77,6 @@ class ProfileScreen extends StatelessWidget {
               // Group 3: Settings & Security
               _buildSectionHeader('CÀI ĐẶT & BẢO MẬT'),
               _buildGroupedList([
-                _buildBiometricToggle(context, authProvider),
-                _buildDivider(),
-                _buildEmailToggle(context, authProvider),
-                _buildDivider(),
                 _buildMenuTile(
                   icon: CupertinoIcons.lock_fill,
                   title: 'Đổi mật khẩu',
@@ -250,88 +246,88 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Biometric Toggle
-  Widget _buildBiometricToggle(BuildContext context, AuthProvider authProvider) {
-    final user = authProvider.currentUser;
-    final isEnabled = user?.biometricEnabled ?? false;
+  // Biometric Toggle - COMMENTED OUT: Biometric functionality removed
+  // Widget _buildBiometricToggle(BuildContext context, AuthProvider authProvider) {
+  //   final user = authProvider.currentUser;
+  //   final isEnabled = user?.biometricEnabled ?? false;
 
-    return FutureBuilder<bool>(
-      future: authProvider.isBiometricAvailableAndEnabled(),
-      builder: (context, snapshot) {
-        final isAvailable = snapshot.data ?? false;
-        final isLoading = authProvider.state.isLoading;
+  //   return FutureBuilder<bool>(
+  //     future: authProvider.isBiometricAvailableAndEnabled(),
+  //     builder: (context, snapshot) {
+  //       final isAvailable = snapshot.data ?? false;
+  //       final isLoading = authProvider.state.isLoading;
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(
-                CupertinoIcons.lock_shield_fill,
-                color: Colors.green,
-                size: 24,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Đăng nhập bằng Face/Touch ID',
-                      style: TextStyle(fontSize: 17),
-                    ),
-                    Text(
-                      isAvailable
-                          ? 'Bật để cho phép đăng nhập nhanh trên thiết bị này'
-                          : 'Thiết bị không hỗ trợ hoặc chưa thiết lập',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: CupertinoColors.systemGrey,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : CupertinoSwitch(
-                      value: isEnabled,
-                      onChanged: isLoading
-                          ? null
-                          : (value) async {
-                              final success = value
-                                  ? await authProvider.enableBiometric()
-                                  : await authProvider.disableBiometric();
-                              
-                              if (context.mounted) {
-                                if (success) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(value ? 'Đã bật đăng nhập sinh trắc học' : 'Đã tắt đăng nhập sinh trắc học'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Lỗi: ${authProvider.state.errorMessage}'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                    ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  //       return Padding(
+  //         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //         child: Row(
+  //           children: [
+  //             Icon(
+  //               CupertinoIcons.lock_shield_fill,
+  //               color: Colors.green,
+  //               size: 24,
+  //             ),
+  //             const SizedBox(width: 16),
+  //             Expanded(
+  //               child: Column(
+  //                 crossAxisAlignment: CrossAxisAlignment.start,
+  //                 children: [
+  //                   const Text(
+  //                     'Đăng nhập bằng Face/Touch ID',
+  //                     style: TextStyle(fontSize: 17),
+  //                   ),
+  //                   Text(
+  //                     isAvailable
+  //                         ? 'Bật để cho phép đăng nhập nhanh trên thiết bị này'
+  //                         : 'Thiết bị không hỗ trợ hoặc chưa thiết lập',
+  //                     style: const TextStyle(
+  //                       fontSize: 13,
+  //                       color: CupertinoColors.systemGrey,
+  //                     ),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //             const SizedBox(width: 8),
+  //             isLoading
+  //                 ? const SizedBox(
+  //                     width: 20,
+  //                     height: 20,
+  //                     child: CircularProgressIndicator(strokeWidth: 2),
+  //                   )
+  //                 : CupertinoSwitch(
+  //                     value: isEnabled,
+  //                     onChanged: isLoading
+  //                         ? null
+  //                         : (value) async {
+  //                             final success = value
+  //                                 ? await authProvider.enableBiometric()
+  //                                 : await authProvider.disableBiometric();
+
+  //                             if (context.mounted) {
+  //                               if (success) {
+  //                                 ScaffoldMessenger.of(context).showSnackBar(
+  //                                   SnackBar(
+  //                                     content: Text(value ? 'Đã bật đăng nhập sinh trắc học' : 'Đã tắt đăng nhập sinh trắc học'),
+  //                                     backgroundColor: Colors.green,
+  //                                   ),
+  //                                 );
+  //                               } else {
+  //                                 ScaffoldMessenger.of(context).showSnackBar(
+  //                                   SnackBar(
+  //                                     content: Text('Lỗi: ${authProvider.state.errorMessage}'),
+  //                                     backgroundColor: Colors.red,
+  //                                   ),
+  //                                 );
+  //                               }
+  //                             }
+  //                           },
+  //                   ),
+  //           ],
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 
   // Email Toggle
   Widget _buildEmailToggle(BuildContext context, AuthProvider authProvider) {

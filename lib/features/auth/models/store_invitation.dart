@@ -44,7 +44,7 @@ class StoreInvitation {
       phone: json['phone'],
       role: UserRole.values.firstWhere(
         (r) => r.toString().split('.').last == json['role'],
-        orElse: () => UserRole.CASHIER,
+        orElse: () => UserRole.cashier,
       ),
       permissions: Map<String, dynamic>.from(json['permissions'] ?? {}),
       invitedAt: DateTime.parse(json['invited_at']),
@@ -89,13 +89,13 @@ class StoreInvitation {
   /// Get role display name in Vietnamese
   String get roleDisplayName {
     switch (role) {
-      case UserRole.OWNER:
+      case UserRole.owner:
         return 'Chủ cửa hàng';
-      case UserRole.MANAGER:
+      case UserRole.manager:
         return 'Quản lý';
-      case UserRole.CASHIER:
+      case UserRole.cashier:
         return 'Thu ngân';
-      case UserRole.INVENTORY_STAFF:
+      case UserRole.inventoryStaff:
         return 'Nhân viên kho';
     }
   }

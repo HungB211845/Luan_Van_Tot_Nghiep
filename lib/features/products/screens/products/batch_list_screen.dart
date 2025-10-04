@@ -68,14 +68,14 @@ class _BatchListScreenState extends State<BatchListScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
-            Text('Số lượng: ${batch.quantity} ${widget.product.unit}'),
+            Text('Số lượng: ${batch.quantity}'),
             Text('Giá vốn: ${AppFormatter.formatCurrency(batch.costPrice)}'),
             Text('Ngày nhập: ${AppFormatter.formatDate(batch.receivedDate)}'),
             if (batch.expiryDate != null)
               Text('Hạn sử dụng: ${AppFormatter.formatDate(batch.expiryDate!)}'),
             if (batch.isExpired)
               const Text('ĐÃ HẾT HẠN', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            else if (batch.isExpiringSoon)
+            if (!batch.isExpired && batch.isExpiringSoon)
               const Text('SẮP HẾT HẠN', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
           ],
         ),

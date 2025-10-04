@@ -33,7 +33,7 @@ class StoreManagementProvider extends ChangeNotifier {
     _setStatus(StoreManagementStatus.loading);
 
     try {
-      _currentStore = await _storeService._authService.getCurrentUserStore();
+      _currentStore = await _storeService.getCurrentUserStore();
       _currentUserRole = await _storeService.getCurrentUserRole();
       _setStatus(StoreManagementStatus.success);
     } catch (e) {
@@ -158,13 +158,13 @@ class StoreManagementProvider extends ChangeNotifier {
 
   /// Check if current user can manage staff
   bool get canManageStaff {
-    return _currentUserRole == UserRole.OWNER ||
-           _currentUserRole == UserRole.MANAGER;
+    return _currentUserRole == UserRole.owner ||
+           _currentUserRole == UserRole.manager;
   }
 
   /// Check if current user is store owner
   bool get isStoreOwner {
-    return _currentUserRole == UserRole.OWNER;
+    return _currentUserRole == UserRole.owner;
   }
 
   void _setStatus(StoreManagementStatus status) {

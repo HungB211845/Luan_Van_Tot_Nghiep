@@ -80,13 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleBiometricLogin() async {
-    final authProvider = context.read<AuthProvider>();
-    final ok = await authProvider.signInWithBiometric();
-    if (ok && mounted) {
-      Navigator.of(context).pushReplacementNamed(RouteNames.home);
-    }
-  }
+
 
  @override
   Widget build(BuildContext context) {
@@ -149,28 +143,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               onBottomFieldSubmitted: (_) => _handleLogin(),
                               topValidator: (v) => (v == null || !v.contains('@')) ? 'Email không hợp lệ' : null,
                               bottomValidator: (v) => (v == null || v.length < 6) ? 'Mật khẩu phải có ít nhất 6 ký tự' : null,
-                              bottomSuffixIcon: FutureBuilder<bool>(
-                                future: context.read<AuthProvider>().isBiometricAvailableAndEnabled(),
-                                builder: (context, snapshot) {
-                                  final bool biometricAvailable = snapshot.data ?? false;
-                                  return Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (biometricAvailable && context.shouldShowBiometric)
-                                        IconButton(
-                                          icon: const Icon(Icons.fingerprint, color: Colors.green),
-                                          onPressed: _handleBiometricLogin,
-                                        ),
-                                      IconButton(
-                                        onPressed: () => setState(() => _obscure = !_obscure),
-                                        icon: Icon(
-                                          _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                          color: Colors.grey[500],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
+                              bottomSuffixIcon: IconButton(
+                                onPressed: () => setState(() => _obscure = !_obscure),
+                                icon: Icon(
+                                  _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                  color: Colors.grey[500],
+                                ),
                               ),
                             ),
                             if (auth.state.errorMessage != null)

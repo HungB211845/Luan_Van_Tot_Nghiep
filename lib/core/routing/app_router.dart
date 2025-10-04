@@ -28,7 +28,7 @@ import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/auth/screens/otp_verification_screen.dart';
 import '../../features/auth/screens/biometric_setup_screen.dart';
-import '../../features/auth/screens/biometric_login_screen.dart';
+// import '../../features/auth/screens/biometric_login_screen.dart'; // File missing
 import '../../features/auth/screens/store_setup_screen.dart';
 import '../../features/auth/screens/store_code_screen.dart';
 import '../../features/auth/screens/signup_step1_screen.dart';
@@ -75,8 +75,9 @@ class AppRouter {
           settings: settings,
         );
       case RouteNames.biometricLogin:
+        // BiometricLoginScreen removed - redirect to login
         return IOSPageRoute(
-          child: const BiometricLoginScreen(),
+          child: const LoginScreen(),
           settings: settings,
         );
       case RouteNames.storeSetup:

@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../auth/models/store.dart';
 import '../../auth/models/user_profile.dart';
 import 'secure_storage_service.dart';
-import 'biometric_service.dart';
+// import 'biometric_service.dart'; // COMMENTED OUT: Biometric functionality removed
 import 'store_service.dart';
 import 'session_service.dart';
 
@@ -15,25 +15,16 @@ class AuthResult {
   final User? user;
   final UserProfile? profile;
   final Store? store;
-  final String? prefillEmail;
-  final String? prefillStoreCode;
 
-  AuthResult.success({
-    this.user,
-    this.profile,
-    this.store,
-    this.prefillEmail,
-    this.prefillStoreCode,
-  })  : isSuccess = true,
+  AuthResult.success({this.user, this.profile, this.store})
+      : isSuccess = true,
         errorMessage = null;
 
   AuthResult.failure(this.errorMessage)
       : isSuccess = false,
         user = null,
         profile = null,
-        store = null,
-        prefillEmail = null,
-        prefillStoreCode = null;
+        store = null;
 }
 
 class AuthService {
@@ -150,206 +141,19 @@ class AuthService {
       print('🚨 DEBUG: General Exception: $e');
       print('🚨 DEBUG: Exception type: ${e.runtimeType}');
       
-      // If store validation fails due to RLS, try direct approach
-      if (e.toString().contains('permission denied') || e.toString().contains('RLS')) {
-        print('🔍 DEBUG: RLS issue detected, trying fallback approach...');
-        return _signInWithEmailAndStoreFallback(email, password, storeCode);
-      }
-      
       return AuthResult.failure('Lỗi đăng nhập: ${e.toString()}');
     }
   }
 
-  /// Fallback method for when RLS blocks store validation
-  Future<AuthResult> _signInWithEmailAndStoreFallback(
-    String email, 
-    String password, 
-    String storeCode
-  ) async {
-    try {
-      print('🔍 DEBUG: Using fallback authentication method');
-      
-      // Step 1: Authenticate user first
-      final res = await _supabase.auth.signInWithPassword(email: email, password: password);
-      final user = res.user;
-      if (user == null) return AuthResult.failure('Email hoặc mật khẩu không đúng');
-      
-      print('🔍 DEBUG: User authenticated: ${user.id}');
 
-      // Step 2: Get user profile (now we have RLS context)
-      final profileResponse = await _supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .eq('is_active', true)
-          .single();
-      
-      print('🔍 DEBUG: Profile found: ${profileResponse}');
-      final profile = UserProfile.fromJson(profileResponse);
 
-      // Step 3: Get store info and validate store code
-      final storeResponse = await _supabase
-          .from('stores')
-          .select('*')
-          .eq('id', profile.storeId)
-          .eq('is_active', true)
-          .single();
-      
-      print('🔍 DEBUG: Store found: ${storeResponse}');
-      final store = Store.fromJson(storeResponse);
-      
-      // Step 4: Validate store code matches
-      if (store.storeCode.toLowerCase() != storeCode.toLowerCase()) {
-        await _supabase.auth.signOut(); // Sign out the authenticated user
-        return AuthResult.failure('Mã cửa hàng không khớp với tài khoản này');
-      }
 
-      // Step 5: Create session and set metadata
-      await _createOrUpdateSession(user);
-      await _updateUserMetadata(user.id, store.id);
 
-      // Step 6: Store context for biometric login
-      await _secure.storeLastStoreCode(storeCode);
-      await _secure.storeLastStoreId(store.id);
-      print('🔍 DEBUG: Stored store context (fallback) - code: $storeCode, id: ${store.id}');
 
-      // Step 7: Store refresh token for biometric session restoration
-      final currentSession = _supabase.auth.currentSession;
-      if (currentSession?.refreshToken != null) {
-        await _secure.storeRefreshToken(currentSession!.refreshToken!);
-        print('🔍 DEBUG: Stored refresh token for biometric login (fallback)');
-      }
 
-      print('🔍 DEBUG: Fallback login successful!');
-      return AuthResult.success(user: user, profile: profile, store: store);
-    } catch (e) {
-      print('🚨 DEBUG: Fallback method also failed: $e');
-      return AuthResult.failure('Không thể xác thực với cửa hàng này: ${e.toString()}');
-    }
-  }
 
-  /// Enable biometric authentication for current user
-  Future<AuthResult> enableBiometric() async {
-    try {
-      print('🔍 DEBUG: Enabling biometric authentication');
-      final isAvailable = await BiometricService.isAvailable();
-      if (!isAvailable) return AuthResult.failure('Thiết bị không hỗ trợ sinh trắc học');
 
-      // Check if a valid refresh token was stored during login
-      final storedToken = await _secure.getBiometricRefreshToken();
-      if (storedToken == null) {
-          return AuthResult.failure('Vui lòng đăng nhập lại bằng mật khẩu để thiết lập Face ID an toàn.');
-      }
 
-      final biometricOk = await BiometricService.authenticate(
-        reason: 'Xác thực để kích hoạt đăng nhập bằng Face ID',
-      );
-      if (!biometricOk) return AuthResult.failure('Xác thực sinh trắc học không thành công');
-
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return AuthResult.failure('Không tìm thấy người dùng hiện tại.');
-
-      await _supabase.from('user_profiles').update({'biometric_enabled': true}).eq('id', userId);
-      print('🔍 DEBUG: Updated user profile with biometric_enabled = true');
-      return AuthResult.success();
-    } catch (e) {
-      print('🚨 DEBUG: Enable biometric error: $e');
-      return AuthResult.failure('Lỗi khi kích hoạt sinh trắc học: ${e.toString()}');
-    }
-  }
-
-  /// Disable biometric authentication for current user
-  Future<AuthResult> disableBiometric() async {
-    try {
-      print('🔍 DEBUG: Disabling biometric authentication');
-
-      // Step 1: Check if user is logged in
-      final currentSession = _supabase.auth.currentSession;
-      if (currentSession == null) {
-        return AuthResult.failure('Vui lòng đăng nhập trước');
-      }
-
-      // Step 2: Delete stored biometric refresh token
-      await _secure.deleteBiometricRefreshToken();
-      print('🔍 DEBUG: Deleted biometric refresh token');
-
-      // Step 3: Update user profile in database
-      final userId = currentSession.user.id;
-      await _supabase
-          .from('user_profiles')
-          .update({'biometric_enabled': false})
-          .eq('id', userId);
-
-      print('🔍 DEBUG: Updated user profile with biometric_enabled = false');
-
-      return AuthResult.success();
-    } catch (e) {
-      print('🚨 DEBUG: Disable biometric error: $e');
-      return AuthResult.failure('Lỗi khi tắt sinh trắc học: ${e.toString()}');
-    }
-  }
-
-  /// Check if biometric authentication is available and enabled for current user
-  Future<bool> isBiometricAvailableAndEnabled() async {
-    try {
-      print('🔍 DEBUG: Checking biometric availability...');
-
-      // Check device capability
-      final isAvailable = await BiometricService.isAvailable();
-      if (!isAvailable) {
-        print('🔍 DEBUG: Device does not support biometric');
-        return false;
-      }
-
-      // Check if we have stored token (this means user enabled biometric before)
-      final hasToken = await _secure.hasBiometricRefreshToken();
-      print('🔍 DEBUG: Has stored biometric token: $hasToken');
-
-      return hasToken;
-    } catch (e) {
-      print('🚨 DEBUG: Check biometric availability error: $e');
-      return false;
-    }
-  }
-
-  /// NEW: Store-aware biometric authentication with secure token restore
-  Future<AuthResult> signInWithBiometric() async {
-    try {
-      print('🔍 DEBUG: Starting biometric authentication.');
-      final biometricOk = await BiometricService.authenticate(reason: 'Đăng nhập vào AgriPOS');
-      if (!biometricOk) return AuthResult.failure('Xác thực sinh trắc học không thành công');
-
-      final refreshToken = await _secure.getBiometricRefreshToken();
-      if (refreshToken == null) {
-        return AuthResult.failure('Chưa thiết lập đăng nhập sinh trắc học. Vui lòng đăng nhập bằng mật khẩu.');
-      }
-
-      final response = await _supabase.auth.setSession(refreshToken);
-      if (response.session == null) {
-        await _secure.deleteBiometricRefreshToken();
-        return AuthResult.failure('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-      }
-
-      final session = response.session!;
-      final profile = await getUserProfile(session.user.id);
-      final store = await getCurrentUserStore();
-
-      if (profile == null || store == null) {
-        await _supabase.auth.signOut();
-        return AuthResult.failure('Không thể tải thông tin tài khoản hoặc cửa hàng.');
-      }
-
-      // If the new session provides a new refresh token, update it.
-      if (session.refreshToken != null && session.refreshToken != refreshToken) {
-        await _secure.storeBiometricRefreshToken(session.refreshToken!);
-      }
-
-      return AuthResult.success(user: session.user, profile: profile, store: store);
-    } catch (e) {
-      print('🚨 DEBUG: Biometric login error: $e');
-      return AuthResult.failure('Lỗi đăng nhập sinh trắc học: ${e.toString()}');
-    }
-  }
 
   Future<AuthResult> signUpWithEmail({
     required String email,

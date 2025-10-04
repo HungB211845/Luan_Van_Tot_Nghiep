@@ -16,9 +16,10 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
-  final _sessionService = SessionService();
-  bool _biometricEnabled = false;
-  bool _loadingBio = true;
+  // final _sessionService = SessionService(); // COMMENTED OUT: Unused field
+  // COMMENTED OUT: Biometric functionality removed
+  // bool _biometricEnabled = false;
+  // bool _loadingBio = true;
   final _secure = SecureStorageService();
   bool _rememberFlag = true;
   bool _loadingRemember = true;
@@ -26,31 +27,33 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   void initState() {
     super.initState();
-    _loadBiometricFlag();
+    // _loadBiometricFlag(); // COMMENTED OUT: Biometric functionality removed
     _loadRememberFlag();
   }
 
-  Future<void> _loadBiometricFlag() async {
-    final enabled = await _sessionService.isBiometricEnabledOnThisDevice();
-    if (!mounted) return;
-    setState(() {
-      _biometricEnabled = enabled;
-      _loadingBio = false;
-    });
-  }
+  // COMMENTED OUT: Biometric functionality removed
+  // Future<void> _loadBiometricFlag() async {
+  //   final enabled = await _sessionService.isBiometricEnabledOnThisDevice();
+  //   if (!mounted) return;
+  //   setState(() {
+  //     _biometricEnabled = enabled;
+  //     _loadingBio = false;
+  //   });
+  // }
 
-  Future<void> _toggleBiometric(bool value) async {
-    setState(() => _loadingBio = true);
-    await _sessionService.setBiometricEnabled(value);
-    if (!mounted) return;
-    setState(() {
-      _biometricEnabled = value;
-      _loadingBio = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(value ? 'Đã bật đăng nhập sinh trắc học' : 'Đã tắt đăng nhập sinh trắc học')),
-    );
-  }
+  // COMMENTED OUT: Biometric functionality removed
+  // Future<void> _toggleBiometric(bool value) async {
+  //   setState(() => _loadingBio = true);
+  //   await _sessionService.setBiometricEnabled(value);
+  //   if (!mounted) return;
+  //   setState(() {
+  //     _biometricEnabled = value;
+  //     _loadingBio = false;
+  //   });
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(content: Text(value ? 'Đã bật đăng nhập sinh trắc học' : 'Đã tắt đăng nhập sinh trắc học')),
+  //   );
+  // }
 
   Future<void> _loadRememberFlag() async {
     try {
@@ -186,22 +189,23 @@ class _AccountScreenState extends State<AccountScreen> {
             color: Colors.white,
             child: Column(
               children: [
-                SwitchListTile(
-                  title: const Text('Đăng nhập bằng Face/Touch ID'),
-                  subtitle: const Text('Thiết bị không hỗ trợ hoặc chưa thiết lập'),
-                  value: _biometricEnabled,
-                  onChanged: _loadingBio ? null : _toggleBiometric,
-                  secondary: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(CupertinoIcons.lock_shield_fill, color: Colors.green, size: 18),
-                  ),
-                ),
-                const Divider(height: 1, indent: 56),
+                // COMMENTED OUT: Biometric functionality removed
+                // SwitchListTile(
+                //   title: const Text('Đăng nhập bằng Face/Touch ID'),
+                //   subtitle: const Text('Thiết bị không hỗ trợ hoặc chưa thiết lập'),
+                //   value: _biometricEnabled,
+                //   onChanged: _loadingBio ? null : _toggleBiometric,
+                //   secondary: Container(
+                //     width: 32,
+                //     height: 32,
+                //     decoration: BoxDecoration(
+                //       color: Colors.green.withOpacity(0.1),
+                //       borderRadius: BorderRadius.circular(6),
+                //     ),
+                //     child: const Icon(CupertinoIcons.lock_shield_fill, color: Colors.green, size: 18),
+                //   ),
+                // ),
+                // const Divider(height: 1, indent: 56),
                 SwitchListTile(
                   title: const Text('Ghi nhớ email đăng nhập'),
                   subtitle: const Text('Lưu email để tự điền ở màn Đăng nhập'),

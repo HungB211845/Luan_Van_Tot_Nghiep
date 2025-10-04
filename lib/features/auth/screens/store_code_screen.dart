@@ -166,7 +166,24 @@ class _StoreCodeScreenState extends State<StoreCodeScreen> {
                         ),
                 ),
               ),
-              
+
+              SizedBox(height: context.cardSpacing * 2),
+
+              // Create store button
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pushNamed(RouteNames.signupStep1);
+                },
+                child: Text(
+                  'Tạo cửa hàng mới',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
               // RESPONSIVE BOTTOM SPACING
               SizedBox(height: context.adaptiveValue(
                 mobile: 40.0,
