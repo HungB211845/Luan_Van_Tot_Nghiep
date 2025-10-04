@@ -15,10 +15,8 @@ class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
   final SessionService _sessionService = SessionService();
   StreamSubscription<AuthState>? _authSub;
-  Timer? _biometricSessionTimer;
 
   auth.AuthState _state = const auth.AuthState(status: auth.AuthStatus.initial, isLoading: false);
-  bool _isRecentBiometricLogin = false;
 
   auth.AuthState get state => _state;
   bool get isAuthenticated => _state.isAuthenticated;
@@ -137,13 +135,11 @@ class AuthProvider extends ChangeNotifier {
             print('AuthProvider: Detected valid refresh token on UserUpdated event. Saving for biometric...');
             await _authService.saveRefreshTokenForBiometric(token);
           } else {
-            print('AuthProvider: Invalid or short refresh token on UserUpdated event. Checking if recent biometric login...');
-            if (_isRecentBiometricLogin) {
-              print('AuthProvider: Skipping biometric cleanup - recent biometric login detected');
-            } else {
-              print('AuthProvider: Proceeding with biometric cleanup - no recent biometric login');
-              await _authService.disableBiometric(); // This will clear the stored token
-            }
+            print('AuthProvider: Invalid or short refresh token on UserUpdated event. Token length: ${token.length}');
+            // IMPORTANT: Do NOT disable biometric just because token is short
+            // Supabase often returns 12-char tokens instead of JWT, this is normal
+            // Only disable biometric in explicit cases like corrupted storage or user action
+            print('AuthProvider: Keeping biometric credentials intact - short token is normal behavior');
           }
         }
         // Also refresh the user profile in the state, as it might have changed
@@ -213,28 +209,13 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> signInWithBiometric() async {
     _setState(_state.copyWith(isLoading: true, errorMessage: null));
 
-    // Set protection flag BEFORE login to prevent race condition with auth events
-    _isRecentBiometricLogin = true;
-    _biometricSessionTimer?.cancel();
-    _biometricSessionTimer = Timer(const Duration(seconds: 15), () {
-      _isRecentBiometricLogin = false;
-      print('🔍 DEBUG: Biometric session flag reset');
-    });
-    print('🔍 DEBUG: Set biometric protection flag BEFORE login attempt (15 seconds)');
-
     final result = await _authService.signInWithBiometric();
     if (result.isSuccess && result.profile != null) {
       BaseService.setCurrentUserProfile(result.profile);
       BaseService.setCurrentUserStoreId(result.profile!.storeId);
 
-      print('🔍 DEBUG: Biometric login successful - protection flag remains active');
       _setState(auth.AuthState(status: auth.AuthStatus.authenticated, userProfile: result.profile, store: result.store, isLoading: false));
       return true;
-    } else {
-      // Failed - clear protection flag immediately
-      _isRecentBiometricLogin = false;
-      _biometricSessionTimer?.cancel();
-      print('🔍 DEBUG: Biometric login failed - cleared protection flag immediately');
     }
     _setState(_state.copyWith(errorMessage: result.errorMessage, isLoading: false));
     return false;
@@ -385,7 +366,6 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _authSub?.cancel();
-    _biometricSessionTimer?.cancel();
     super.dispose();
   }
 }

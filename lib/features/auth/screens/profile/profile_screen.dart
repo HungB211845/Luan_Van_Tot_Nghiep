@@ -6,8 +6,14 @@ import '../../providers/auth_provider.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../services/secure_storage_service.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
@@ -79,8 +85,6 @@ class ProfileScreen extends StatelessWidget {
               _buildSectionHeader('CÀI ĐẶT & BẢO MẬT'),
               _buildGroupedList([
                 _buildBiometricToggle(context, authProvider),
-                _buildDivider(),
-                _buildEmailToggle(context, authProvider),
                 _buildDivider(),
                 _buildMenuTile(
                   icon: CupertinoIcons.lock_fill,
@@ -364,50 +368,6 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Email Toggle
-  Widget _buildEmailToggle(BuildContext context, AuthProvider authProvider) {
-    // TODO: Implement email persistence toggle
-    final isRememberEmail = false; // Placeholder
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          const Icon(
-            CupertinoIcons.envelope_fill,
-            color: Colors.green,
-            size: 24,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Ghi nhớ email đăng nhập',
-                  style: TextStyle(fontSize: 17),
-                ),
-                Text(
-                  'Lưu email để tự điền ở màn Đăng nhập',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: CupertinoColors.systemGrey,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          CupertinoSwitch(
-            value: isRememberEmail,
-            onChanged: (value) {
-              // TODO: Implement email persistence
-            },
-          ),
-        ],
-      ),
-    );
-  }
 
   // Action Tile (centered text, colored)
   Widget _buildActionTile({

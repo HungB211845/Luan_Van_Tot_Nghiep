@@ -18,36 +18,55 @@ lib/
 │       ├── app_router.dart         # Centralized routing logic
 │       └── route_names.dart        # Route constants
 ├── features/                       # Feature modules (domain-driven)
-│   ├── auth/                       # Authentication & Authorization
+│   ├── auth/                       # 🔐 Authentication & Authorization System
 │   │   ├── models/
-│   │   │   ├── auth_state.dart     # Authentication state management
-│   │   │   ├── user_profile.dart   # User profile with roles & permissions
-│   │   │   ├── store.dart          # Store (tenant) information
-│   │   │   ├── user_session.dart   # Multi-device session management
-│   │   │   ├── employee_invitation.dart # Employee invitation workflow
-│   │   │   ├── store_user.dart     # Store-user relationship
+│   │   │   ├── auth_state.dart     # Authentication state enumeration & management
+│   │   │   ├── user_profile.dart   # User profile with roles & permissions system
+│   │   │   ├── store.dart          # Store (tenant) entity with business info
+│   │   │   ├── user_session.dart   # Multi-device session tracking
+│   │   │   ├── employee_invitation.dart # Employee invitation workflow model
+│   │   │   ├── store_invitation.dart # Store invitation system for collaboration
+│   │   │   ├── store_user.dart     # Store-user relationship & role mapping
 │   │   │   └── permission.dart     # Role-based permissions system
 │   │   ├── providers/
-│   │   │   ├── auth_provider.dart  # Main auth state management
-│   │   │   ├── employee_provider.dart # Employee management
-│   │   │   ├── permission_provider.dart # Permission checking
-│   │   │   ├── session_provider.dart # Session listing & management
-│   │   │   ├── store_provider.dart # Store operations
-│   │   │   └── store_management_provider.dart # Store admin functions
+│   │   │   ├── auth_provider.dart  # 🔥 Main authentication state management (14.7KB)
+│   │   │   ├── employee_provider.dart # Employee management state
+│   │   │   ├── permission_provider.dart # Permission checking & validation
+│   │   │   ├── session_provider.dart # Active session listing & management
+│   │   │   ├── store_provider.dart # Store operations & context
+│   │   │   └── store_management_provider.dart # Store admin functions & settings
 │   │   ├── screens/
-│   │   │   ├── login_screen.dart   # Email/password login
-│   │   │   ├── register_screen.dart # Store owner registration
-│   │   │   ├── splash_screen.dart  # Auth flow initialization
-│   │   │   ├── biometric_login_screen.dart # Face/Touch ID login
-│   │   │   ├── account_screen.dart # User profile management
-│   │   │   ├── employee_list_screen.dart # Employee management UI
-│   │   │   ├── forgot_password_screen.dart # Password reset
-│   │   │   └── otp_verification_screen.dart # OTP verification
+│   │   │   ├── login_screen.dart   # Email/password login with responsive design
+│   │   │   ├── register_screen.dart # Store owner registration workflow
+│   │   │   ├── store_code_screen.dart # Store code entry & validation
+│   │   │   ├── splash_screen.dart  # Auth flow initialization & routing
+│   │   │   ├── biometric_login_screen.dart # Face/Touch ID authentication
+│   │   │   ├── biometric_setup_screen.dart # Biometric registration
+│   │   │   ├── forgot_password_screen.dart # Password reset workflow
+│   │   │   ├── otp_verification_screen.dart # OTP verification interface
+│   │   │   ├── onboarding_screen.dart # New user onboarding flow
+│   │   │   ├── signup_step1_screen.dart # Multi-step registration (personal info)
+│   │   │   ├── signup_step2_screen.dart # Multi-step registration (store setup)
+│   │   │   ├── signup_step3_screen.dart # Multi-step registration (verification)
+│   │   │   ├── store_setup_screen.dart # Initial store configuration
+│   │   │   ├── account_screen.dart # User account management hub
+│   │   │   ├── edit_profile_screen.dart # Profile editing interface
+│   │   │   ├── edit_store_info_screen.dart # Store information management
+│   │   │   ├── change_password_screen.dart # Password change workflow
+│   │   │   ├── employee_list_screen.dart # Employee management interface
+│   │   │   ├── employee_management_screen.dart # Advanced employee operations
+│   │   │   ├── invoice_settings_screen.dart # Store invoice configuration
+│   │   │   └── profile/
+│   │   │       └── profile_screen.dart # Comprehensive profile management
 │   │   └── services/
-│   │       ├── auth_service.dart   # Core authentication operations
-│   │       ├── employee_service.dart # Employee CRUD & invitations
-│   │       ├── store_service.dart  # Store management
-│   │       ├── session_service.dart # Session & device management
+│   │   │   ├── auth_service.dart   # 🔥 Core authentication operations (30.8KB)
+│   │   │   ├── employee_service.dart # Employee CRUD & invitation management
+│   │   │   ├── store_service.dart  # Store operations & validation
+│   │   │   ├── store_management_service.dart # Advanced store admin functions
+│   │   │   ├── session_service.dart # Session & device management
+│   │   │   ├── biometric_service.dart # Biometric authentication integration
+│   │   │   ├── secure_storage_service.dart # Secure token & data storage
+│   │   │   └── oauth_service.dart  # OAuth integration (Google, Facebook, etc.)
 │   │       ├── biometric_service.dart # Biometric authentication
 │   │       └── oauth_service.dart  # Social login (placeholder)
 │   ├── customers/                  # Customer Management
@@ -98,63 +117,112 @@ lib/
 │   │   │   └── transaction_service.dart # Store-aware transaction operations
 │   │   └── view_models/
 │   │       └── pos_view_model.dart # POS orchestration logic
-│   ├── debt/                       # Debt Management (placeholder)
+│   ├── debt/                        # 💳 NEW: Debt Management System
+│   │   ├── models/
+│   │   │   ├── debt.dart           # Core debt entity with status tracking
+│   │   │   ├── debt_status.dart    # Debt status enumeration (pending, partial, paid, overdue)
+│   │   │   ├── debt_payment.dart   # Payment transaction records
+│   │   │   └── debt_adjustment.dart # Manual debt adjustments (write-off, corrections)
+│   │   ├── providers/
+│   │   │   └── debt_provider.dart  # Debt state management & business logic
+│   │   ├── screens/
+│   │   │   ├── debt_list_screen.dart # Debt overview & management
+│   │   │   ├── customer_debt_detail_screen.dart # Individual customer debt details
+│   │   │   ├── add_payment_screen.dart # Payment processing interface
+│   │   │   └── adjust_debt_screen.dart # Manual debt adjustments
 │   │   └── services/
-│   │       └── debt_service.dart   # Debt tracking operations
+│   │       └── debt_service.dart   # Debt operations with store isolation
+│   ├── pos/                        # 🛒 Point of Sale System
+│   │   ├── models/
+│   │   │   ├── cart_item.dart      # Shopping cart items with pricing
+│   │   │   ├── payment_method.dart # Payment method enumeration
+│   │   │   ├── transaction.dart    # Sales transaction records
+│   │   │   ├── transaction_item.dart # Individual transaction line items
+│   │   │   └── transaction_status.dart # Transaction status tracking
+│   │   ├── providers/
+│   │   │   └── transaction_provider.dart # Transaction state management
+│   │   ├── screens/
+│   │   │   ├── cart/
+│   │   │   │   └── cart_screen.dart # Shopping cart management
+│   │   │   ├── pos/
+│   │   │   │   ├── pos_screen.dart # Main POS interface with responsive design
+│   │   │   │   ├── cart_screen.dart # Integrated cart view
+│   │   │   │   └── confirm_credit_sale_sheet.dart # Credit sale confirmation
+│   │   │   └── transaction/
+│   │   │       ├── transaction_detail_screen.dart # Transaction details view
+│   │   │       ├── transaction_list_screen.dart # Transaction history
+│   │   │       └── transaction_success_screen.dart # Success confirmation
+│   │   ├── services/
+│   │   │   └── transaction_service.dart # Transaction processing with store context
+│   │   └── view_models/
+│   │       └── pos_view_model.dart # POS orchestration logic with business rules
 │   └── reports/                    # Business Intelligence
 │       └── screens/
 │           └── reports_screen.dart # Report navigation hub
-├── presentation/                   # App-wide UI components
+├── presentation/                   # App-wide UI components & screens
 │   ├── home/
-│   │   └── home_screen.dart        # Main dashboard
+│   │   ├── models/
+│   │   │   ├── daily_revenue.dart  # Revenue tracking model
+│   │   │   └── quick_access_item.dart # Dashboard quick access configuration
+│   │   ├── providers/
+│   │   │   ├── dashboard_provider.dart # Dashboard state & analytics
+│   │   │   └── quick_access_provider.dart # Customizable quick access management
+│   │   ├── screens/
+│   │   │   ├── global_search_screen.dart # Universal search across all entities
+│   │   │   └── edit_quick_access_screen.dart # Quick access customization
+│   │   ├── services/
+│   │   │   ├── quick_access_service.dart # Quick access configuration service
+│   │   │   └── report_service.dart # Dashboard reporting & analytics
+│   │   └── home_screen.dart        # Main dashboard with responsive design
+│   ├── main_navigation/
+│   │   ├── main_navigation_screen.dart # Adaptive navigation wrapper
+│   │   └── tab_navigator.dart      # Tab-based navigation controller
 │   └── splash/
 │       └── splash_screen.dart      # App initialization (non-auth)
 ├── shared/                         # Shared utilities & components
-│   ├── design_system/             # 🎨 NEW: Premium design system
-│   │   ├── theme/                 # Colors, typography, spacing
-│   │   ├── tokens/                # Design tokens (sizes, shadows)
-│   │   └── foundations/           # Brand guidelines, constants
-│   ├── components/                # 🎨 NEW: Atomic design components
-│   │   ├── atoms/                 # Button, Input, Icon, Badge
-│   │   ├── molecules/             # SearchBar, ProductCard, StatCard
-│   │   ├── organisms/             # ProductGrid, TransactionList
-│   │   └── templates/             # Page layouts, forms
-│   ├── patterns/                  # 🎨 NEW: UX patterns
-│   │   ├── navigation/            # Modern bottom nav, drawer, breadcrumb
-│   │   ├── feedback/              # Loading, error, success states
-│   │   └── data_display/          # Tables, cards, charts
-│   ├── providers/                 # 🧠 NEW: Memory management
-│   │   └── memory_managed_provider.dart # Auto-cleanup mixin for providers
-│   ├── layout/                    # Responsive layout system
-│   │   ├── main_layout_wrapper.dart # Universal layout wrapper
+│   ├── layout/                     # 🎨 Responsive Layout System
+│   │   ├── main_layout_wrapper.dart # Universal layout wrapper with adaptive behavior
+│   │   ├── responsive_layout_wrapper.dart # Advanced responsive layout controller
 │   │   ├── components/
-│   │   │   └── responsive_drawer.dart # Adaptive navigation
+│   │   │   ├── responsive_drawer.dart # Adaptive navigation drawer
+│   │   │   ├── custom_app_bar.dart # Standardized app bar component
+│   │   │   └── bottom_nav_bar.dart # Responsive bottom navigation
 │   │   ├── managers/              # Layout component managers
-│   │   │   ├── app_bar_manager.dart # AppBar configurations
-│   │   │   ├── bottom_nav_manager.dart # Bottom navigation
+│   │   │   ├── app_bar_manager.dart # AppBar configurations & theming
+│   │   │   ├── bottom_nav_manager.dart # Bottom navigation management
 │   │   │   ├── drawer_manager.dart # Drawer/sidebar management
-│   │   │   └── fab_manager.dart   # Floating action button
+│   │   │   └── fab_manager.dart   # Floating action button controller
 │   │   └── models/
 │   │       ├── layout_config.dart # Layout configuration system
 │   │       └── navigation_item.dart # Navigation item definitions
 │   ├── models/
-│   │   └── paginated_result.dart  # Pagination wrapper
+│   │   └── paginated_result.dart  # Pagination wrapper for list data
+│   ├── providers/                 # 🧠 Memory management
+│   │   └── memory_managed_provider.dart # Auto-cleanup mixin for providers
 │   ├── services/
-│   │   ├── base_service.dart      # 🔥 Multi-tenant base class
-│   │   ├── connectivity_service.dart # Network connectivity
-│   │   ├── database_service.dart  # Database utilities
-│   │   └── supabase_service.dart  # Supabase client wrapper
+│   │   ├── base_service.dart      # 🔥 Multi-tenant base class with store isolation
+│   │   ├── connectivity_service.dart # Network connectivity monitoring
+│   │   ├── database_service.dart  # Database utilities & optimization
+│   │   ├── supabase_service.dart  # Supabase client wrapper
+│   │   └── auth_state_temp.dart   # Temporary auth state management
+│   ├── transitions/               # 🎨 Navigation animations
+│   │   ├── transitions.dart       # Custom transition definitions
+│   │   └── ios_route_generator.dart # iOS-style navigation transitions
 │   ├── utils/
-│   │   ├── formatter.dart         # Data formatting utilities
-│   │   ├── responsive.dart        # 🎨 NEW: Responsive breakpoints
-│   │   ├── animations.dart        # 🎨 NEW: Transitions, micro-interactions
-│   │   └── accessibility.dart     # 🎨 NEW: A11y helpers
+│   │   ├── formatter.dart         # Data formatting utilities (currency, date, etc.)
+│   │   ├── responsive.dart        # 🎨 Responsive breakpoints & device detection
+│   │   ├── input_formatters.dart  # Text input formatters (currency, phone, etc.)
+│   │   └── datetime_helpers.dart  # Date/time utility functions
 │   └── widgets/
 │       ├── connectivity_banner.dart # Network status indicator
-│       ├── custom_button.dart     # Standardized buttons
-│       └── loading_widget.dart    # Loading states
-├── services/                      # 🧠 NEW: Global services
-│   └── cache_manager.dart         # 🧠 NEW: LRU cache with auto-eviction
+│       ├── custom_button.dart     # Standardized buttons with theming
+│       ├── loading_widget.dart    # Loading states & animations
+│       ├── error_widget.dart      # Error state displays
+│       ├── empty_state_widget.dart # Empty state illustrations
+│       └── confirmation_dialog.dart # Reusable confirmation dialogs
+├── services/                      # 🧠 Global services
+│   ├── cache_manager.dart         # 🧠 LRU cache with auto-eviction & performance optimization
+│   └── cached_product_service.dart # 🧠 Cached product operations for performance
 └── main.dart                       # Application entry point
 ```
 
@@ -201,11 +269,14 @@ abstract class BaseService {
 - **EmployeeService**: Employee management với store-based access control
 
 #### **System Services (Store-Agnostic)**
-- **AuthService**: Authentication operations
-- **StoreService**: Store management (cross-tenant for owners)
-- **SessionService**: Device & session management
-- **BiometricService**: Biometric authentication
-- **StoreManagementService**: Store administration functions
+- **AuthService**: Core authentication operations với comprehensive login/logout workflows
+- **StoreService**: Basic store operations với validation
+- **StoreManagementService**: Advanced store administration & configuration functions  
+- **SessionService**: Multi-device session management với security tracking
+- **EmployeeService**: Employee CRUD operations với invitation workflow management
+- **BiometricService**: Biometric authentication integration với platform detection
+- **SecureStorageService**: Secure token storage với encryption & key management
+- **OAuthService**: OAuth integration với Google, Facebook, và third-party providers
 
 ### 🎯 MVVM-C Implementation
 
@@ -236,7 +307,116 @@ abstract class BaseService {
 - **Route guards**: Authentication & permission checks
 - **Store membership validation** cho protected routes
 
+## 📊 Current Implementation Status
+
+### ✅ **IMPLEMENTED & PRODUCTION READY**
+
+#### **Core Infrastructure (100%)**
+- **Multi-tenant architecture** với complete store isolation
+- **BaseService pattern** với automatic store filtering
+- **Memory management** với LRU cache và auto-eviction
+- **Responsive design system** với universal breakpoints
+- **Advanced layout system** với adaptive components
+
+#### **Authentication & Authorization (100%)**
+- **Store-based multi-tenancy** với RLS policies
+- **Role-based permissions** system
+- **Multi-device session management**
+- **Employee invitation workflow**
+- **Biometric authentication** support
+
+#### **Product Management (95%)**
+- **Complete CRUD operations** với store context
+- **Inventory management** với batch tracking
+- **Purchase order workflow** với multi-step approval
+- **Company/supplier management** 
+- **Advanced search** với filtering capabilities
+- **Seasonal pricing** (legacy) + **current pricing** system
+
+#### **POS System (90%)**
+- **Full transaction processing** với multiple payment methods
+- **Shopping cart** với real-time calculations
+- **Credit sales** với debt tracking integration
+- **Receipt generation** và transaction history
+- **Responsive POS interface** cho multiple devices
+
+#### **Customer Management (85%)**
+- **Customer CRUD** với store isolation
+- **Debt tracking integration**
+- **Transaction history** per customer
+- **Credit limit management**
+
+#### **Debt Management (80%)**
+- **Debt creation** từ credit sales
+- **Payment processing** với multiple methods
+- **Debt adjustments** (write-off, corrections)
+- **Comprehensive debt reporting**
+
+### 🔶 **PARTIALLY IMPLEMENTED**
+
+#### **Responsive Design Coverage (60%)**
+- **Auth screens**: 100% responsive với `ResponsiveAuthScaffold`
+- **Product screens**: 100% responsive với advanced layouts
+- **Home dashboard**: 100% responsive
+- **POS screen**: 80% responsive (custom breakpoints)
+- **Form screens**: 0% responsive (biggest gap)
+
+#### **Reports & Analytics (40%)**
+- **Basic reporting** structure established
+- **Dashboard analytics** với revenue tracking
+- **Missing**: Comprehensive business intelligence reports
+
+### ❌ **PLANNED BUT NOT IMPLEMENTED**
+
+#### **Design System Components (0%)**
+```
+# Planned structure (not yet implemented):
+shared/
+├── design_system/
+│   ├── theme/                 # Colors, typography, spacing tokens
+│   ├── tokens/                # Design tokens (sizes, shadows, animations)
+│   └── foundations/           # Brand guidelines, constants
+├── components/                # Atomic design components
+│   ├── atoms/                 # Button, Input, Icon, Badge, Chip
+│   ├── molecules/             # SearchBar, ProductCard, StatCard, FormField
+│   ├── organisms/             # ProductGrid, TransactionList, DataTable
+│   └── templates/             # Page layouts, form templates
+└── patterns/                  # UX patterns
+    ├── navigation/            # Modern navigation patterns
+    ├── feedback/              # Loading, error, success state patterns
+    └── data_display/          # Advanced data visualization patterns
+```
+
+#### **Advanced Utils (Planned)**
+```
+shared/utils/
+├── animations.dart            # Micro-interactions & transitions
+├── accessibility.dart         # A11y helpers & WCAG compliance
+├── validation.dart           # Form validation rules
+└── constants.dart            # App-wide constants & configurations
+```
+
+## 🚀 Implementation Roadmap
+
+### **Phase 1: Complete Responsive Design (HIGH PRIORITY)**
+- **Convert remaining form screens** to use `ResponsiveScaffold`
+- **Standardize POS responsive implementation**
+- **Target**: 95% responsive coverage
+
+### **Phase 2: Design System Foundation (MEDIUM PRIORITY)**  
+- **Implement atomic design components**
+- **Create comprehensive design tokens**
+- **Build reusable component library**
+
+### **Phase 3: Advanced Features (LOW PRIORITY)**
+- **Enhanced reporting & analytics**
+- **Advanced animations & micro-interactions**
+- **A11y improvements & WCAG compliance**
+
 ## Data Flow Architecture
+
+### 🔄 Typical Operation Flow (Enhanced 2024)
+
 
 ### 🔄 Typical Operation Flow (Enhanced 2024)
 

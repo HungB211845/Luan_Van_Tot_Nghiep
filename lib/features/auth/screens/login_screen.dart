@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordFocusNode = FocusNode();
   bool _obscure = true;
   String? _storeName;
+  bool? _rememberEmail; // null = loading, true/false = actual value
 
   static const Color primaryTextColor = Color(0xFF1D1D1F);
   static const Color secondaryTextColor = Color(0xFF8A8A8E);
@@ -42,12 +43,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loadSavedData() async {
-    final email = await SecureStorageService().getRememberedEmail();
-    final storeName = await SecureStorageService().getLastStoreName();
+    final secureStorage = SecureStorageService();
+    final rememberFlag = await secureStorage.getRememberFlag();
+    final email = rememberFlag ? await secureStorage.getRememberedEmail() : null;
+    final storeName = await secureStorage.getLastStoreName();
+
     if (!mounted) return;
     setState(() {
-      if (email != null) _emailController.text = email;
+      if (email != null && email.isNotEmpty) _emailController.text = email;
       _storeName = storeName;
+      _rememberEmail = rememberFlag; // Load remember flag state
     });
   }
 
@@ -75,7 +80,14 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (ok && mounted) {
-      await SecureStorageService().storeRememberedEmail(_emailController.text.trim());
+      final secureStorage = SecureStorageService();
+      final rememberFlag = await secureStorage.getRememberFlag();
+
+      if (rememberFlag) {
+        // Only save email if remember flag is enabled
+        await secureStorage.storeRememberedEmail(_emailController.text.trim());
+      }
+
       Navigator.of(context).pushReplacementNamed(RouteNames.home);
     }
   }
@@ -86,6 +98,53 @@ class _LoginScreenState extends State<LoginScreen> {
     if (ok && mounted) {
       Navigator.of(context).pushReplacementNamed(RouteNames.home);
     }
+  }
+
+  Widget _buildRememberToggle() {
+    final isRememberEmail = _rememberEmail ?? false;
+    final isLoading = _rememberEmail == null;
+
+    return Row(
+      children: [
+        const Text(
+          'Ghi nhớ email',
+          style: TextStyle(fontSize: 16, color: secondaryTextColor),
+        ),
+        const Spacer(),
+        if (isLoading)
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          Switch(
+            value: isRememberEmail,
+            activeColor: Colors.green,
+            onChanged: (value) async {
+              try {
+                final secureStorage = SecureStorageService();
+
+                // ONLY control the remember flag, DO NOT save email here
+                await secureStorage.setRememberFlag(value);
+
+                if (!value) {
+                  // When user manually disables, clear the remembered email
+                  await secureStorage.storeRememberedEmail('');
+                }
+                // When enabling: DO NOT save email here, let login success handle it
+
+                setState(() {
+                  _rememberEmail = value;
+                });
+              } catch (e) {
+                // Silent fail for toggle
+                print('Error updating remember flag: $e');
+              }
+            },
+          ),
+      ],
+    );
   }
 
  @override
@@ -184,6 +243,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
+                            SizedBox(height: context.cardSpacing * 2),
+
+                            // Remember Email Toggle
+                            _buildRememberToggle(),
+
                             SizedBox(height: context.cardSpacing * 3),
                             SizedBox(
                               height: 52,
