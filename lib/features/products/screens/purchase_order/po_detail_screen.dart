@@ -293,7 +293,9 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           children: [
             Icon(Icons.inventory, color: Colors.green.shade600),
             const SizedBox(width: 8),
-            const Text('Xác Nhận Nhận Hàng'),
+            const Expanded(
+              child: Text('Xác Nhận Nhận Hàng'),
+            ),
           ],
         ),
         content: Column(
@@ -422,7 +424,26 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label, style: TextStyle(color: Colors.grey[600])), Text(value, style: const TextStyle(fontWeight: FontWeight.bold))],
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.grey[600]),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

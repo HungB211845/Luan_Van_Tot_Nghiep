@@ -31,15 +31,9 @@ class AuthProvider extends ChangeNotifier {
 
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
-        // CRITICAL: Validate refresh token format before trusting the session
-        final isValidToken = await _authService.isValidRefreshToken(session.refreshToken);
-
-        if (!isValidToken) {
-          print('🚨 DEBUG: Detected corrupted refresh token, clearing storage...');
-          await _authService.clearCorruptedStorage();
-          _setState(const auth.AuthState(status: auth.AuthStatus.unauthenticated, isLoading: false));
-          return;
-        }
+        // REMOVED: Refresh token length validation - Supabase can have short tokens
+        // Trust SessionService validation instead of checking token format
+        print('🔍 DEBUG: Found session, validating with SessionService...');
 
         final valid = await _sessionService.validateSession();
         if (valid) {

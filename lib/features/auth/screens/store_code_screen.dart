@@ -109,6 +109,8 @@ class _StoreCodeScreenState extends State<StoreCodeScreen> {
               TextFormField(
                 controller: _storeCodeController,
                 textAlign: TextAlign.center,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _handleContinue(),
                 style: TextStyle(
                   fontSize: context.adaptiveValue(
                     mobile: 18.0,

@@ -28,6 +28,24 @@ class SecureStorageService {
   Future<void> delete(String key) async => _storage.delete(key: key);
   Future<void> clearAll() async => _storage.deleteAll();
 
+  /// SELECTIVE cleanup for corrupted sessions - preserve user preferences and store context
+  /// This is the CORRECT way to handle corrupted tokens without losing user data
+  Future<void> clearSessionDataOnly() async {
+    print('🧹 DEBUG: Starting selective session cleanup (preserving user data)...');
+
+    // Clear session-related data ONLY
+    await delete(_keyRefreshToken);
+    await delete(_keyBiometricRefreshToken);
+
+    // PRESERVE (do NOT delete):
+    // - Store context: _keyLastStoreCode, _keyLastStoreId, _keyLastStoreName
+    // - Biometric credentials: _keyBiometricEmail, _keyBiometricPassword, _keyBiometricStoreCode, _keyBiometricEnabled
+    // - Remember email: _keyRememberEmail, _keyRememberFlag
+    // - UI preferences and settings
+
+    print('🧹 DEBUG: Selective cleanup complete - preserved store code, biometric credentials, and user preferences');
+  }
+
   // Refresh token (optional, Supabase Flutter tự quản lý session; để dự phòng)
   Future<void> storeRefreshToken(String token) async => write(_keyRefreshToken, token);
   Future<String?> getRefreshToken() async => read(_keyRefreshToken);
@@ -50,7 +68,30 @@ class SecureStorageService {
   Future<void> storeLastStoreName(String storeName) async => write(_keyLastStoreName, storeName);
   Future<String?> getLastStoreName() async => read(_keyLastStoreName);
 
-  Future<void> clearLastStoreCode() async => delete(_keyLastStoreCode);
+  Future<void> clearLastStoreCode() async {
+    print('🔍 DEBUG: Clearing store code - this should only happen on explicit store switch');
+    await delete(_keyLastStoreCode);
+    await delete(_keyLastStoreId);
+    await delete(_keyLastStoreName);
+  }
+
+  /// SIMPLIFIED: Check if store code exists (permanent store selection)
+  /// This is the ONLY check needed for store persistence
+  Future<bool> hasStoreCode() async {
+    try {
+      final storeCode = await getLastStoreCode();
+      final hasCode = storeCode != null && storeCode.isNotEmpty;
+
+      print('🔍 DEBUG: Store code check:');
+      print('  - Store Code: ${storeCode ?? 'null'}');
+      print('  - Has Store Code: $hasCode');
+
+      return hasCode;
+    } catch (e) {
+      print('🚨 DEBUG: Error checking store code: $e');
+      return false;
+    }
+  }
 
   // Biometric refresh token storage (Face ID/Touch ID protected)
   Future<void> storeBiometricRefreshToken(String token) async {

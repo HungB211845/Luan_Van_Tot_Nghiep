@@ -30,6 +30,26 @@ class SessionService {
     await _supabase.from('user_sessions').update({'fcm_token': fcmToken}).eq('device_id', deviceId);
   }
 
+  /// Fast Supabase session validation without database hit
+  /// Checks session.expiresAt directly for immediate validation
+  bool isSupabaseSessionValid() {
+    final session = _supabase.auth.currentSession;
+    if (session == null) return false;
+
+    final exp = session.expiresAt;
+    if (exp == null) return false;
+
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+    final valid = exp > now;
+
+    print('🔍 DEBUG: Supabase session validation:');
+    print('  - Current time: $now');
+    print('  - Expires at: $exp');
+    print('  - Session valid: $valid');
+
+    return valid;
+  }
+
   Future<bool> validateSession() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return false;

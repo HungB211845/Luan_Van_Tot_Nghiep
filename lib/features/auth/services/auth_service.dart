@@ -796,21 +796,22 @@ class AuthService {
   }
 
   /// Clears corrupted session storage and forces fresh authentication
+  /// SELECTIVE cleanup - preserves store_code and user preferences
   Future<void> clearCorruptedStorage() async {
     try {
-      print('🧹 DEBUG: Starting corrupted storage cleanup...');
+      print('🧹 DEBUG: Starting selective corrupted storage cleanup...');
 
       // Sign out from Supabase
       await _supabase.auth.signOut();
       print('🧹 DEBUG: Signed out from Supabase');
 
-      // Clear all secure storage
-      await _secure.clearAll();
-      print('🧹 DEBUG: Cleared all secure storage');
+      // SELECTIVE cleanup - preserve store_code and user preferences
+      await _secure.clearSessionDataOnly();
+      print('🧹 DEBUG: Cleared session data only (preserved store_code and preferences)');
 
-      print('🧹 DEBUG: Corrupted storage cleanup completed');
+      print('🧹 DEBUG: Selective corrupted storage cleanup completed');
     } catch (e) {
-      print('🚨 DEBUG: Error during storage cleanup: $e');
+      print('🚨 DEBUG: Error during selective storage cleanup: $e');
       // Continue anyway, as we want to force a clean state
     }
   }

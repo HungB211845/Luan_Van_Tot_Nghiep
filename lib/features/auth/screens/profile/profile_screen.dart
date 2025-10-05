@@ -14,6 +14,36 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool _biometricEnabled = false;
+  bool _isLoading = true;
+  final SecureStorageService _secureStorage = SecureStorageService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricState();
+  }
+
+  Future<void> _loadBiometricState() async {
+    try {
+      final isEnabled = await _secureStorage.isBiometricCredentialsStored();
+      if (mounted) {
+        setState(() {
+          _biometricEnabled = isEnabled;
+          _isLoading = false;
+        });
+      }
+      print('🔍 DEBUG: ProfileScreen loaded biometric state: $_biometricEnabled');
+    } catch (e) {
+      print('🚨 DEBUG: Error loading biometric state: $e');
+      if (mounted) {
+        setState(() {
+          _biometricEnabled = false;
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -257,14 +287,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Biometric Toggle
   Widget _buildBiometricToggle(BuildContext context, AuthProvider authProvider) {
-    final user = authProvider.currentUser;
-    final isEnabled = user?.biometricEnabled ?? false;
+    // Use local state instead of AuthProvider user state
+    final isEnabled = _biometricEnabled;
 
     return FutureBuilder<bool>(
       future: authProvider.isBiometricAvailableAndEnabled(),
       builder: (context, snapshot) {
         final isAvailable = snapshot.data ?? false;
-        final isLoading = authProvider.state.isLoading;
+        final isLoading = _isLoading || authProvider.state.isLoading;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -344,12 +374,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                               if (context.mounted) {
                                 if (success) {
+                                  // Update local state immediately
+                                  setState(() {
+                                    _biometricEnabled = value;
+                                  });
+
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(value ? 'Đã bật đăng nhập sinh trắc học' : 'Đã tắt đăng nhập sinh trắc học'),
                                       backgroundColor: Colors.green,
                                     ),
                                   );
+
+                                  print('🔍 DEBUG: ProfileScreen updated local biometric state: $value');
                                 } else if (authProvider.state.errorMessage != null) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
