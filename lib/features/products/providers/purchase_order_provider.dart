@@ -17,38 +17,45 @@ class POCartItem {
   final Product product;
   int quantity;
   double unitCost;
+  double? sellingPrice; // MODIFIED: Make nullable
   String? unit;
-  // Add controllers for quantity and unitCost
+
   final TextEditingController quantityController;
   final TextEditingController unitCostController;
+  final TextEditingController sellingPriceController; // ADDED
 
   POCartItem({
     required this.product,
     this.quantity = 1,
     this.unitCost = 0.0,
+    this.sellingPrice,
     this.unit,
-  }) : quantityController = TextEditingController(text: quantity.toString()),
-       unitCostController = TextEditingController(
-         text: unitCost.toStringAsFixed(0),
-       );
+  })  : quantityController = TextEditingController(text: quantity.toString()),
+        unitCostController = TextEditingController(
+          text: unitCost.toStringAsFixed(0),
+        ),
+        sellingPriceController = TextEditingController(
+          text: sellingPrice != null ? sellingPrice.toStringAsFixed(0) : '',
+        );
 
-  // Add a dispose method for the controllers
   void dispose() {
     quantityController.dispose();
     unitCostController.dispose();
+    sellingPriceController.dispose(); // ADDED
   }
 
-  // Add copyWith method
   POCartItem copyWith({
     Product? product,
     int? quantity,
     double? unitCost,
+    double? sellingPrice,
     String? unit,
   }) {
     return POCartItem(
       product: product ?? this.product,
       quantity: quantity ?? this.quantity,
       unitCost: unitCost ?? this.unitCost,
+      sellingPrice: sellingPrice ?? this.sellingPrice,
       unit: unit ?? this.unit,
     );
   }
@@ -467,6 +474,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
           product: product,
           quantity: quantity,
           unitCost: unitCost ?? 0.0,
+          sellingPrice: null, // Explicitly set as null
           unit: unit,
         ),
       );
@@ -490,26 +498,35 @@ class PurchaseOrderProvider extends ChangeNotifier {
     String productId, {
     int? newQuantity,
     double? newUnitCost,
+    double? newSellingPrice,
     String? newUnit,
+    bool? clearSellingPrice, // Add explicit flag for clearing
   }) {
     final index = _poCartItems.indexWhere(
       (item) => item.product.id == productId,
     );
     if (index != -1) {
       if (newQuantity != null) {
-        // Allow quantity = 0, don't auto-remove
         _poCartItems[index].quantity = newQuantity.clamp(0, 999999);
-        // Update controller text
-        _poCartItems[index].quantityController.text = _poCartItems[index]
-            .quantity
-            .toString();
+        _poCartItems[index].quantityController.text =
+            _poCartItems[index].quantity.toString();
       }
       if (newUnitCost != null) {
         _poCartItems[index].unitCost = newUnitCost.clamp(0.0, double.infinity);
-        // Update controller text
-        _poCartItems[index].unitCostController.text = _poCartItems[index]
-            .unitCost
-            .toStringAsFixed(0);
+        _poCartItems[index].unitCostController.text =
+            _poCartItems[index].unitCost.toStringAsFixed(0);
+      }
+      // Handle selling price update
+      if (clearSellingPrice == true) {
+        // Explicitly clear selling price when user deletes all text
+        _poCartItems[index].sellingPrice = null;
+        _poCartItems[index].sellingPriceController.text = '';
+      } else if (newSellingPrice != null) {
+        // Update with new selling price value
+        _poCartItems[index].sellingPrice =
+            newSellingPrice.clamp(0.0, double.infinity);
+        _poCartItems[index].sellingPriceController.text =
+            _poCartItems[index].sellingPrice!.toStringAsFixed(0);
       }
       if (newUnit != null) {
         _poCartItems[index].unit = newUnit;
@@ -558,7 +575,6 @@ class PurchaseOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Create Purchase Order from Cart
   Future<PurchaseOrder?> createPOFromCart({
     String? notes,
     PurchaseOrderStatus status = PurchaseOrderStatus.draft,
@@ -594,6 +610,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
             productId: cartItem.product.id,
             quantity: cartItem.quantity,
             unitCost: cartItem.unitCost,
+            sellingPrice: cartItem.sellingPrice, // ADDED
             unit: cartItem.unit,
             totalCost: cartItem.quantity * cartItem.unitCost,
             createdAt: DateTime.now(),

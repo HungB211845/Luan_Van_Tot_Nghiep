@@ -131,7 +131,6 @@ class _AccountScreenState extends State<AccountScreen> {
                 subtitle: Text(supabaseUser?.email ?? 'Chưa đăng nhập'),
                 trailing: const Icon(CupertinoIcons.chevron_right, color: Colors.grey),
                 onTap: () {
-                  debugPrint('🔍 DEBUG: Navigating to editProfile: ${RouteNames.editProfile}');
                   Navigator.pushNamed(context, RouteNames.editProfile);
                 },
               ),
@@ -150,7 +149,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   iconColor: Colors.green,
                   title: 'Thông tin cửa hàng',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to editStoreInfo: ${RouteNames.editStoreInfo}');
                     Navigator.pushNamed(context, RouteNames.editStoreInfo);
                   },
                 ),
@@ -160,7 +158,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   iconColor: Colors.green,
                   title: 'Quản lý nhân viên',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to employeeManagement: ${RouteNames.employeeManagement}');
                     Navigator.pushNamed(context, RouteNames.employeeManagement);
                   },
                 ),
@@ -170,7 +167,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   iconColor: Colors.green,
                   title: 'Cài đặt hóa đơn & Thuế',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to invoiceSettings: ${RouteNames.invoiceSettings}');
                     Navigator.pushNamed(context, RouteNames.invoiceSettings);
                   },
                 ),
@@ -223,7 +219,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   iconColor: Colors.green,
                   title: 'Đổi mật khẩu',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to changePassword: ${RouteNames.changePassword}');
                     Navigator.pushNamed(context, RouteNames.changePassword);
                   },
                 ),

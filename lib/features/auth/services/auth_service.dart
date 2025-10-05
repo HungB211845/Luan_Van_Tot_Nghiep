@@ -57,7 +57,6 @@ class AuthService {
     required String storeCode
   }) async {
     try {
-      print('🔍 DEBUG: Starting store-aware login for store: $storeCode');
       
       // Step 1: Validate store exists and is active
       // Use RPC function to bypass RLS for store validation
@@ -65,39 +64,23 @@ class AuthService {
         'store_code_param': storeCode
       });
       
-      print('🔍 DEBUG: Store validation response: $storeValidation');
       
       if (storeValidation == null || storeValidation['valid'] != true) {
         return AuthResult.failure('Mã cửa hàng không tồn tại hoặc đã bị vô hiệu hóa');
       }
       
       final storeData = storeValidation['store_data'] as Map<String, dynamic>;
-      print('🔍 DEBUG: Creating Store object from response...');
       final store = Store.fromJson(storeData);
-      print('🔍 DEBUG: Store created: ${store.storeName}');
       
       // Step 2: Authenticate user
-      print('🔍 DEBUG: Authenticating user with email: $email');
       final res = await _supabase.auth.signInWithPassword(email: email, password: password);
 
       // CRITICAL: Debug the auth response object
-      print('🔍 DEBUG: Auth response session: ${res.session != null ? 'Present' : 'NULL'}');
-      if (res.session != null) {
-        final session = res.session!;
-        print('🔍 DEBUG: Session access token length: ${session.accessToken.length}');
-        print('🔍 DEBUG: Session refresh token length: ${session.refreshToken?.length ?? 'NULL'}');
-        print('🔍 DEBUG: Session refresh token: ${session.refreshToken?.length != null && session.refreshToken!.length > 20 ? session.refreshToken!.substring(0, 20) : session.refreshToken}...');
-        print('🔍 DEBUG: Session expires at: ${session.expiresAt}');
-        print('🔍 DEBUG: Session token type: ${session.tokenType}');
-      }
 
       final user = res.user;
       if (user == null) return AuthResult.failure('Email hoặc mật khẩu không đúng');
 
-      print('🔍 DEBUG: User authenticated: ${user.id}');
-
       // Step 3: Verify user belongs to the specified store
-      print('🔍 DEBUG: Checking user store membership...');
       final profileResponse = await _supabase
           .from('user_profiles')
           .select('*')
@@ -106,7 +89,6 @@ class AuthService {
           .eq('is_active', true)
           .maybeSingle();
       
-      print('🔍 DEBUG: Profile query response: $profileResponse');
       
       if (profileResponse == null) {
         // User exists but doesn't belong to this store or is inactive
@@ -114,9 +96,7 @@ class AuthService {
         return AuthResult.failure('Tài khoản này không thuộc cửa hàng "${store.storeName}" hoặc đã bị vô hiệu hóa');
       }
 
-      print('🔍 DEBUG: Creating UserProfile object from response...');
       final profile = UserProfile.fromJson(profileResponse);
-      print('🔍 DEBUG: Profile created: ${profile.fullName}');
 
       // Step 4: Create session and set metadata
       await _createOrUpdateSession(user);
@@ -125,29 +105,17 @@ class AuthService {
       // Step 5: Store context for future logins
       await _secure.storeLastStoreCode(storeCode);
       await _secure.storeLastStoreId(store.id);
-      print('🔍 DEBUG: Stored store context - code: $storeCode, id: ${store.id}');
 
       // Step 6: Store refresh token for biometric authentication (with validation)
       final currentSession = _supabase.auth.currentSession;
-      print('🔍 DEBUG: Current session after login - present: ${currentSession != null}');
-      if (currentSession?.accessToken != null) {
-        print('🔍 DEBUG: Current session access token length: ${currentSession!.accessToken.length}');
-      }
       if (currentSession?.refreshToken != null) {
-        print('🔍 DEBUG: Current session refresh token length: ${currentSession!.refreshToken!.length}');
-        print('🔍 DEBUG: Current session refresh token: ${currentSession.refreshToken!.length > 20 ? currentSession.refreshToken!.substring(0, 20) : currentSession.refreshToken}...');
-
         // Validate refresh token before storing for biometric use
-        final isValidToken = await isValidRefreshToken(currentSession.refreshToken!);
+        final isValidToken = await isValidRefreshToken(currentSession!.refreshToken!);
         if (isValidToken) {
           await _secure.storeRefreshToken(currentSession.refreshToken!);
-          print('🔍 DEBUG: Stored valid refresh token for biometric login');
-        } else {
-          print('🚨 DEBUG: Login session returned invalid refresh token');
         }
       }
 
-      print('🔍 DEBUG: Login successful!');
       return AuthResult.success(user: user, profile: profile, store: store);
     } on AuthException catch (e) {
       print('🚨 DEBUG: AuthException: ${e.message}');
@@ -170,7 +138,6 @@ class AuthService {
       
       // If store validation fails due to RLS, try direct approach
       if (e.toString().contains('permission denied') || e.toString().contains('RLS')) {
-        print('🔍 DEBUG: RLS issue detected, trying fallback approach...');
         return _signInWithEmailAndStoreFallback(email, password, storeCode);
       }
       
@@ -185,14 +152,12 @@ class AuthService {
     String storeCode
   ) async {
     try {
-      print('🔍 DEBUG: Using fallback authentication method');
       
       // Step 1: Authenticate user first
       final res = await _supabase.auth.signInWithPassword(email: email, password: password);
       final user = res.user;
       if (user == null) return AuthResult.failure('Email hoặc mật khẩu không đúng');
       
-      print('🔍 DEBUG: User authenticated: ${user.id}');
 
       // Step 2: Get user profile (now we have RLS context)
       final profileResponse = await _supabase
@@ -202,7 +167,6 @@ class AuthService {
           .eq('is_active', true)
           .single();
       
-      print('🔍 DEBUG: Profile found: ${profileResponse}');
       final profile = UserProfile.fromJson(profileResponse);
 
       // Step 3: Get store info and validate store code
@@ -213,7 +177,6 @@ class AuthService {
           .eq('is_active', true)
           .single();
       
-      print('🔍 DEBUG: Store found: ${storeResponse}');
       final store = Store.fromJson(storeResponse);
       
       // Step 4: Validate store code matches
@@ -229,7 +192,6 @@ class AuthService {
       // Step 6: Store context for biometric login
       await _secure.storeLastStoreCode(storeCode);
       await _secure.storeLastStoreId(store.id);
-      print('🔍 DEBUG: Stored store context (fallback) - code: $storeCode, id: ${store.id}');
 
       // Step 7: Store refresh token for biometric session restoration
       final currentSession = _supabase.auth.currentSession;
@@ -238,13 +200,9 @@ class AuthService {
         final isValidToken = await isValidRefreshToken(currentSession!.refreshToken!);
         if (isValidToken) {
           await _secure.storeRefreshToken(currentSession.refreshToken!);
-          print('🔍 DEBUG: Stored valid refresh token for biometric login (fallback)');
-        } else {
-          print('🚨 DEBUG: Login session returned invalid refresh token (fallback)');
         }
       }
 
-      print('🔍 DEBUG: Fallback login successful!');
       return AuthResult.success(user: user, profile: profile, store: store);
     } catch (e) {
       print('🚨 DEBUG: Fallback method also failed: $e');
@@ -259,7 +217,6 @@ class AuthService {
     required String storeCode,
   }) async {
     try {
-      print('🔍 DEBUG: Enabling biometric authentication with password verification');
       final isAvailable = await BiometricService.isAvailable();
       if (!isAvailable) return AuthResult.failure('Thiết bị không hỗ trợ sinh trắc học');
 
@@ -289,10 +246,8 @@ class AuthService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId != null) {
         await _supabase.from('user_profiles').update({'biometric_enabled': true}).eq('id', userId);
-        print('🔍 DEBUG: Updated user profile with biometric_enabled = true');
       }
 
-      print('🔍 DEBUG: Successfully enabled biometric authentication with credentials');
       return AuthResult.success(profile: authResult.profile, store: authResult.store);
     } catch (e) {
       print('🚨 DEBUG: Enable biometric error: $e');
@@ -308,7 +263,6 @@ class AuthService {
   /// Disable biometric authentication for current user
   Future<AuthResult> disableBiometric() async {
     try {
-      print('🔍 DEBUG: Disabling biometric authentication');
 
       // Step 1: Check if user is logged in
       final currentSession = _supabase.auth.currentSession;
@@ -318,11 +272,9 @@ class AuthService {
 
       // Step 2: Delete stored biometric credentials
       await _secure.deleteBiometricCredentials();
-      print('🔍 DEBUG: Deleted biometric credentials');
 
       // Step 3: Also delete old biometric refresh token for backward compatibility
       await _secure.deleteBiometricRefreshToken();
-      print('🔍 DEBUG: Deleted legacy biometric refresh token');
 
       // Step 4: Update user profile in database
       final userId = currentSession.user.id;
@@ -331,7 +283,6 @@ class AuthService {
           .update({'biometric_enabled': false})
           .eq('id', userId);
 
-      print('🔍 DEBUG: Updated user profile with biometric_enabled = false');
 
       return AuthResult.success();
     } catch (e) {
@@ -343,23 +294,19 @@ class AuthService {
   /// Check if biometric authentication is available and enabled for current user
   Future<bool> isBiometricAvailableAndEnabled() async {
     try {
-      print('🔍 DEBUG: Checking biometric availability...');
 
       // Check device capability
       final isAvailable = await BiometricService.isAvailable();
       if (!isAvailable) {
-        print('🔍 DEBUG: Device does not support biometric');
         return false;
       }
 
       // Check if we have stored credentials (this means user enabled biometric before)
       final hasCredentials = await _secure.isBiometricCredentialsStored();
-      print('🔍 DEBUG: Has stored biometric credentials: $hasCredentials');
 
       // Also check legacy token storage for backward compatibility
       if (!hasCredentials) {
         final hasToken = await _secure.hasBiometricRefreshToken();
-        print('🔍 DEBUG: Has legacy biometric token: $hasToken');
         return hasToken;
       }
 
@@ -373,7 +320,6 @@ class AuthService {
   /// NEW: Store-aware biometric authentication with credential storage
   Future<AuthResult> signInWithBiometric() async {
     try {
-      print('🔍 DEBUG: Starting biometric authentication.');
       final biometricOk = await BiometricService.authenticate(reason: 'Đăng nhập vào AgriPOS');
       if (!biometricOk) return AuthResult.failure('Xác thực sinh trắc học không thành công');
 
@@ -381,7 +327,6 @@ class AuthService {
       final hasCredentials = await _secure.isBiometricCredentialsStored();
 
       if (hasCredentials) {
-        print('🔍 DEBUG: Using stored credentials for biometric login');
         final credentials = await _secure.getBiometricCredentials();
 
         final email = credentials['email'];
@@ -397,7 +342,6 @@ class AuthService {
           );
 
           if (result.isSuccess) {
-            print('🔍 DEBUG: Biometric login successful with stored credentials');
             return result;
           } else {
             print('🚨 DEBUG: Stored credentials failed, clearing biometric data');
@@ -408,7 +352,6 @@ class AuthService {
       }
 
       // FALLBACK: Try legacy token storage for backward compatibility
-      print('🔍 DEBUG: Falling back to legacy token storage');
       final storedToken = await _secure.getBiometricRefreshToken();
       if (storedToken == null) {
         return AuthResult.failure('Chưa thiết lập đăng nhập sinh trắc học. Vui lòng đăng nhập bằng mật khẩu.');
@@ -425,7 +368,6 @@ class AuthService {
             final store = await getCurrentUserStore();
 
             if (profile != null && store != null) {
-              print('🔍 DEBUG: Legacy token login successful');
               return AuthResult.success(user: session.user, profile: profile, store: store);
             }
           }
@@ -536,7 +478,6 @@ class AuthService {
       // IMPORTANT: DO NOT clear remember_email or remember_flag - these are user preferences that should persist
       // Keep refresh_token, last_store_code, last_store_id, biometric_credentials, remember_email and remember_flag
       // This preserves Face ID AND Remember Email across logout/login cycles
-      print('🔍 DEBUG: Sign out complete, preserved refresh token, store context, biometric credentials AND remember email preferences');
     } catch (e) {
       print('Error during sign out: $e');
       rethrow;
@@ -560,8 +501,6 @@ class AuthService {
 
   Future<UserProfile?> getUserProfile(String userId) async {
     try {
-      print('🔍 DEBUG: Getting user profile for userId: $userId');
-      print('🔍 DEBUG: Current auth.uid(): ${_supabase.auth.currentUser?.id ?? 'NULL'}');
 
       final row = await _supabase.from('user_profiles')
         .select('*')
@@ -569,7 +508,6 @@ class AuthService {
         .maybeSingle();
 
       if (row != null) {
-        print('🔍 DEBUG: User profile found successfully');
         return UserProfile.fromJson(row);
       } else {
         print('🚨 DEBUG: User profile not found - possible RLS policy issue');
@@ -620,25 +558,12 @@ class AuthService {
   /// Update user metadata with store_id for RLS policies
   Future<void> _updateUserMetadata(String userId, String storeId) async {
     try {
-      print('🔍 DEBUG: Updating user metadata - BEFORE session check');
-      final sessionBefore = _supabase.auth.currentSession;
-      print('🔍 DEBUG: Session BEFORE metadata update - refresh token length: ${sessionBefore?.refreshToken?.length ?? 'NULL'}');
 
       // AVOID admin.updateUserById() as it invalidates current session!
       // Use regular updateUser() instead which preserves session
       await _supabase.auth.updateUser(
         UserAttributes(data: {'store_id': storeId}),
       );
-
-      print('🔍 DEBUG: Updating user metadata - AFTER session check');
-      final sessionAfter = _supabase.auth.currentSession;
-      print('🔍 DEBUG: Session AFTER metadata update - refresh token length: ${sessionAfter?.refreshToken?.length ?? 'NULL'}');
-
-      // If session was invalidated, log warning but continue
-      if (sessionBefore?.refreshToken?.length != sessionAfter?.refreshToken?.length) {
-        print('🚨 DEBUG: WARNING - Session token length changed during metadata update!');
-        print('🚨 DEBUG: Before: ${sessionBefore?.refreshToken?.length ?? 'NULL'}, After: ${sessionAfter?.refreshToken?.length ?? 'NULL'}');
-      }
 
     } catch (e) {
       print('🚨 DEBUG: Error updating user metadata: $e');
@@ -758,7 +683,6 @@ class AuthService {
   Future<void> saveRefreshTokenForBiometric(String token) async {
     try {
       await _secure.storeBiometricRefreshToken(token);
-      print('🔍 DEBUG: Successfully saved new refresh token for biometric use.');
     } catch (e) {
       print('🚨 DEBUG: Failed to save refresh token for biometric use: $e');
       // Optionally rethrow or handle the error
@@ -768,30 +692,25 @@ class AuthService {
   /// Validates if a refresh token has proper JWT format
   Future<bool> isValidRefreshToken(String? token) async {
     if (token == null || token.isEmpty) {
-      print('🔍 DEBUG: Token is null or empty');
       return false;
     }
 
     if (token.length < 50) {
-      print('🔍 DEBUG: Token too short (${token.length} chars) - likely corrupted');
       return false;
     }
 
     // Basic JWT format check (should have 3 parts separated by dots)
     final parts = token.split('.');
     if (parts.length != 3) {
-      print('🔍 DEBUG: Token does not have JWT format (${parts.length} parts)');
       return false;
     }
 
     // CRITICAL: Distinguish between access token and refresh token
     // Access tokens are typically ~900 chars, refresh tokens are much longer
     if (token.length < 200) {
-      print('🔍 DEBUG: Token too short for refresh token (${token.length} chars) - likely access token');
       return false;
     }
 
-    print('🔍 DEBUG: Token validation passed (${token.length} chars) - valid refresh token');
     return true;
   }
 

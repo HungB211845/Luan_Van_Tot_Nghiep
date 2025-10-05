@@ -79,7 +79,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProductProvider>().loadProducts();
+      final provider = context.read<ProductProvider>();
+      if (provider.status == ProductStatus.idle) {
+        provider.loadProducts();
+      }
     });
     _searchController.addListener(() {
       context.read<ProductProvider>().searchProducts(_searchController.text);
@@ -164,13 +167,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔍 DEBUG: Check responsive detection on web
-    if (kDebugMode) {
-      print('🔍 ProductListScreen responsive: ${context.responsive.deviceType}');
-      print('🔍 Is Desktop: ${context.isDesktop}');
-      print('🔍 Is Web: ${PlatformInfo.isWeb}');
-    }
-
     return context.adaptiveWidget(
       mobile: _buildMobileLayout(),
       tablet: _buildDesktopLayout(), // Tablet uses desktop layout
@@ -179,7 +175,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Widget _buildMobileLayout() {
-    debugPrint('Building ProductListScreen Mobile Layout');
     return Scaffold(
       appBar: _buildAppBar(),
       body: Column(
@@ -192,7 +187,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Widget _buildDesktopLayout() {
-    debugPrint('Building ProductListScreen Desktop Layout');
     return Scaffold(
       body: Column(
         children: [

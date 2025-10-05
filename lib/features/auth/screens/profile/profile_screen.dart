@@ -33,7 +33,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
         });
       }
-      print('🔍 DEBUG: ProfileScreen loaded biometric state: $_biometricEnabled');
     } catch (e) {
       print('🚨 DEBUG: Error loading biometric state: $e');
       if (mounted) {
@@ -70,7 +69,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   name: user?.fullName ?? 'Người dùng',
                   email: Supabase.instance.client.auth.currentUser?.email ?? '',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to editProfile: ${RouteNames.editProfile}');
                     Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.editProfile);
                   },
                 ),
@@ -85,7 +83,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: CupertinoIcons.building_2_fill,
                   title: 'Thông tin cửa hàng',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to editStoreInfo: ${RouteNames.editStoreInfo}');
                     Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.editStoreInfo);
                   },
                 ),
@@ -94,7 +91,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: CupertinoIcons.person_2_fill,
                   title: 'Quản lý nhân viên',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to employeeManagement: ${RouteNames.employeeManagement}');
                     Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.employeeManagement);
                   },
                 ),
@@ -103,7 +99,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: CupertinoIcons.doc_text_fill,
                   title: 'Cài đặt hóa đơn & Thuế',
                   onTap: () {
-                    debugPrint('🔍 DEBUG: Navigating to invoiceSettings: ${RouteNames.invoiceSettings}');
                     Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.invoiceSettings);
                   },
                 ),
@@ -386,7 +381,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   );
 
-                                  print('🔍 DEBUG: ProfileScreen updated local biometric state: $value');
                                 } else if (authProvider.state.errorMessage != null) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(

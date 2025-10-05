@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/routing/route_names.dart';
@@ -11,7 +10,6 @@ import '../../features/debt/providers/debt_provider.dart';
 import '../../features/pos/providers/transaction_provider.dart';
 import '../../shared/utils/formatter.dart';
 import '../../shared/utils/datetime_helpers.dart';
-import '../../shared/utils/responsive.dart';
 import 'providers/quick_access_provider.dart';
 import 'providers/dashboard_provider.dart';
 
@@ -23,7 +21,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-
   @override
   void initState() {
     super.initState();
@@ -38,7 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-
   Future<void> _refreshData() async {
     final productProvider = context.read<ProductProvider>();
     await Future.wait([
@@ -50,222 +46,13 @@ class _HomeScreenState extends State<HomeScreen> {
     ]);
   }
 
-
   @override
   Widget build(BuildContext context) {
-    // 🎯 HomeScreen has CUSTOM responsive behavior, NOT using ResponsiveScaffold
-    // On tablet/desktop, only render content since MainNavigationScreen already has sidebar
-    return context.adaptiveWidget(
-      mobile: _buildMobileScaffold(),
-      tablet: _buildTabletDashboard(),
-      desktop: _buildDesktopDashboard(),
-    );
-  }
-
-  Widget _buildMobileScaffold() {
     return Scaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: _buildHomeContent(),
-      drawer: _buildNavigationDrawer(),
-    );
-  }
-
-  Widget _buildTabletDashboard() {
-    return Scaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: _buildTabletContent(),
-    );
-  }
-
-  Widget _buildDesktopDashboard() {
-    return Scaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: _buildDesktopContent(),
-    );
-  }
-
-  Widget _buildNavigationDrawer() {
-    return Drawer(
-      child: Column(
-        children: [
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: Colors.green),
-            accountName: Consumer<AuthProvider>(
-              builder: (context, auth, child) {
-                return Text(auth.currentUser?.fullName ?? 'User');
-              },
-            ),
-            accountEmail: Consumer<AuthProvider>(
-              builder: (context, auth, child) {
-                return Text('ID: ${auth.currentUser?.id.substring(0, 8) ?? 'N/A'}...');
-              },
-            ),
-            currentAccountPicture: Consumer<AuthProvider>(
-              builder: (context, auth, child) {
-                final initial = (auth.currentUser?.fullName ?? 'U')
-                    .substring(0, 1)
-                    .toUpperCase();
-                return CircleAvatar(
-                  backgroundColor: Colors.white,
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.home),
-            title: const Text('Trang chủ'),
-            onTap: () => Navigator.pop(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.point_of_sale),
-            title: const Text('Bán hàng'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, RouteNames.pos);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.people),
-            title: const Text('Khách hàng'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, RouteNames.customers);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.inventory),
-            title: const Text('Sản phẩm'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, RouteNames.products);
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Cài đặt'),
-            onTap: () {
-              Navigator.pop(context);
-              context.read<NavigationProvider>().goToProfile();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 📱 Tablet: 2-Column Dashboard Layout
-  Widget _buildTabletContent() {
-    return RefreshIndicator(
-      onRefresh: _refreshData,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(context.sectionPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Section - Full Width
-            _buildGreetingWidget(),
-            SizedBox(height: context.cardSpacing * 2),
-
-            // Search Bar - Full Width
-            _buildDesktopSearchBar(),
-            SizedBox(height: context.cardSpacing * 2),
-
-            // Two-Column Layout
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Left Column (40%) - Revenue Chart
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    children: [
-                      _buildRevenueChartWidget(),
-                      SizedBox(height: context.cardSpacing * 2),
-                      _buildForYouWidget(),
-                    ],
-                  ),
-                ),
-                SizedBox(width: context.cardSpacing * 2),
-                // Right Column (60%) - Quick Actions
-                Expanded(
-                  flex: 3,
-                  child: _buildQuickActionsWidget(),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 🖥️ Desktop: 3-Column Dashboard Layout
-  Widget _buildDesktopContent() {
-    return RefreshIndicator(
-      onRefresh: _refreshData,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(context.sectionPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Section - Full Width
-            Row(
-              children: [
-                Expanded(child: _buildGreetingWidget()),
-                const SizedBox(width: 24),
-                // Right-aligned search bar on desktop
-                Container(
-                  width: 400,
-                  child: _buildDesktopSearchBar(),
-                ),
-              ],
-            ),
-            SizedBox(height: context.cardSpacing * 3),
-
-            // Three-Column Layout
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Left Column (35%) - Revenue Chart
-                Expanded(
-                  flex: 35,
-                  child: _buildRevenueChartWidget(),
-                ),
-                SizedBox(width: context.cardSpacing * 2),
-                // Middle Column (30%) - For You Insights
-                Expanded(
-                  flex: 30,
-                  child: _buildForYouWidget(),
-                ),
-                SizedBox(width: context.cardSpacing * 2),
-                // Right Column (35%) - Quick Actions
-                Expanded(
-                  flex: 35,
-                  child: _buildQuickActionsWidget(),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHomeContent() {
-
-    
-    return CustomScrollView(
-      slivers: [
-        // Mobile AppBar with search
-        if (context.isMobile) ...[
+      body: CustomScrollView(
+        slivers: [
+          // Minimal AppBar - Clean Navigation Bar
           SliverAppBar(
             floating: false,
             pinned: true,
@@ -296,37 +83,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            title: GestureDetector(
-              onTap: () {
-                Navigator.of(context, rootNavigator: true)
-                    .pushNamed(RouteNames.globalSearch);
-              },
-              child: Container(
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      CupertinoIcons.search,
-                      color: Colors.grey.shade600,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Tìm kiếm...',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
             actions: [
               IconButton(
                 icon: const Icon(CupertinoIcons.bell),
@@ -336,93 +92,38 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-        ],
 
-        // Pull to refresh
-        CupertinoSliverRefreshControl(
-          onRefresh: _refreshData,
-        ),
+          // Pull to refresh
+          CupertinoSliverRefreshControl(onRefresh: _refreshData),
 
-        // Dashboard Content với responsive padding
-        SliverPadding(
-          padding: EdgeInsets.all(context.sectionPadding),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              // Dynamic Greeting Widget
-              _buildGreetingWidget(),
-              SizedBox(height: context.cardSpacing * 2),
+          // Widget Dashboard Content
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // Dynamic Greeting Widget
+                _buildGreetingWidget(),
+                const SizedBox(height: 16),
 
-              // Desktop search bar (not in AppBar)
-              if (context.isDesktop) ...[
-                _buildDesktopSearchBar(),
-                SizedBox(height: context.cardSpacing * 2),
-              ],
+                // Global Search Bar
+                _buildSearchBar(),
+                const SizedBox(height: 24),
 
-              // Revenue Chart Widget
-              _buildRevenueChartWidget(),
-              SizedBox(height: context.cardSpacing * 2),
+                // Revenue Chart Widget
+                _buildRevenueChartWidget(),
+                const SizedBox(height: 16),
 
-              // Smart "For You" Widget
-              _buildForYouWidget(),
-              SizedBox(height: context.cardSpacing * 2),
+                // Smart "For You" Widget (Alerts + Recent Activity)
+                _buildForYouWidget(),
+                const SizedBox(height: 16),
 
-              // RESPONSIVE Quick Actions Grid  
-              _buildQuickActionsWidget(),
-              SizedBox(height: context.sectionPadding * 2),
-            ]),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 🔍 Desktop Search Bar
-  Widget _buildDesktopSearchBar() {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            Navigator.of(context, rootNavigator: true)
-                .pushNamed(RouteNames.globalSearch);
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Icon(
-                  CupertinoIcons.search,
-                  color: Colors.grey.shade600,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Tìm kiếm sản phẩm, giao dịch, khách hàng...',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 16,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+                // Customizable Quick Actions Grid
+                _buildQuickActionsWidget(),
+                const SizedBox(height: 32),
+              ]),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -457,6 +158,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // 🔍 Global Search Bar
+  Widget _buildSearchBar() {
+    return Hero(
+      tag: 'global_search',
+      child: Material(
+        color: Colors.transparent,
+        child: GestureDetector(
+          onTap: () {
+            Navigator.of(
+              context,
+              rootNavigator: true,
+            ).pushNamed(RouteNames.globalSearch);
+          },
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.search,
+                  color: Colors.grey.shade600,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Tìm kiếm sản phẩm, giao dịch...',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // 📊 Interactive Revenue Chart Widget
   Widget _buildRevenueChartWidget() {
     return Consumer<DashboardProvider>(
@@ -475,7 +216,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final weeklyData = dashboard.weeklyData;
         final maxRevenue = weeklyData.isEmpty
             ? 100000.0
-            : weeklyData.map((d) => d.revenue).reduce((a, b) => a > b ? a : b) * 1.2;
+            : weeklyData.map((d) => d.revenue).reduce((a, b) => a > b ? a : b) *
+                  1.2;
 
         return GestureDetector(
           // Swipe to navigate weeks
@@ -507,8 +249,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Header: Tap to view Reports
                 GestureDetector(
                   onTap: () {
-                    Navigator.of(context, rootNavigator: true)
-                        .pushNamed(RouteNames.reports);
+                    Navigator.of(
+                      context,
+                      rootNavigator: true,
+                    ).pushNamed(RouteNames.reports);
                   },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -544,12 +288,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (event.isInterestedForInteractions &&
                               response != null &&
                               response.spot != null) {
-                            dashboard.selectDay(response.spot!.touchedBarGroupIndex);
+                            dashboard.selectDay(
+                              response.spot!.touchedBarGroupIndex,
+                            );
                           }
                         },
                         touchTooltipData: BarTouchTooltipData(
                           getTooltipColor: (group) => Colors.black87,
-                          tooltipBorder: const BorderSide(color: Colors.transparent),
+                          tooltipBorder: const BorderSide(
+                            color: Colors.transparent,
+                          ),
                           tooltipPadding: const EdgeInsets.all(8),
                           tooltipMargin: 8,
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
@@ -573,13 +321,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             showTitles: true,
                             getTitlesWidget: (value, meta) {
                               final index = value.toInt();
-                              if (index >= weeklyData.length) return const SizedBox();
+                              if (index >= weeklyData.length)
+                                return const SizedBox();
                               return Text(
                                 weeklyData[index].weekdayLabel,
                                 style: TextStyle(
                                   color: Colors.grey.shade600,
                                   fontSize: 12,
-                                  fontWeight: dashboard.selectedDayIndex == index
+                                  fontWeight:
+                                      dashboard.selectedDayIndex == index
                                       ? FontWeight.bold
                                       : FontWeight.normal,
                                 ),
@@ -602,11 +352,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       barGroups: weeklyData
                           .asMap()
                           .entries
-                          .map((entry) => _buildBarGroup(
-                                entry.key,
-                                entry.value.revenue,
-                                isSelected: dashboard.selectedDayIndex == entry.key,
-                              ))
+                          .map(
+                            (entry) => _buildBarGroup(
+                              entry.key,
+                              entry.value.revenue,
+                              isSelected:
+                                  dashboard.selectedDayIndex == entry.key,
+                            ),
+                          )
                           .toList(),
                     ),
                   ),
@@ -669,29 +422,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Summary: Tap to view Reports
                 GestureDetector(
                   onTap: () {
-                    Navigator.of(context, rootNavigator: true)
-                        .pushNamed(RouteNames.reports);
+                    Navigator.of(
+                      context,
+                      rootNavigator: true,
+                    ).pushNamed(RouteNames.reports);
                   },
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'Tổng tuần này',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: Colors.grey, fontSize: 14),
                       ),
-                      const Spacer(),
-                      Flexible(
-                        child: Text(
-                          AppFormatter.formatCurrency(dashboard.weekTotalRevenue),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
+                      Text(
+                        AppFormatter.formatCurrency(dashboard.weekTotalRevenue),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                       ),
                     ],
@@ -794,8 +542,9 @@ class _HomeScreenState extends State<HomeScreen> {
           // Fallback: Recent Activity if no alerts
           Consumer2<ProductProvider, DebtProvider>(
             builder: (context, productProvider, debtProvider, child) {
-              final hasAlerts = productProvider.lowStockProducts.isNotEmpty ||
-                                debtProvider.overdueDebts.isNotEmpty;
+              final hasAlerts =
+                  productProvider.lowStockProducts.isNotEmpty ||
+                  debtProvider.overdueDebts.isNotEmpty;
 
               if (hasAlerts) return const SizedBox.shrink();
 
@@ -870,10 +619,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -890,126 +636,110 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ⚡ iOS-Style Quick Actions Grouped List
+  // ⚡ Customizable Quick Actions Grid
   Widget _buildQuickActionsWidget() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // iOS Section Header
-        _buildSectionHeader('TRUY CẬP NHANH'),
-
-        // Dynamic Grouped List from QuickAccessProvider
-        Consumer<QuickAccessProvider>(
-          builder: (context, provider, child) {
-            if (provider.isLoading) {
-              return _buildGroupedList([
-                const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Truy cập nhanh',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
-              ]);
-            }
+              ),
+              TextButton(
+                onPressed: () async {
+                  await Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).pushNamed(RouteNames.editQuickAccess);
+                  if (context.mounted) {
+                    context.read<QuickAccessProvider>().loadConfiguration();
+                  }
+                },
+                child: const Text(
+                  'Sửa',
+                  style: TextStyle(color: Colors.green, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
-            final items = provider.visibleItems;
-            if (items.isEmpty) {
-              return _buildGroupedList([
-                const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(
+          // Dynamic Grid from QuickAccessProvider
+          Consumer<QuickAccessProvider>(
+            builder: (context, provider, child) {
+              if (provider.isLoading) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              final items = provider.visibleItems;
+              if (items.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
                     child: Text(
                       'Chưa có mục nào. Nhấn "Sửa" để thêm.',
                       style: TextStyle(color: Colors.grey),
                     ),
                   ),
-                ),
-              ]);
-            }
+                );
+              }
 
-            // Build list items with separators
-            final listItems = <Widget>[];
-            for (int i = 0; i < items.length; i++) {
-              final item = items[i];
-              listItems.add(
-                _buildQuickActionRow(
-                  icon: item.icon,
-                  label: item.label,
-                  color: item.color,
-                  onTap: () => Navigator.of(context, rootNavigator: true)
-                      .pushNamed(item.route),
+              return GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.5,
                 ),
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return _buildQuickActionCard(
+                    icon: item.icon,
+                    label: item.label,
+                    color: item.color,
+                    onTap: () => Navigator.of(
+                      context,
+                      rootNavigator: true,
+                    ).pushNamed(item.route),
+                  );
+                },
               );
-
-              // Add divider between items (not after last item)
-              if (i < items.length - 1) {
-                listItems.add(_buildDivider());
-              }
-            }
-
-            return _buildGroupedList(listItems);
-          },
-        ),
-      ],
-    );
-  }
-
-  // iOS Section Header (like ProfileScreen)
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8, top: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: CupertinoColors.systemGrey,
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              await Navigator.of(context, rootNavigator: true)
-                  .pushNamed(RouteNames.editQuickAccess);
-              if (context.mounted) {
-                context.read<QuickAccessProvider>().loadConfiguration();
-              }
             },
-            child: const Text(
-              'Sửa',
-              style: TextStyle(
-                color: Colors.green,
-                fontSize: 16,
-              ),
-            ),
           ),
         ],
       ),
     );
   }
 
-  // iOS Grouped List Container (like ProfileScreen)
-  Widget _buildGroupedList(List<Widget> children) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(children: children),
-    );
-  }
-
-  // iOS Divider between list items (like ProfileScreen)
-  Widget _buildDivider() {
-    return Container(
-      margin: const EdgeInsets.only(left: 52),
-      height: 0.5,
-      color: CupertinoColors.separator,
-    );
-  }
-
-  Widget _buildQuickActionRow({
+  Widget _buildQuickActionCard({
     required IconData icon,
     required String label,
     required Color color,
@@ -1019,36 +749,24 @@ class _HomeScreenState extends State<HomeScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icon with circular background
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: color,
                 ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 16),
-              // Label
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-              // Chevron
-              const Icon(
-                CupertinoIcons.chevron_right,
-                color: CupertinoColors.systemGrey3,
-                size: 20,
               ),
             ],
           ),

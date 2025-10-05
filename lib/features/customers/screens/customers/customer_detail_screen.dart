@@ -319,10 +319,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 final outstandingDebt = customerDebts
                     .fold<double>(0, (sum, debt) => sum + debt.remainingAmount);
 
-                print('🔍 DEBUG Customer Detail - Customer ID: ${widget.customer.id}');
-                print('🔍 DEBUG Total debts in provider: ${debtProvider.debts.length}');
-                print('🔍 DEBUG Customer debts: ${customerDebts.length}');
-                print('🔍 DEBUG Outstanding debt: $outstandingDebt');
                 return Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

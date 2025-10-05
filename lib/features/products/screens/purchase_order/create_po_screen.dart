@@ -552,6 +552,8 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             ),
             const SizedBox(height: 12),
             _buildSmartPriceField(item, poProvider),
+            const SizedBox(height: 12), // ADDED
+            _buildSellingPriceField(item, poProvider), // ADDED
             if (isZeroQuantity)
               Container(
                 margin: const EdgeInsets.only(top: 8),
@@ -607,6 +609,59 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       ),
     );
   }
+
+  Widget _buildSellingPriceField(
+    POCartItem item,
+    PurchaseOrderProvider poProvider,
+  ) {
+    return TextFormField(
+      controller: item.sellingPriceController,
+      decoration: InputDecoration(
+        labelText: 'Giá bán mới (tùy chọn)',
+        hintText: 'Để trống để giữ nguyên giá bán hiện tại',
+        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.sell_outlined),
+        suffixText: 'VND',
+      ),
+      keyboardType: TextInputType.number,
+      onTap: () {
+        item.sellingPriceController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: item.sellingPriceController.text.length,
+        );
+      },
+      onChanged: (value) {
+        if (value.isEmpty) {
+          poProvider.updatePOCartItem(item.product.id, clearSellingPrice: true);
+          return;
+        }
+        final price = double.tryParse(value);
+        if (price != null && price >= 0) {
+          poProvider.updatePOCartItem(item.product.id, newSellingPrice: price);
+        } else if (price == null) {
+          item.sellingPriceController.text =
+              item.sellingPrice?.toStringAsFixed(0) ?? '';
+          item.sellingPriceController.selection = TextSelection.fromPosition(
+            TextPosition(offset: item.sellingPriceController.text.length),
+          );
+        }
+      },
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return null; // Optional field
+        }
+        final price = double.tryParse(value);
+        if (price == null) {
+          return 'Vui lòng nhập số hợp lệ';
+        }
+        if (price < 0) {
+          return 'Giá không được âm';
+        }
+        return null;
+      },
+    );
+  }
+
 
   Widget _buildSmartQuantityField(
     POCartItem item,

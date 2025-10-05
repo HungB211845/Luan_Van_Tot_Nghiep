@@ -149,11 +149,17 @@ class TransactionService extends BaseService {
   }
 
   /// Log slow queries for performance monitoring
+  /// TEMPORARILY DISABLED: Causing database overload during timeout issues
   Future<void> _logSlowQuery(
     String queryType,
     int executionTimeMs,
     Map<String, dynamic> queryParams,
   ) async {
+    // DISABLED: This was creating infinite loop when database is slow
+    // Re-enable after database performance is fixed
+    return;
+
+    /* ORIGINAL CODE - COMMENTED OUT
     try {
       await _supabase.rpc(
         'log_slow_query',
@@ -167,6 +173,7 @@ class TransactionService extends BaseService {
       // Don't throw on logging errors, just print them
       print('Failed to log slow query: $e');
     }
+    */
   }
 
   // =====================================================

@@ -17,24 +17,24 @@ import '../providers/navigation_provider.dart';
 
 class AppProviders {
   static List<SingleChildWidget> get list => [
-        ChangeNotifierProvider(create: (_) => CustomerProvider()),
-        ChangeNotifierProvider(create: (_) => ProductProvider()),
-        ChangeNotifierProvider(create: (_) => ProductEditModeProvider()),
-        ChangeNotifierProvider(create: (_) => TransactionProvider()),
-        ChangeNotifierProvider(create: (_) => CompanyProvider()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => PermissionProvider()),
-        ChangeNotifierProvider(create: (_) => StoreProvider()),
-        ChangeNotifierProvider(create: (_) => SessionProvider()),
-        ChangeNotifierProvider(
-          create: (context) => PurchaseOrderProvider(
-            Provider.of<ProductProvider>(context, listen: false),
-          ),
-        ),
-        ChangeNotifierProvider(create: (_) => DebtProvider()),
-        ChangeNotifierProvider(create: (_) => QuickAccessProvider()),
-        ChangeNotifierProvider(create: (_) => DashboardProvider()),
-        ChangeNotifierProvider(create: (_) => NavigationProvider()),
-        // Dễ dàng thêm providers mới ở đây
-      ];
+    ChangeNotifierProvider(create: (_) => CustomerProvider()),
+    ChangeNotifierProvider(create: (_) => ProductProvider()),
+    ChangeNotifierProvider(create: (_) => ProductEditModeProvider()),
+    ChangeNotifierProvider(create: (_) => TransactionProvider()),
+    ChangeNotifierProvider(create: (_) => CompanyProvider()),
+    ChangeNotifierProvider(create: (_) => AuthProvider()),
+    ChangeNotifierProvider(create: (_) => PermissionProvider()),
+    ChangeNotifierProvider(create: (_) => StoreProvider()),
+    ChangeNotifierProvider(create: (_) => SessionProvider()),
+    ChangeNotifierProvider(
+      create: (context) => PurchaseOrderProvider(
+        Provider.of<ProductProvider>(context, listen: false),
+      ),
+    ),
+    ChangeNotifierProvider(create: (_) => DebtProvider()),
+    ChangeNotifierProvider(create: (_) => QuickAccessProvider()),
+    ChangeNotifierProvider(create: (_) => DashboardProvider()),
+    ChangeNotifierProvider(create: (_) => NavigationProvider()),
+    // Dễ dàng thêm providers mới ở đây
+  ];
 }

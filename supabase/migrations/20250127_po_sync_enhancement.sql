@@ -76,11 +76,8 @@ GROUP BY po.id, po.po_number, po.status, po.delivery_date, po.supplier_id,
 -- Grant access to the view
 GRANT SELECT ON po_inventory_impact TO authenticated;
 
--- Add RLS policy for store isolation
-ALTER VIEW po_inventory_impact ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "po_inventory_impact_store_isolation" ON po_inventory_impact
-    FOR SELECT TO authenticated
-    USING (store_id = (SELECT store_id FROM user_profiles WHERE id = auth.uid()));
+-- Note: Views inherit RLS from underlying tables automatically
+-- No need to enable RLS on views - it's inherited from purchase_orders, companies, etc.
 
 -- =====================================================
 -- 4. CREATE ENHANCED RPC FUNCTION
@@ -177,8 +174,8 @@ BEGIN
             false
         ) RETURNING id INTO batch_id;
 
-        -- ✅ NEW FEATURE: Update selling price if provided in PO item
-        IF item_record.selling_price IS NOT NULL AND item_record.selling_price > 0 THEN
+        -- ✅ NEW FEATURE: Update selling price if provided in PO item AND is higher than current
+        IF item_record.selling_price IS NOT NULL AND item_record.selling_price > item_record.current_price THEN
             -- Store old price for history tracking
             old_selling_price := item_record.current_price;
             

@@ -69,7 +69,6 @@ class SecureStorageService {
   Future<String?> getLastStoreName() async => read(_keyLastStoreName);
 
   Future<void> clearLastStoreCode() async {
-    print('🔍 DEBUG: Clearing store code - this should only happen on explicit store switch');
     await delete(_keyLastStoreCode);
     await delete(_keyLastStoreId);
     await delete(_keyLastStoreName);
@@ -82,9 +81,6 @@ class SecureStorageService {
       final storeCode = await getLastStoreCode();
       final hasCode = storeCode != null && storeCode.isNotEmpty;
 
-      print('🔍 DEBUG: Store code check:');
-      print('  - Store Code: ${storeCode ?? 'null'}');
-      print('  - Has Store Code: $hasCode');
 
       return hasCode;
     } catch (e) {

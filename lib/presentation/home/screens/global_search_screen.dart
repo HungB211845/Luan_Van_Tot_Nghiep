@@ -40,12 +40,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint('🔍 SEARCH: Global Search Screen initialized');
 
     // Auto-focus search field when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
-      debugPrint('🔍 SEARCH: Search field focused');
     });
 
     // Listen to search input with debouncing
@@ -64,10 +62,8 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
   void _onSearchChanged() {
     final query = _searchController.text.trim();
-    debugPrint('🔍 SEARCH: Query changed to: "$query"');
 
     if (query.isEmpty) {
-      debugPrint('🔍 SEARCH: Query empty, clearing results');
       setState(() {
         _productResults.clear();
         _transactionResults.clear();
@@ -79,7 +75,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     // Simple debouncing - search after 300ms delay
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_searchController.text.trim() == query) {
-        debugPrint('🔍 SEARCH: Performing search for: "$query"');
         _performSearch(query);
       }
     });
@@ -87,11 +82,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
   Future<void> _performSearch(String query) async {
     if (query.length < 2) {
-      debugPrint('🔍 SEARCH: Query too short: "$query" (${query.length} chars)');
       return; // Minimum 2 characters
     }
 
-    debugPrint('🔍 SEARCH: Starting search for: "$query"');
     setState(() => _isLoading = true);
 
     // Save search to recent searches
@@ -104,10 +97,8 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         _searchTransactions(query),
         _searchCustomers(query),
       ]);
-      debugPrint('🔍 SEARCH: Search completed successfully');
     } catch (e) {
       // Handle search errors gracefully
-      debugPrint('🚨 SEARCH ERROR: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -117,29 +108,24 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
   Future<void> _searchProducts(String query) async {
     try {
-      debugPrint('🔍 SEARCH: Searching products for: "$query"');
       final productProvider = context.read<ProductProvider>();
       await productProvider.searchProducts(query);
 
       if (mounted) {
         final results = productProvider.products.take(5).toList();
-        debugPrint('🔍 SEARCH: Found ${results.length} products');
         setState(() {
           _productResults = results;
         });
       }
     } catch (e) {
-      debugPrint('🚨 SEARCH ERROR: Product search failed: $e');
     }
   }
 
   Future<void> _searchTransactions(String query) async {
     try {
-      debugPrint('🔍 SEARCH: Searching transactions for: "$query"');
       final transactionProvider = context.read<TransactionProvider>();
       // Search transactions by ID or customer name
       final allTransactions = transactionProvider.transactions;
-      debugPrint('🔍 SEARCH: Total transactions available: ${allTransactions.length}');
 
       final results = allTransactions.where((tx) {
         final txId = tx.id.toLowerCase();
@@ -150,22 +136,18 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                customerName.contains(searchQuery);
       }).take(5).toList();
 
-      debugPrint('🔍 SEARCH: Found ${results.length} transactions');
       if (mounted) {
         setState(() => _transactionResults = results);
       }
     } catch (e) {
-      debugPrint('🚨 SEARCH ERROR: Transaction search failed: $e');
     }
   }
 
   Future<void> _searchCustomers(String query) async {
     try {
-      debugPrint('🔍 SEARCH: Searching customers for: "$query"');
       final customerProvider = context.read<CustomerProvider>();
       // Search customers by name or phone
       final allCustomers = customerProvider.customers;
-      debugPrint('🔍 SEARCH: Total customers available: ${allCustomers.length}');
 
       final results = allCustomers.where((customer) {
         final name = customer.name.toLowerCase();
@@ -176,12 +158,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                phone.contains(searchQuery);
       }).take(5).toList();
 
-      debugPrint('🔍 SEARCH: Found ${results.length} customers');
       if (mounted) {
         setState(() => _customerResults = results);
       }
     } catch (e) {
-      debugPrint('🚨 SEARCH ERROR: Customer search failed: $e');
     }
   }
 
@@ -215,7 +195,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         setState(() {});
       }
     } catch (e) {
-      debugPrint('🚨 SUGGESTIONS ERROR: Failed to load suggestions: $e');
     }
   }
 

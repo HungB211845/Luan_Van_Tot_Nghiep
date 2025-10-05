@@ -42,10 +42,6 @@ class SessionService {
     final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
     final valid = exp > now;
 
-    print('🔍 DEBUG: Supabase session validation:');
-    print('  - Current time: $now');
-    print('  - Expires at: $exp');
-    print('  - Session valid: $valid');
 
     return valid;
   }

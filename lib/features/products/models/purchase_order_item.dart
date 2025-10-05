@@ -6,6 +6,7 @@ class PurchaseOrderItem {
   final String productId;
   final int quantity;
   final double unitCost;
+  final double? sellingPrice; // ADDED
   final String? unit; // Thêm trường unit
   final double totalCost;
   final int receivedQuantity;
@@ -20,6 +21,7 @@ class PurchaseOrderItem {
     required this.productId,
     required this.quantity,
     required this.unitCost,
+    this.sellingPrice, // ADDED
     this.unit,
     required this.totalCost,
     this.receivedQuantity = 0,
@@ -36,6 +38,7 @@ class PurchaseOrderItem {
       'product_id': productId,
       'quantity': quantity,
       'unit_cost': unitCost,
+      'selling_price': sellingPrice, // ADDED
       'unit': unit, // Thêm vào map
       'received_quantity': receivedQuantity,
       'notes': notes,
@@ -59,6 +62,7 @@ class PurchaseOrderItem {
       productId: map['product_id'] ?? '',
       quantity: map['quantity']?.toInt() ?? 0,
       unitCost: (map['unit_cost'] as num?)?.toDouble() ?? 0.0,
+      sellingPrice: (map['selling_price'] as num?)?.toDouble(), // ADDED
       unit: map['unit'], // Thêm từ map
       totalCost: (map['total_cost'] as num?)?.toDouble() ?? 0.0,
       receivedQuantity: map['received_quantity']?.toInt() ?? 0,

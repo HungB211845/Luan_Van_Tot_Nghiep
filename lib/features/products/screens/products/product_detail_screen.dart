@@ -558,7 +558,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // Mobile layout (traditional single column)
   Widget _buildMobileLayout(Product product) {
-    debugPrint('Building ProductDetailScreen Mobile Layout');
     return Scaffold(
       appBar: AppBar(
         title: Center(
@@ -590,7 +589,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // Tablet layout (optimized spacing)
   Widget _buildTabletLayout(Product product) {
-    debugPrint('Building ProductDetailScreen Tablet Layout');
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -623,7 +621,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // Desktop layout (two-column master-detail)
   Widget _buildDesktopLayout(Product product) {
-    debugPrint('Building ProductDetailScreen Desktop Layout');
     return Scaffold(
       body: Column(
         children: [

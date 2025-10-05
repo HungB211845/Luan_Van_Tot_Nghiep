@@ -167,10 +167,10 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      mainAxisSize: MainAxisSize.min, // Fix overflow
                       children: [
-                        // FIXED: Use Expanded to prevent overflow
-                        Expanded(
-                          flex: 3,
+                        // FIXED: Flexible instead of Expanded for better space usage
+                        Flexible(
                           child: Text(
                             batch.batchNumber,
                             style: const TextStyle(
@@ -181,23 +181,20 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                           ),
                         ),
                         if (isExpiringSoon) ...[
-                          const SizedBox(width: 8),
-                          Expanded(
-                            flex: 2,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.orange[100],
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                'Sắp hết hạn',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.orange[700],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                          const SizedBox(width: 4), // Reduced spacing
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Sắp hết hạn',
+                              style: TextStyle(
+                                fontSize: 9, // Smaller font
+                                color: Colors.orange[700],
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -229,9 +226,11 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getStockColor(batch.quantity.toDouble()).withOpacity(0.1),
+                      color: _getStockColor(batch.quantity.toDouble())
+                          .withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(

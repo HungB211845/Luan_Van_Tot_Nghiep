@@ -66,6 +66,11 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
         _viewModel?.initialize();
       });
       _isInitialized = true;
+    } else {
+      // FIXED: Auto-refresh on hot restart or screen focus
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _viewModel?.forceRefresh();
+      });
     }
   }
 
