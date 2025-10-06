@@ -33,56 +33,71 @@ temperature: 0.3
 
 ### 1. TỘI ÁC LỚN NHẤT: TỰ Ý REFACTOR THAY VÌ SỬA LỖI NHỎ
 
-*   **Vấn đề:** Khi phát hiện lỗi `setState during build`, lẽ ra chỉ cần sửa đúng cái anti-pattern trong Provider là xong.
-*   **Sai lầm của tao:** Tao đã quá tự tin, thay vì sửa lỗi nhỏ, tao lại cố "đập đi xây lại" cả một kiến trúc (`DebtProvider`, `DebtService`) theo ý mình (mô hình "sổ kế toán").
-*   **Hậu quả:** Hành động này phá vỡ toàn bộ các màn hình khác đang phụ thuộc vào kiến trúc cũ, tạo ra một mớ lỗi biên dịch khổng lồ và biến một lỗi nhỏ thành một thảm họa.
-*   **BÀI HỌC:** **Cấm tuyệt đối refactor lớn khi chưa hiểu hết hệ thống và chưa được yêu cầu.** Ưu tiên các bản vá nhỏ, có mục tiêu rõ ràng. Tôn trọng kiến trúc hiện có.
+- **Vấn đề:** Khi phát hiện lỗi `setState during build`, lẽ ra chỉ cần sửa đúng cái anti-pattern trong Provider là xong.
+- **Sai lầm của tao:** Tao đã quá tự tin, thay vì sửa lỗi nhỏ, tao lại cố "đập đi xây lại" cả một kiến trúc (`DebtProvider`, `DebtService`) theo ý mình (mô hình "sổ kế toán").
+- **Hậu quả:** Hành động này phá vỡ toàn bộ các màn hình khác đang phụ thuộc vào kiến trúc cũ, tạo ra một mớ lỗi biên dịch khổng lồ và biến một lỗi nhỏ thành một thảm họa.
+- **BÀI HỌC:** **Cấm tuyệt đối refactor lớn khi chưa hiểu hết hệ thống và chưa được yêu cầu.** Ưu tiên các bản vá nhỏ, có mục tiêu rõ ràng. Tôn trọng kiến trúc hiện có.
 
 ### 2. LỖI KINH ĐIỂN: `setState during build` VÀ `notifyListeners()`
 
-*   **Vấn đề:** App bị crash hoặc rơi vào vòng lặp vô hạn khi load dữ liệu.
-*   **Nguyên nhân gốc:** Hàm load data trong Provider (ví dụ `loadAllDebts`) gọi `notifyListeners()` **ngay khi bắt đầu**, trước khi `await` network call. Khi hàm này được gọi từ `initState` của một widget, nó gây ra exception.
-*   **Sai lầm của tao:** Tao đã sửa lỗi này ở `ProductProvider` nhưng lại lặp lại y hệt khi viết lại `DebtProvider`.
-*   **BÀI HỌC:** Mọi hàm load dữ liệu trong Provider **BẮT BUỘC** phải theo pattern an toàn sau:
+- **Vấn đề:** App bị crash hoặc rơi vào vòng lặp vô hạn khi load dữ liệu.
+- **Nguyên nhân gốc:** Hàm load data trong Provider (ví dụ `loadAllDebts`) gọi `notifyListeners()` **ngay khi bắt đầu**, trước khi `await` network call. Khi hàm này được gọi từ `initState` của một widget, nó gây ra exception.
+- **Sai lầm của tao:** Tao đã sửa lỗi này ở `ProductProvider` nhưng lại lặp lại y hệt khi viết lại `DebtProvider`.
+- **BÀI HỌC:** Mọi hàm load dữ liệu trong Provider **BẮT BUỘC** phải theo pattern an toàn sau:
 
-    ```dart
-    Future<void> loadData() async {
-      if (_isLoading) return;
-      // 1. Set state loading một cách "im lặng"
-      _isLoading = true;
-      _errorMessage = null;
-      // TUYỆT ĐỐI KHÔNG notifyListeners() ở đây
+  ```dart
+  Future<void> loadData() async {
+    if (_isLoading) return;
+    // 1. Set state loading một cách "im lặng"
+    _isLoading = true;
+    _errorMessage = null;
+    // TUYỆT ĐỐI KHÔNG notifyListeners() ở đây
 
-      try {
-        // 2. Await để lấy dữ liệu
-        _data = await _service.fetchData();
-      } catch (e) {
-        _errorMessage = e.toString();
-      } finally {
-        // 3. Set state và GỌI NOTIFYLISTENERS MỘT LẦN DUY NHẤT ở cuối
-        _isLoading = false;
-        notifyListeners();
-      }
+    try {
+      // 2. Await để lấy dữ liệu
+      _data = await _service.fetchData();
+    } catch (e) {
+      _errorMessage = e.toString();
+    } finally {
+      // 3. Set state và GỌI NOTIFYLISTENERS MỘT LẦN DUY NHẤT ở cuối
+      _isLoading = false;
+      notifyListeners();
     }
-    ```
+  }
+  ```
 
 ### 3. SỰ THỐI NÁT CỦA CODEBASE: HÀM "MA" VÀ DOCS LỆCH PHA
 
-*   **Vấn đề:** App gọi hàm RPC `apply_customer_payment` nhưng hàm này không hề tồn tại trong migration. Trong khi đó, docs lại ghi là `process_customer_payment`.
-*   **Sai lầm của tao:** Ban đầu tao đã tin vào code Dart mà không kiểm tra chéo với migration và docs.
-*   **BÀI HỌC:**
-    *   Migration (`supabase/migrations`) là **nguồn chân lý duy nhất** cho schema và RPC của database.
-    *   Trước khi sửa một hàm RPC, phải **luôn tìm định nghĩa của nó trong migration trước**.
-    *   Nếu một hàm được gọi trong code Dart mà không có trong migration, nó là một hàm "ma" (tạo bằng tay trên server). Phải viết lại và lưu vào migration ngay lập tức, không được sửa mò.
+- **Vấn đề:** App gọi hàm RPC `apply_customer_payment` nhưng hàm này không hề tồn tại trong migration. Trong khi đó, docs lại ghi là `process_customer_payment`.
+- **Sai lầm của tao:** Ban đầu tao đã tin vào code Dart mà không kiểm tra chéo với migration và docs.
+- **BÀI HỌC:**
+  - Migration (`supabase/migrations`) là **nguồn chân lý duy nhất** cho schema và RPC của database.
+  - Trước khi sửa một hàm RPC, phải **luôn tìm định nghĩa của nó trong migration trước**.
+  - Nếu một hàm được gọi trong code Dart mà không có trong migration, nó là một hàm "ma" (tạo bằng tay trên server). Phải viết lại và lưu vào migration ngay lập tức, không được sửa mò.
 
 ### 4. QUY TRÌNH SỬA LỖI "ĐỌC -> SỬA -> XÁC MINH"
 
-*   **Vấn đề:** Các lệnh `replace` của tao liên tục thất bại vì `old_string` không khớp.
-*   **Sai lầm của tao:** Tao đã quá vội vàng, sửa file liên tục mà không `read_file` lại để xác nhận trạng thái hiện tại của nó trước khi đưa ra lệnh `replace` tiếp theo.
-*   **BÀI HỌC:** Mọi thao tác sửa file, dù là nhỏ nhất, phải tuân thủ quy trình 3 bước:
-    1.  **ĐỌC (READ):** Dùng `read_file` để lấy code mới nhất.
-    2.  **SỬA (MODIFY):** Dùng `replace` hoặc `write_file`.
-    3.  **XÁC MINH (VERIFY):** Nếu `replace` báo lỗi, hoặc nếu không chắc chắn, phải `read_file` lại ngay để kiểm tra kết quả. **Không bao giờ được giả định** là lệnh sửa đã thành công.
+- **Vấn đề:** Các lệnh `replace` của tao liên tục thất bại vì `old_string` không khớp.
+- **Sai lầm của tao:** Tao đã quá vội vàng, sửa file liên tục mà không `read_file` lại để xác nhận trạng thái hiện tại của nó trước khi đưa ra lệnh `replace` tiếp theo.
+- **BÀI HỌC:** Mọi thao tác sửa file, dù là nhỏ nhất, phải tuân thủ quy trình 3 bước:
+  1.  **ĐỌC (READ):** Dùng `read_file` để lấy code mới nhất.
+  2.  **SỬA (MODIFY):** Dùng `replace` hoặc `write_file`.
+  3.  **XÁC MINH (VERIFY):** Nếu `replace` báo lỗi, hoặc nếu không chắc chắn, phải `read_file` lại ngay để kiểm tra kết quả. **Không bao giờ được giả định** là lệnh sửa đã thành công.
+
+5. TỘI THÍCH ĐẶT LẠI TÊN VÀ TẠO HÀM MỚI KHÔNG CẦN THIẾT
+
+- Vấn đề: Khi cần sửa logic của hàm RPC create_batches_from_po, tao đã
+  đề xuất tạo một hàm hoàn toàn mới với tên
+  process_purchase_order_delivery.
+- Sai lầm của tao: Hành động này không tôn trọng code hiện có. Thay vì
+  chỉ nâng cấp hàm cũ, tao đã cố gắng áp đặt một cái tên mới, gây ra
+  sự thay đổi không cần thiết ở cả tầng service Dart (phải gọi tên hàm
+  mới). Nó phức tạp hóa vấn đề một cách không đáng có.
+- BÀI HỌC: Ưu tiên sửa đổi và nâng cấp các hàm hiện có thay vì tạo hàm
+  mới. Chỉ tạo hàm mới khi logic của hàm cũ sai lầm một cách cơ bản
+  hoặc khi tên cũ gây hiểu nhầm nghiêm trọng. Tôn trọng danh pháp
+  (naming convention) đã tồn tại trong dự án. Sửa tại chỗ (in-place)
+  luôn tốt hơn là "đập đi xây lại" với một cái tên mới.
 
 ## REQUIREMENTS CHỐNG HALLUCINATION (ANTI-HALLUCINATION REQUIREMENTS)
 
@@ -159,7 +174,7 @@ temperature: 0.3
 **MANDATORY 5-STEP PROCESS:**
 
 1. **READ FIRST:** Always read relevant files để get exact names và signatures
-2. **CROSS-CHECK:** Verify against multiple sources (models, services, database, docs)  
+2. **CROSS-CHECK:** Verify against multiple sources (models, services, database, docs)
 3. **VALIDATE SYNTAX:** Check exact syntax requirements cho frameworks/packages being used
 4. **CONFIRM EXISTENCE:** Verify functions/methods/properties/tables/columns actually exist trong codebase
 5. **TEST COMPATIBILITY:** Ensure naming matches existing patterns trong codebase
@@ -175,13 +190,15 @@ AgriPOS đã có **Universal Responsive System** hoàn chỉnh cho phép tất c
 **File chính:** `lib/shared/utils/responsive.dart` - Chứa toàn bộ responsive logic
 
 **Breakpoints chuẩn:**
-- **Mobile**: < 600px (Phone)  
+
+- **Mobile**: < 600px (Phone)
 - **Tablet**: 600px - 900px (iPad)
 - **Desktop**: > 900px (Web/Desktop)
 
 ### 🚀 Quick Implementation (90% Cases)
 
 **Cách 1: ResponsiveScaffold (Thay thế Scaffold)**
+
 ```dart
 // BEFORE (old screen):
 return Scaffold(
@@ -202,6 +219,7 @@ return ResponsiveScaffold(  // ← REPLACE Scaffold
 ```
 
 **Cách 2: Adaptive Widgets (Custom logic)**
+
 ```dart
 import '../../../../shared/utils/responsive.dart';
 
@@ -215,11 +233,12 @@ return context.adaptiveWidget(  // ← Magic method
 ### 🎨 Responsive Helpers
 
 **Auto-responsive values:**
+
 ```dart
 // Responsive spacing (16/24/32px auto)
 padding: EdgeInsets.all(context.sectionPadding),
 
-// Responsive grid columns (1/2/3 auto)  
+// Responsive grid columns (1/2/3 auto)
 crossAxisCount: context.gridColumns,
 
 // Responsive card spacing (8/12/16px auto)
@@ -228,12 +247,13 @@ margin: EdgeInsets.all(context.cardSpacing),
 // Responsive font sizes
 fontSize: context.adaptiveValue(
   mobile: 16.0,
-  tablet: 18.0, 
+  tablet: 18.0,
   desktop: 20.0,
 ),
 ```
 
 **Platform-aware components:**
+
 ```dart
 // Show biometric only on mobile devices
 if (context.shouldShowBiometric) {
@@ -251,19 +271,22 @@ if (context.shouldUseBottomNav) {
 ### 📐 Automatic Behaviors
 
 **Navigation Adaptation:**
+
 - **Mobile**: AppBar + Bottom Navigation + Drawer
 - **Tablet**: AppBar + Side Panel + Extended FABs
 - **Desktop**: No AppBar + Sidebar + Integrated Toolbars
 
 **Layout Adaptation:**
+
 - **Grid columns**: 1 → 2 → 3 automatically
-- **Content width**: Full → Constrained → Max 1200px  
+- **Content width**: Full → Constrained → Max 1200px
 - **Form width**: Full → 500px → 400px
 - **Spacing**: 16px → 24px → 32px
 
 ### 🎯 Auth Screens Special Handling
 
 **Auth screens need different layouts (no AppBar on desktop):**
+
 ```dart
 return ResponsiveAuthScaffold(  // ← Special auth wrapper
   title: 'Login',
@@ -272,6 +295,7 @@ return ResponsiveAuthScaffold(  // ← Special auth wrapper
 ```
 
 **Results:**
+
 - **Mobile**: Standard mobile auth flow
 - **Tablet**: Centered forms với larger spacing
 - **Desktop**: Split screen (branding left + form right)
@@ -279,8 +303,9 @@ return ResponsiveAuthScaffold(  // ← Special auth wrapper
 ### 📋 Implementation Checklist
 
 **✅ Working Examples (Reference này):**
+
 - `LoginScreen` - Full responsive auth
-- `RegisterScreen` - Responsive forms  
+- `RegisterScreen` - Responsive forms
 - `StoreCodeScreen` - Adaptive layouts
 - `HomeScreen` - Responsive grid + navigation
 - `CustomerListScreen` - Basic responsive list
@@ -291,6 +316,7 @@ return ResponsiveAuthScaffold(  // ← Special auth wrapper
 1. **Add import:** `import '../../../../shared/utils/responsive.dart';`
 
 2. **Replace Scaffold:**
+
    ```dart
    return ResponsiveScaffold(
      title: 'Screen Title',
@@ -299,6 +325,7 @@ return ResponsiveAuthScaffold(  // ← Special auth wrapper
    ```
 
 3. **Use responsive helpers:**
+
    ```dart
    padding: EdgeInsets.all(context.sectionPadding),
    crossAxisCount: context.gridColumns,
@@ -309,6 +336,7 @@ return ResponsiveAuthScaffold(  // ← Special auth wrapper
 ### 🔧 Advanced Patterns
 
 **Responsive Grid:**
+
 ```dart
 GridView.builder(
   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -320,15 +348,17 @@ GridView.builder(
 ```
 
 **Conditional Rendering:**
+
 ```dart
 // Mobile-specific features
 if (context.isMobile) _buildMobileOnlyWidget(),
 
-// Desktop-specific features  
+// Desktop-specific features
 if (context.isDesktop) _buildDesktopOnlyWidget(),
 ```
 
 **Responsive Container:**
+
 ```dart
 Container(
   width: context.contentWidth,     // Auto responsive width
@@ -345,10 +375,10 @@ Container(
 
 ```dart
 // Mobile AppBar search
-if (context.isMobile) 
+if (context.isMobile)
   SliverAppBar(title: _buildSearchInTitle()),
 
-// Desktop search bar  
+// Desktop search bar
 if (context.isDesktop)
   _buildDesktopSearchBar(),
 ```
@@ -356,12 +386,14 @@ if (context.isDesktop)
 ### 🚨 Common Mistakes
 
 **❌ Don't:**
+
 - Mix old responsive code với new system
 - Use fixed breakpoints (600px, 1200px) - use context helpers
 - Assume platform without checking context.shouldShowX
 - Apply responsive wrapper to auth screens (use ResponsiveAuthScaffold)
 
-**✅ Do:**  
+**✅ Do:**
+
 - Always import responsive.dart trước khi dùng
 - Use context helpers thay vì hard-coded values
 - Test across all breakpoints
@@ -370,9 +402,10 @@ if (context.isDesktop)
 ### 🎯 Production Results
 
 **AgriPOS giờ có enterprise-grade responsive design:**
+
 - Tự động adapt mọi screen size
 - Platform-aware features (biometric, navigation)
-- Consistent 8px grid design system  
+- Consistent 8px grid design system
 - Zero breaking changes cho existing screens
 - Modern web app UX standards
 
@@ -455,7 +488,7 @@ if (context.isDesktop)
 **BEFORE EVERY CODE SUGGESTION, VERIFY:**
 
 - ✅ **Method exists và has exact signature**
-- ✅ **Variables/properties exist với exact names** 
+- ✅ **Variables/properties exist với exact names**
 - ✅ **Imports are available và correctly referenced**
 - ✅ **Database tables/columns exist với exact names**
 - ✅ **RPC functions exist với exact parameters**
@@ -575,7 +608,7 @@ if (context.isDesktop)
 // Step 1: Import responsive utilities
 import '../../../shared/utils/responsive.dart';
 
-// Step 2: Replace Scaffold với ResponsiveScaffold  
+// Step 2: Replace Scaffold với ResponsiveScaffold
 return ResponsiveScaffold(
   title: 'Screen Title',
   body: _buildContent(),
@@ -610,6 +643,7 @@ Widget _buildAuthActions() {
 ```
 
 **AUTH SCREENS SPECIAL CASE:**
+
 ```dart
 return ResponsiveAuthScaffold( // Special auth wrapper
   title: 'Login',
@@ -618,6 +652,7 @@ return ResponsiveAuthScaffold( // Special auth wrapper
 ```
 
 **PRODUCTION RESULTS ACHIEVED:**
+
 - ✅ Universal responsive system works across all device types
 - ✅ Web platform gets proper desktop experience (no mobile AppBar/BottomNav)
 - ✅ Platform-aware feature detection (biometric, etc.)
@@ -627,7 +662,6 @@ return ResponsiveAuthScaffold( // Special auth wrapper
 - ✅ Consistent 8px grid system throughout app
 
 **System đã được verified và hoạt động perfect trong production!** 🚀
-
 
 # Context (Phần Bối Cảnh Dự Án)
 
@@ -639,19 +673,19 @@ Dự án này là AgriPOS, một ứng dụng POS quản lý vật tư nông ngh
 
 **Cấu trúc thư mục và vai trò kiến trúc cốt lõi:**
 
-*   **`lib/core/`**: Chứa các thành phần cốt lõi của ứng dụng như quản lý Providers (`app/app_providers.dart`) và hệ thống định tuyến (`routing/`). Đây là lớp **Coordinator** trong MVVM-C.
-*   **`lib/features/<feature_name>/`**: Tổ chức theo tính năng (ví dụ: `products`, `customers`, `pos`). Mỗi tính năng bao gồm:
-    *   **`models/`**: **Entities (Lớp Domain)**. Các lớp Dart thuần túy định nghĩa cấu trúc dữ liệu cốt lõi của ứng dụng (ví dụ: `Product`, `PurchaseOrder`).
-    *   **`providers/`**: **ViewModels (MVVM-C) / Lớp Ứng dụng (Clean Architecture)**. Các `ChangeNotifier` quản lý trạng thái UI, hiển thị dữ liệu cho Views và chứa logic nghiệp vụ (Use Cases) cho tính năng đó. Chúng tương tác với lớp `services` để tìm nạp/lưu trữ dữ liệu.
-    *   **`screens/`**: **Views (MVVM-C) / Frameworks & Drivers (Clean Architecture)**. Các widget Flutter chịu trách nhiệm hiển thị UI và gửi sự kiện người dùng đến các Providers.
-    *   **`services/`**: **Interface Adapters (Clean Architecture)**. Các lớp này (ví dụ: `ProductService`, `PurchaseOrderService`) trừu tượng hóa nguồn dữ liệu, chứa logic tương tác với Supabase.
-*   **`lib/shared/`**: Chứa các thành phần, model, dịch vụ, tiện ích và widget dùng chung trên toàn bộ ứng dụng.
+- **`lib/core/`**: Chứa các thành phần cốt lõi của ứng dụng như quản lý Providers (`app/app_providers.dart`) và hệ thống định tuyến (`routing/`). Đây là lớp **Coordinator** trong MVVM-C.
+- **`lib/features/<feature_name>/`**: Tổ chức theo tính năng (ví dụ: `products`, `customers`, `pos`). Mỗi tính năng bao gồm:
+  - **`models/`**: **Entities (Lớp Domain)**. Các lớp Dart thuần túy định nghĩa cấu trúc dữ liệu cốt lõi của ứng dụng (ví dụ: `Product`, `PurchaseOrder`).
+  - **`providers/`**: **ViewModels (MVVM-C) / Lớp Ứng dụng (Clean Architecture)**. Các `ChangeNotifier` quản lý trạng thái UI, hiển thị dữ liệu cho Views và chứa logic nghiệp vụ (Use Cases) cho tính năng đó. Chúng tương tác với lớp `services` để tìm nạp/lưu trữ dữ liệu.
+  - **`screens/`**: **Views (MVVM-C) / Frameworks & Drivers (Clean Architecture)**. Các widget Flutter chịu trách nhiệm hiển thị UI và gửi sự kiện người dùng đến các Providers.
+  - **`services/`**: **Interface Adapters (Clean Architecture)**. Các lớp này (ví dụ: `ProductService`, `PurchaseOrderService`) trừu tượng hóa nguồn dữ liệu, chứa logic tương tác với Supabase.
+- **`lib/shared/`**: Chứa các thành phần, model, dịch vụ, tiện ích và widget dùng chung trên toàn bộ ứng dụng.
 
 **Mô hình 3 lớp (UI -> Provider -> Service) được áp dụng như sau:**
 
-*   **UI (Views):** Nằm trong `lib/features/<feature_name>/screens/`.
-*   **Provider (State Management / ViewModels / Use Cases):** Nằm trong `lib/features/<feature_name>/providers/`.
-*   **Service (Business Logic & API / Data Access):** Nằm trong `lib/features/<feature_name>/services/`.
+- **UI (Views):** Nằm trong `lib/features/<feature_name>/screens/`.
+- **Provider (State Management / ViewModels / Use Cases):** Nằm trong `lib/features/<feature_name>/providers/`.
+- **Service (Business Logic & API / Data Access):** Nằm trong `lib/features/<feature_name>/services/`.
 
 **Để tham khảo đặc tả hệ thống (specs) chi tiết, hãy đọc file sau:**
 

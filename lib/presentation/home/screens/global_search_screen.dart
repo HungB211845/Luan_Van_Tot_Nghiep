@@ -10,11 +10,10 @@ import '../../../features/products/providers/product_provider.dart';
 import '../../../features/pos/providers/transaction_provider.dart';
 import '../../../features/customers/providers/customer_provider.dart';
 import '../../../shared/utils/formatter.dart';
-import '../../../shared/utils/datetime_helpers.dart';
 import '../../../core/routing/route_names.dart';
 
-/// Global Search Screen - Unified search across all app content
-/// Features: Hero animation, real-time search, multi-category results
+const String _recentSearchesKey = 'recent_searches';
+
 class GlobalSearchScreen extends StatefulWidget {
   const GlobalSearchScreen({super.key});
 
@@ -31,7 +30,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   List<Customer> _customerResults = [];
   bool _isLoading = false;
 
-  // Recent searches and suggestions
   List<String> _recentSearches = [];
   List<Product> _recentProducts = [];
   List<Customer> _recentCustomers = [];
@@ -40,21 +38,16 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   @override
   void initState() {
     super.initState();
-
-    // Auto-focus search field when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+      _loadSuggestionsAndRecentSearches();
     });
-
-    // Listen to search input with debouncing
     _searchController.addListener(_onSearchChanged);
-
-    // Load suggestions for empty state
-    _loadSuggestions();
   }
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -62,43 +55,32 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
   void _onSearchChanged() {
     final query = _searchController.text.trim();
-
     if (query.isEmpty) {
       setState(() {
         _productResults.clear();
         _transactionResults.clear();
         _customerResults.clear();
+        _isLoading = false;
       });
       return;
     }
-
-    // Simple debouncing - search after 300ms delay
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (_searchController.text.trim() == query) {
+      if (mounted && _searchController.text.trim() == query) {
         _performSearch(query);
       }
     });
   }
 
   Future<void> _performSearch(String query) async {
-    if (query.length < 2) {
-      return; // Minimum 2 characters
-    }
-
+    if (query.length < 2) return;
     setState(() => _isLoading = true);
-
-    // Save search to recent searches
-    _saveRecentSearch(query);
-
+    await _saveRecentSearch(query);
     try {
-      // Search in parallel for better performance
       await Future.wait([
         _searchProducts(query),
         _searchTransactions(query),
         _searchCustomers(query),
       ]);
-    } catch (e) {
-      // Handle search errors gracefully
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -107,150 +89,106 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   }
 
   Future<void> _searchProducts(String query) async {
-    try {
-      final productProvider = context.read<ProductProvider>();
-      await productProvider.searchProducts(query);
-
-      if (mounted) {
-        final results = productProvider.products.take(5).toList();
-        setState(() {
-          _productResults = results;
-        });
-      }
-    } catch (e) {
+    final productProvider = context.read<ProductProvider>();
+    await productProvider.searchProducts(query);
+    if (mounted) {
+      setState(() {
+        _productResults = productProvider.products.take(5).toList();
+      });
     }
   }
 
   Future<void> _searchTransactions(String query) async {
-    try {
-      final transactionProvider = context.read<TransactionProvider>();
-      // Search transactions by ID or customer name
-      final allTransactions = transactionProvider.transactions;
-
-      final results = allTransactions.where((tx) {
-        final txId = tx.id.toLowerCase();
-        final customerName = (tx.customerName ?? '').toLowerCase();
-        final searchQuery = query.toLowerCase();
-
-        return txId.contains(searchQuery) ||
-               customerName.contains(searchQuery);
-      }).take(5).toList();
-
-      if (mounted) {
-        setState(() => _transactionResults = results);
-      }
-    } catch (e) {
+    final transactionProvider = context.read<TransactionProvider>();
+    final allTransactions = transactionProvider.transactions;
+    final searchQuery = query.toLowerCase();
+    final results = allTransactions.where((tx) {
+      final txId = tx.id.toLowerCase();
+      final customerName = (tx.customerName ?? '').toLowerCase();
+      return txId.contains(searchQuery) || customerName.contains(searchQuery);
+    }).take(5).toList();
+    if (mounted) {
+      setState(() => _transactionResults = results);
     }
   }
 
   Future<void> _searchCustomers(String query) async {
-    try {
-      final customerProvider = context.read<CustomerProvider>();
-      // Search customers by name or phone
-      final allCustomers = customerProvider.customers;
-
-      final results = allCustomers.where((customer) {
-        final name = customer.name.toLowerCase();
-        final phone = (customer.phone ?? '').toLowerCase();
-        final searchQuery = query.toLowerCase();
-
-        return name.contains(searchQuery) ||
-               phone.contains(searchQuery);
-      }).take(5).toList();
-
-      if (mounted) {
-        setState(() => _customerResults = results);
-      }
-    } catch (e) {
+    final customerProvider = context.read<CustomerProvider>();
+    final allCustomers = customerProvider.customers;
+    final searchQuery = query.toLowerCase();
+    final results = allCustomers.where((customer) {
+      final name = customer.name.toLowerCase();
+      final phone = (customer.phone ?? '').toLowerCase();
+      return name.contains(searchQuery) || phone.contains(searchQuery);
+    }).take(5).toList();
+    if (mounted) {
+      setState(() => _customerResults = results);
     }
   }
 
-  /// Load suggestions for empty state
-  Future<void> _loadSuggestions() async {
-    try {
-      // Load recent searches from local storage (simplified with hardcoded data for now)
-      _recentSearches = ['anh 3', 'NPK', 'công nợ', 'hóa đơn tháng 9'];
+  Future<void> _loadSuggestionsAndRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    final productProvider = context.read<ProductProvider>();
+    final customerProvider = context.read<CustomerProvider>();
+    final transactionProvider = context.read<TransactionProvider>();
 
-      // Load recent/suggested items
-      final productProvider = context.read<ProductProvider>();
-      final customerProvider = context.read<CustomerProvider>();
-      final transactionProvider = context.read<TransactionProvider>();
-
-      // Get recent products (first 3)
+    setState(() {
+      _recentSearches = prefs.getStringList(_recentSearchesKey) ?? [];
       if (productProvider.products.isNotEmpty) {
         _recentProducts = productProvider.products.take(3).toList();
       }
-
-      // Get recent customers (first 3)
       if (customerProvider.customers.isNotEmpty) {
         _recentCustomers = customerProvider.customers.take(3).toList();
       }
-
-      // Get recent transactions (first 3)
       if (transactionProvider.transactions.isNotEmpty) {
         _recentTransactions = transactionProvider.transactions.take(3).toList();
       }
-
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e) {
-    }
+    });
   }
 
-  /// Save search query to recent searches
-  void _saveRecentSearch(String query) {
+  Future<void> _saveRecentSearch(String query) async {
     if (query.trim().isEmpty) return;
-
-    // Remove if already exists to avoid duplicates
-    _recentSearches.remove(query);
-
-    // Add to beginning of list
-    _recentSearches.insert(0, query);
-
-    // Keep only last 5 searches
-    if (_recentSearches.length > 5) {
-      _recentSearches = _recentSearches.take(5).toList();
-    }
-
-    // TODO: Save to SharedPreferences for persistence
+    final prefs = await SharedPreferences.getInstance();
+    final updatedSearches = [
+      query,
+      ..._recentSearches.where((s) => s != query)
+    ];
+    _recentSearches = updatedSearches.take(5).toList();
+    await prefs.setStringList(_recentSearchesKey, _recentSearches);
+    setState(() {});
   }
 
-  /// Handle tap on recent search
   void _onRecentSearchTap(String query) {
     _searchController.text = query;
+    _searchController.selection =
+        TextSelection.fromPosition(TextPosition(offset: query.length));
     _performSearch(query);
   }
 
-  /// Clear all recent searches
-  void _clearRecentSearches() {
+  Future<void> _clearRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_recentSearchesKey);
     setState(() {
       _recentSearches.clear();
     });
-    // TODO: Clear from SharedPreferences as well
   }
 
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarIconBrightness: Brightness.dark, // Dark icons on green background
-        statusBarBrightness: Brightness.light, // For Android compatibility
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
       ),
       child: Scaffold(
         backgroundColor: CupertinoColors.systemGroupedBackground,
         body: SafeArea(
-        child: Column(
-          children: [
-            // Search Header with Hero Animation
-            _buildSearchHeader(),
-
-            // Search Results
-            Expanded(
-              child: _buildSearchResults(),
-            ),
-          ],
-        ),
+          child: Column(
+            children: [
+              _buildSearchHeader(),
+              Expanded(child: _buildSearchResults()),
+            ],
+          ),
         ),
       ),
     );
@@ -262,57 +200,57 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          // Search field with Hero animation
           Expanded(
             child: Hero(
               tag: 'global_search',
               child: Material(
                 color: Colors.transparent,
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    focusNode: _focusNode,
-                    decoration: InputDecoration(
-                      hintText: 'Tìm kiếm sản phẩm, giao dịch...',
-                      hintStyle: TextStyle(color: Colors.grey.shade600),
-                      prefixIcon: Icon(
-                        CupertinoIcons.search,
-                        color: Colors.grey.shade600,
-                        size: 20,
-                      ),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(
-                                CupertinoIcons.clear,
-                                color: Colors.grey.shade600,
-                                size: 20,
-                              ),
-                              onPressed: () {
-                                _searchController.clear();
-                                _focusNode.requestFocus();
-                              },
-                            )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _focusNode,
+                  decoration: InputDecoration(
+                    hintText: 'Tìm kiếm sản phẩm, giao dịch...',
+                    hintStyle: TextStyle(color: Colors.grey.shade600),
+                    prefixIcon: Icon(
+                      CupertinoIcons.search,
+                      color: Colors.grey.shade600,
+                      size: 20,
+                    ),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              CupertinoIcons.clear,
+                              color: Colors.grey.shade600,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              _focusNode.requestFocus();
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    isDense: true,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.green, width: 2),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-
           const SizedBox(width: 12),
-
-          // Cancel button
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text(
@@ -333,41 +271,30 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     if (_searchController.text.trim().isEmpty) {
       return _buildEmptyState();
     }
-
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
-
     final hasResults = _productResults.isNotEmpty ||
-                      _transactionResults.isNotEmpty ||
-                      _customerResults.isNotEmpty;
-
+        _transactionResults.isNotEmpty ||
+        _customerResults.isNotEmpty;
     if (!hasResults) {
       return _buildNoResultsState();
     }
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Product Results
         if (_productResults.isNotEmpty) ...[
           _buildSectionHeader('Sản phẩm', _productResults.length),
           const SizedBox(height: 8),
           ..._productResults.map(_buildProductResult),
           const SizedBox(height: 24),
         ],
-
-        // Transaction Results
         if (_transactionResults.isNotEmpty) ...[
           _buildSectionHeader('Giao dịch', _transactionResults.length),
           const SizedBox(height: 8),
           ..._transactionResults.map(_buildTransactionResult),
           const SizedBox(height: 24),
         ],
-
-        // Customer Results
         if (_customerResults.isNotEmpty) ...[
           _buildSectionHeader('Khách hàng', _customerResults.length),
           const SizedBox(height: 8),
@@ -381,35 +308,26 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Recent Searches Section
         if (_recentSearches.isNotEmpty) ...[
           _buildRecentSearchesHeader(),
           const SizedBox(height: 12),
           ..._recentSearches.map(_buildRecentSearchItem),
           const SizedBox(height: 32),
         ],
-
-        // Suggestions Section
         _buildSectionTitle('Gợi ý cho bạn'),
         const SizedBox(height: 12),
-
-        // Recent Products
         if (_recentProducts.isNotEmpty) ...[
           _buildSubSectionTitle('Sản phẩm'),
           const SizedBox(height: 8),
           ..._recentProducts.map(_buildSuggestionProductItem),
           const SizedBox(height: 20),
         ],
-
-        // Recent Customers
         if (_recentCustomers.isNotEmpty) ...[
           _buildSubSectionTitle('Khách hàng'),
           const SizedBox(height: 8),
           ..._recentCustomers.map(_buildSuggestionCustomerItem),
           const SizedBox(height: 20),
         ],
-
-        // Recent Transactions
         if (_recentTransactions.isNotEmpty) ...[
           _buildSubSectionTitle('Giao dịch gần đây'),
           const SizedBox(height: 8),
@@ -499,7 +417,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           ),
         ),
         subtitle: Text(
-          'Tồn kho: ${product.availableStock ?? 0} • ${AppFormatter.formatCurrency(product.currentPrice ?? 0)}',
+          'Tồn kho: ${product.availableStock ?? 0} • ${AppFormatter.formatCurrency(product.currentSellingPrice)}',
           style: TextStyle(
             color: Colors.grey.shade600,
             fontSize: 14,
@@ -511,7 +429,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           size: 20,
         ),
         onTap: () {
-          // Navigate to product detail
           Navigator.of(context).pushNamed(
             RouteNames.productDetail,
             arguments: product,
@@ -572,7 +489,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           ],
         ),
         onTap: () {
-          // Navigate to transaction detail screen
           Navigator.of(context).pop();
           Navigator.of(context).pushNamed(
             RouteNames.transactionDetail,
@@ -620,7 +536,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           size: 20,
         ),
         onTap: () {
-          // Navigate to customer detail screen
           Navigator.of(context).pop();
           Navigator.of(context).pushNamed(
             RouteNames.customerDetail,
@@ -630,8 +545,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       ),
     );
   }
-
-  // Helper methods for empty state UI components
 
   Widget _buildSectionTitle(String title) {
     return Padding(
@@ -652,28 +565,31 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          'TÌM KIẾM GẦN ĐÂY',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
-            letterSpacing: 0.5,
+        Expanded(
+          child: Text(
+            'TÌM KIẾM GẦN ĐÂY',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+              letterSpacing: 0.5,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         GestureDetector(
           onTap: _clearRecentSearches,
           child: Container(
-            width: 20,
-            height: 20,
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: Colors.grey.shade400,
+              color: Colors.grey.shade300,
               shape: BoxShape.circle,
             ),
             child: Icon(
               CupertinoIcons.clear,
               color: Colors.white,
-              size: 14,
+              size: 12,
             ),
           ),
         ),
@@ -740,7 +656,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          AppFormatter.formatCurrency(product.currentPrice ?? 0),
+          AppFormatter.formatCurrency(product.currentSellingPrice),
           style: TextStyle(
             color: Colors.grey.shade600,
             fontSize: 13,
