@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../customers/models/customer.dart';
 import '../../customers/services/customer_service.dart';
 import '../../../../shared/utils/formatter.dart';
-import '../../../../shared/utils/input_formatters.dart'; // <--- ADD THIS IMPORT
+import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../models/debt.dart';
 import '../models/debt_payment.dart';
@@ -17,7 +17,15 @@ import '../../pos/screens/transaction/transaction_detail_screen.dart';
 import 'add_payment_screen.dart';
 
 // Data classes for the new grouped structure
-enum LedgerEntryType { debt, payment }
+enum LedgerEntryType { debt, payment, paymentGroup }
+
+class PaymentGroup {
+  final List<DebtPayment> payments;
+  final DateTime date;
+  double get totalAmount => payments.fold(0, (sum, p) => sum + p.amount);
+
+  PaymentGroup({required this.payments, required this.date});
+}
 
 class LedgerEntry {
   final dynamic entry;
@@ -101,6 +109,51 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     if (mounted) setState(() {});
   }
 
+  List<dynamic> _groupConsecutivePayments(List<DebtPayment> payments) {
+    if (payments.isEmpty) return [];
+
+    payments.sort((a, b) => a.paymentDate.compareTo(b.paymentDate));
+
+    List<dynamic> processedEntries = [];
+    List<DebtPayment> currentGroup = [];
+
+    for (int i = 0; i < payments.length; i++) {
+      if (currentGroup.isEmpty) {
+        currentGroup.add(payments[i]);
+      } else {
+        final lastPaymentInGroup = currentGroup.last;
+        final currentPayment = payments[i];
+        // Group payments within a 5-second threshold
+        if (currentPayment.paymentDate
+                .difference(lastPaymentInGroup.paymentDate)
+                .inSeconds <
+            5) {
+          currentGroup.add(currentPayment);
+        } else {
+          if (currentGroup.length > 1) {
+            processedEntries.add(PaymentGroup(
+                payments: List.from(currentGroup), date: currentGroup.first.paymentDate));
+          } else {
+            processedEntries.add(currentGroup.first);
+          }
+          currentGroup = [currentPayment];
+        }
+      }
+    }
+
+    // Add the last group
+    if (currentGroup.isNotEmpty) {
+      if (currentGroup.length > 1) {
+        processedEntries.add(PaymentGroup(
+            payments: List.from(currentGroup), date: currentGroup.first.paymentDate));
+      } else {
+        processedEntries.add(currentGroup.first);
+      }
+    }
+
+    return processedEntries;
+  }
+
   List<MonthlyLedgerGroup> _createGroupedLedger(
     List<Debt> debts,
     List<DebtPayment> payments,
@@ -125,7 +178,7 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       return true;
     }).toList();
 
-    if (_filter.entryType != LedgerEntryType.payment) {
+    if (_filter.entryType != LedgerEntryType.payment && _filter.entryType != LedgerEntryType.paymentGroup) {
       for (var debt in filteredDebts) {
         allEntries.add(
           LedgerEntry(
@@ -137,30 +190,46 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       }
     }
     if (_filter.entryType != LedgerEntryType.debt) {
-      for (var payment in filteredPayments) {
-        allEntries.add(
-          LedgerEntry(
-            entry: payment,
-            date: payment.paymentDate,
-            type: LedgerEntryType.payment,
-          ),
-        );
+      final processedPayments = _groupConsecutivePayments(filteredPayments);
+      for (var paymentEntry in processedPayments) {
+        if (paymentEntry is DebtPayment) {
+           allEntries.add(
+            LedgerEntry(
+              entry: paymentEntry,
+              date: paymentEntry.paymentDate,
+              type: LedgerEntryType.payment,
+            ),
+          );
+        } else if (paymentEntry is PaymentGroup) {
+          allEntries.add(
+            LedgerEntry(
+              entry: paymentEntry,
+              date: paymentEntry.date,
+              type: LedgerEntryType.paymentGroup,
+            ),
+          );
+        }
       }
     }
 
+    // Search logic needs to be adapted for PaymentGroup
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       allEntries.removeWhere((entry) {
-        if (isDebtEntry(entry)) {
+        if (entry.type == LedgerEntryType.debt) {
           final Debt debt = entry.entry;
           return !(debt.transactionId?.toLowerCase().contains(query) ??
                   false) &&
               !(debt.originalAmount.toString().contains(query));
-        } else {
+        } else if (entry.type == LedgerEntryType.payment) {
           final DebtPayment payment = entry.entry;
           return !(payment.amount.toString().contains(query)) &&
               !(payment.notes?.toLowerCase().contains(query) ?? false);
+        } else if (entry.type == LedgerEntryType.paymentGroup) {
+          final PaymentGroup group = entry.entry;
+          return !group.totalAmount.toString().contains(query) && !group.payments.any((p) => p.notes?.toLowerCase().contains(query) ?? false);
         }
+        return true;
       });
     }
 
@@ -169,12 +238,16 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     Map<String, MonthlyLedgerGroup> groupedMap = {};
     for (var entry in allEntries) {
       String monthKey = DateFormat('yyyy-MM').format(entry.date);
-      double debtIncurred = isDebtEntry(entry)
-          ? (entry.entry as Debt).originalAmount
-          : 0;
-      double amountPaid = !isDebtEntry(entry)
-          ? (entry.entry as DebtPayment).amount
-          : 0;
+      double debtIncurred = 0;
+      double amountPaid = 0;
+
+      if (entry.type == LedgerEntryType.debt) {
+        debtIncurred = (entry.entry as Debt).originalAmount;
+      } else if (entry.type == LedgerEntryType.payment) {
+        amountPaid = (entry.entry as DebtPayment).amount;
+      } else if (entry.type == LedgerEntryType.paymentGroup) {
+        amountPaid = (entry.entry as PaymentGroup).totalAmount;
+      }
 
       groupedMap.update(
         monthKey,
@@ -194,8 +267,6 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     }
     return groupedMap.values.toList();
   }
-
-  bool isDebtEntry(LedgerEntry entry) => entry.type == LedgerEntryType.debt;
 
   Future<void> _navigateToTransactionDetails(String transactionId) async {
     showDialog(
@@ -263,7 +334,7 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     if (_filter.onlyOverdue) return 'Sổ Cái (Quá hạn)';
     if (_filter.entryType == LedgerEntryType.debt)
       return 'Sổ Cái (Nợ phát sinh)';
-    if (_filter.entryType == LedgerEntryType.payment) return 'Sổ Cái (Đã trả)';
+    if (_filter.entryType == LedgerEntryType.payment || _filter.entryType == LedgerEntryType.paymentGroup) return 'Sổ Cái (Đã trả)';
     return 'Sổ Cái (Đã lọc)';
   }
 
@@ -406,33 +477,26 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
   }
 
   Widget _buildLedgerItem(LedgerEntry ledgerEntry) {
-    final bool isDebtEntry = ledgerEntry.type == LedgerEntryType.debt;
-    final Debt? debt = isDebtEntry ? ledgerEntry.entry as Debt : null;
-    final DebtPayment? payment = !isDebtEntry
-        ? ledgerEntry.entry as DebtPayment
-        : null;
-    final String title = isDebtEntry
-        ? (debt!.notes?.contains('Ghi nợ thủ công') ?? false)
-            ? 'Ghi nợ thủ công'
-            : 'Giao dịch bán hàng'
-        : 'Thanh toán (${payment!.paymentMethod})';
-    final String dateSubtitle;
-    if (isDebtEntry) {
-      final isOverdue = debt!.isOverdue;
-      dateSubtitle =
-          'Ngày tạo: ${AppFormatter.formatDate(debt.createdAt)} • Đáo hạn: ${debt.dueDate != null ? AppFormatter.formatDate(debt.dueDate!) : 'N/A'}';
-    } else {
-      dateSubtitle =
-          'Ngày trả: ${AppFormatter.formatDate(payment!.paymentDate)}';
+    switch (ledgerEntry.type) {
+      case LedgerEntryType.debt:
+        return _buildDebtItem(ledgerEntry.entry as Debt);
+      case LedgerEntryType.payment:
+        return _buildPaymentItem(ledgerEntry.entry as DebtPayment);
+      case LedgerEntryType.paymentGroup:
+        return _buildPaymentGroupItem(ledgerEntry.entry as PaymentGroup);
     }
-    final String amountText = isDebtEntry
-        ? '+ ${AppFormatter.formatCurrency(debt!.originalAmount)}'
-        : '- ${AppFormatter.formatCurrency(payment!.amount)}';
-    final Color amountColor = isDebtEntry ? Colors.orange : Colors.green;
-    final IconData icon = isDebtEntry
-        ? Icons.add_shopping_cart
-        : Icons.check_circle;
-    final VoidCallback? onTap = isDebtEntry && debt!.transactionId != null
+  }
+
+  Widget _buildDebtItem(Debt debt) {
+    final String title = (debt.notes?.contains('Ghi nợ thủ công') ?? false)
+        ? 'Ghi nợ thủ công'
+        : 'Giao dịch bán hàng';
+    final String dateSubtitle =
+        'Ngày tạo: ${AppFormatter.formatDate(debt.createdAt)} • Đáo hạn: ${debt.dueDate != null ? AppFormatter.formatDate(debt.dueDate!) : 'N/A'}';
+    final String amountText = '+ ${AppFormatter.formatCurrency(debt.originalAmount)}';
+    final Color amountColor = Colors.orange;
+    final IconData icon = Icons.add_shopping_cart;
+    final VoidCallback? onTap = debt.transactionId != null
         ? () => _navigateToTransactionDetails(debt.transactionId!)
         : null;
 
@@ -441,8 +505,8 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       child: InkWell(
         onTap: onTap,
         onLongPress: () {
-          if (isDebtEntry && debt?.transactionId != null) {
-            Clipboard.setData(ClipboardData(text: debt!.transactionId!));
+          if (debt.transactionId != null) {
+            Clipboard.setData(ClipboardData(text: debt.transactionId!));
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Đã sao chép Mã Giao Dịch'),
@@ -478,7 +542,7 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
                       dateSubtitle,
                       style: TextStyle(
                         fontSize: 12,
-                        color: (isDebtEntry && debt!.isOverdue)
+                        color: (debt.isOverdue)
                             ? Colors.red
                             : Colors.grey[600],
                       ),
@@ -499,6 +563,97 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPaymentItem(DebtPayment payment, {bool isGrouped = false}) {
+     final String title = 'Thanh toán (${payment.paymentMethod})';
+     final String dateSubtitle = 'Ngày trả: ${AppFormatter.formatDate(payment.paymentDate)}';
+     final String amountText = '- ${AppFormatter.formatCurrency(payment.amount)}';
+     final Color amountColor = Colors.green;
+     final IconData icon = Icons.check_circle;
+
+    return Material(
+      color: isGrouped ? Colors.transparent : Colors.white,
+      child: Container(
+          padding: EdgeInsets.symmetric(horizontal: isGrouped ? 24 : 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: isGrouped ? null : Border(
+              bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              if (!isGrouped) ...[
+                Icon(icon, color: amountColor, size: 28),
+                const SizedBox(width: 16),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: isGrouped ? 14 : 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      dateSubtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                     if (payment.notes?.isNotEmpty ?? false)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          'Ghi chú: ${payment.notes}',
+                          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey[700]),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                amountText,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: amountColor,
+                  fontSize: isGrouped ? 15 : 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+    );
+  }
+
+  Widget _buildPaymentGroupItem(PaymentGroup group) {
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16.0),
+      leading: const Icon(Icons.check_circle, color: Colors.green, size: 28),
+      title: Text(
+        'Thanh toán gộp',
+        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+      ),
+      subtitle: Text(
+        'Ngày: ${AppFormatter.formatDate(group.date)}',
+        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+      ),
+      trailing: Text(
+        '- ${AppFormatter.formatCurrency(group.totalAmount)}',
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.green,
+          fontSize: 16,
+        ),
+      ),
+      children: group.payments.map((p) => _buildPaymentItem(p, isGrouped: true)).toList(),
     );
   }
 
@@ -620,7 +775,8 @@ class _AddTransactionSheetState extends State<_AddTransactionSheet> {
           ),
         );
       }
-    } finally {
+    }
+    finally {
       if (mounted) {
         setState(() => _isProcessing = false);
       }
