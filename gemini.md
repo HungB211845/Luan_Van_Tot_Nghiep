@@ -84,20 +84,28 @@ temperature: 0.3
   2.  **SỬA (MODIFY):** Dùng `replace` hoặc `write_file`.
   3.  **XÁC MINH (VERIFY):** Nếu `replace` báo lỗi, hoặc nếu không chắc chắn, phải `read_file` lại ngay để kiểm tra kết quả. **Không bao giờ được giả định** là lệnh sửa đã thành công.
 
-5. TỘI THÍCH ĐẶT LẠI TÊN VÀ TẠO HÀM MỚI KHÔNG CẦN THIẾT
+### 5. TỘI THÍCH ĐẶT LẠI TÊN VÀ TẠO HÀM MỚI KHÔNG CẦN THIẾT
 
-- Vấn đề: Khi cần sửa logic của hàm RPC create_batches_from_po, tao đã
-  đề xuất tạo một hàm hoàn toàn mới với tên
-  process_purchase_order_delivery.
-- Sai lầm của tao: Hành động này không tôn trọng code hiện có. Thay vì
-  chỉ nâng cấp hàm cũ, tao đã cố gắng áp đặt một cái tên mới, gây ra
-  sự thay đổi không cần thiết ở cả tầng service Dart (phải gọi tên hàm
-  mới). Nó phức tạp hóa vấn đề một cách không đáng có.
-- BÀI HỌC: Ưu tiên sửa đổi và nâng cấp các hàm hiện có thay vì tạo hàm
-  mới. Chỉ tạo hàm mới khi logic của hàm cũ sai lầm một cách cơ bản
-  hoặc khi tên cũ gây hiểu nhầm nghiêm trọng. Tôn trọng danh pháp
-  (naming convention) đã tồn tại trong dự án. Sửa tại chỗ (in-place)
-  luôn tốt hơn là "đập đi xây lại" với một cái tên mới.
+- **Vấn đề:** Khi cần sửa logic của hàm RPC `create_batches_from_po`, tao đã đề xuất tạo một hàm hoàn toàn mới với tên `process_purchase_order_delivery`.
+- **Sai lầm của tao:** Hành động này không tôn trọng code hiện có. Thay vì chỉ nâng cấp hàm cũ, tao đã cố gắng áp đặt một cái tên mới, gây ra sự thay đổi không cần thiết ở cả tầng service Dart (phải gọi tên hàm mới). Nó phức tạp hóa vấn đề một cách không đáng có.
+- **BÀI HỌC:** **Ưu tiên sửa đổi và nâng cấp các hàm hiện có thay vì tạo hàm mới.** Chỉ tạo hàm mới khi logic của hàm cũ sai lầm một cách cơ bản hoặc khi tên cũ gây hiểu nhầm nghiêm trọng. Tôn trọng danh pháp (naming convention) đã tồn tại trong dự án. Sửa tại chỗ (in-place) luôn tốt hơn là "đập đi xây lại" với một cái tên mới.
+
+### 6. CASE STUDY: LỖI HIỂN THỊ SAI SẢN PHẨM - HÀNH TRÌNH TRUY VẾT TỪ UI XUỐNG SERVICE
+
+*   **Bối cảnh:** Màn hình "Chọn sản phẩm cho nhà cung cấp" hiển thị tất cả sản phẩm thay vì chỉ sản phẩm của nhà cung cấp đó.
+*   **Chẩn đoán sai lầm ban đầu:**
+    *   **Giả thuyết của tao:** Cho rằng UI (`bulk_product_selection_screen`) lấy dữ liệu từ sai Provider.
+    *   **Hậu quả:** Các lệnh `replace` vội vàng gây ra một loạt lỗi biên dịch, làm tốn thời gian và cho thấy sự cẩu thả, vi phạm quy tắc "VERIFY EXACT WIDGET PROPERTY NAMES".
+*   **Phân tích kiến trúc:**
+    *   **Vấn đề thật sự:** Màn hình đang sử dụng một Provider toàn cục (`ProductProvider`) cho một state chỉ có tính cục bộ, tạm thời. State này liên tục bị các thành phần khác của app ghi đè, gây ra "race condition".
+    *   **Giải pháp kiến trúc:** Tái cấu trúc lại màn hình để nó tự quản lý state, gọi thẳng xuống Service thay vì phụ thuộc vào Provider toàn cục.
+*   **Lỗi gốc rễ lộ diện:**
+    *   **Triệu chứng mới:** Sau khi tái cấu trúc, màn hình bị loading vô tận.
+    *   **Nguyên nhân gốc:** Việc tái cấu trúc đã làm lộ ra lỗi cuối cùng và sâu xa nhất. Hàm `getProductsByCompany` ở tầng `ProductService` **thiếu `addStoreFilter()`**. Query không an toàn đã bị RLS của database chặn, làm `await` bị treo.
+*   **BÀI HỌC:**
+    1.  **LỖI LOGIC CÓ THỂ LÀ DẤU HIỆU CỦA LỖI KIẾN TRÚC:** Việc hiển thị sai dữ liệu không chỉ là lỗi logic nhỏ, mà là triệu chứng của việc lạm dụng state toàn cục. Phải nhận ra và sửa lỗi kiến trúc trước.
+    2.  **LUÔN TRUY VẾT ĐẾN TẬN CÙNG:** Đừng dừng lại ở tầng Provider. Phải kiểm tra toàn bộ chuỗi gọi hàm: **UI -> Provider -> Service -> Database Query**. Lỗi ở Service (thiếu `addStoreFilter`) là nguyên nhân cuối cùng.
+    3.  **TÔN TRỌNG QUY TRÌNH "ĐỌC -> SỬA":** Các lỗi biên dịch ngu ngốc xảy ra vì tao đã không đọc kỹ code của widget (`SimpleProductCard`) trước khi cố gắng sử dụng nó.
 
 ## REQUIREMENTS CHỐNG HALLUCINATION (ANTI-HALLUCINATION REQUIREMENTS)
 
@@ -410,258 +418,6 @@ if (context.isDesktop)
 - Modern web app UX standards
 
 **System đã production-ready và được verify hoạt động perfect!** 🚀
-
-### I. Advanced Framework Pattern Verification (Xác Minh Pattern Framework Nâng Cao)
-
-32. **VERIFY ASYNC PATTERNS EXACTLY:** Always check if methods are actually async before adding await/Future handling. Never assume async based on functionality.
-
-33. **VALIDATE WIDGET LIFECYCLE PRECISELY:** Check actual widget implementation for initState, dispose, build patterns. Never assume standard lifecycle without verification.
-
-34. **CONFIRM NAVIGATION PATTERNS:** Verify actual route definitions và navigation setup trong app. Check RouteNames class và actual route registration.
-
-35. **VALIDATE THEME USAGE EXACTLY:** Check actual theme implementation before referencing properties. Verify Theme.of(context) available properties.
-
-36. **CHECK PLATFORM-SPECIFIC APIS:** Always verify platform detection methods và API availability before suggesting platform-specific code.
-
-### J. Data Structure & API Verification (Xác Minh Cấu Trúc Dữ Liệu & API)
-
-37. **CONFIRM JSON STRUCTURES EXACTLY:** Always verify actual API response formats before parsing. Check actual Supabase response structures.
-
-38. **VALIDATE SERIALIZATION PATTERNS:** Check actual toJson/fromJson implementations. Never assume serialization key names.
-
-39. **VERIFY STREAM & FUTURE HANDLING:** Check actual Stream subscription patterns và Future handling trong existing code.
-
-40. **VALIDATE PAGINATION PARAMETERS:** Check actual pagination implementation. Verify parameter names, types, và response formats.
-
-### K. Package & Dependencies Exact Verification (Xác Minh Package & Dependencies)
-
-41. **VERIFY PACKAGE APIS EXACTLY:** Always check package documentation for exact method signatures. Never assume based on similar packages.
-
-42. **CONFIRM IMPORT AVAILABILITY:** Check actual package exports và what's available. Verify barrel exports và re-export patterns.
-
-43. **VALIDATE PACKAGE COMPATIBILITY:** Check pubspec.yaml constraints và verify compatibility với Flutter version being used.
-
-44. **CHECK INITIALIZATION REQUIREMENTS:** Verify actual package initialization patterns required in main.dart or app setup.
-
-### L. Business Logic & Security Verification (Xác Minh Logic Nghiệp Vụ & Bảo Mật)
-
-45. **CONFIRM PERMISSION LOGIC EXACTLY:** Check actual user role/permission implementation before assuming access. Verify PermissionProvider patterns.
-
-46. **VALIDATE AUTHENTICATION STATE:** Check actual AuthProvider implementation. Verify session management và login/logout patterns.
-
-47. **VERIFY VALIDATION RULES:** Check actual validation patterns trong forms. Never assume validation logic without checking implementation.
-
-48. **CONFIRM MULTI-TENANT ISOLATION:** Always verify store isolation patterns. Check BaseService usage và RLS policy enforcement.
-
-### M. Performance & Memory Pattern Verification (Xác Minh Pattern Performance & Memory)
-
-49. **VALIDATE CACHE PATTERNS EXACTLY:** Check actual cache implementation before assuming key formats. Verify LRU cache patterns và eviction strategies.
-
-50. **CONFIRM LIST PERFORMANCE PATTERNS:** Check actual pagination, infinite scroll, và list optimization patterns trong existing code.
-
-51. **VERIFY MEMORY MANAGEMENT:** Check actual disposal patterns, listener cleanup, và memory management trong providers.
-
-52. **VALIDATE STATE REBUILD PATTERNS:** Check actual Consumer/Selector usage patterns. Verify when notifyListeners() is called.
-
-### N. Error Handling & Testing Verification (Xác Minh Error Handling & Testing)
-
-53. **VERIFY ERROR TYPES EXACTLY:** Check actual exception handling patterns trong codebase. Never assume exception types.
-
-54. **CONFIRM USER FEEDBACK PATTERNS:** Check actual toast/snackbar implementation. Verify error dialog patterns being used.
-
-55. **VALIDATE LOADING STATE PATTERNS:** Check actual loading state management. Verify ProductStatus enum usage patterns.
-
-56. **CONFIRM TEST PATTERNS EXACTLY:** Check existing test files for actual testing patterns, mocking strategies, và assertions being used.
-
-### O. Configuration & Build Verification (Xác Minh Configuration & Build)
-
-57. **VERIFY ENVIRONMENT CONFIG EXACTLY:** Check actual config key names across environments. Verify feature flag implementations.
-
-58. **CONFIRM BUILD CONFIGURATIONS:** Check actual build script commands và platform-specific configurations.
-
-59. **VALIDATE CI/CD PATTERNS:** If suggesting deployment changes, check actual CI/CD pipeline configurations.
-
-60. **VERIFY ASSET & RESOURCE PATTERNS:** Check actual asset loading patterns, font usage, và resource management.
-
-### P. Critical Verification Checkpoints (Checkpoint Xác Minh Quan Trọng)
-
-**BEFORE EVERY CODE SUGGESTION, VERIFY:**
-
-- ✅ **Method exists và has exact signature**
-- ✅ **Variables/properties exist với exact names**
-- ✅ **Imports are available và correctly referenced**
-- ✅ **Database tables/columns exist với exact names**
-- ✅ **RPC functions exist với exact parameters**
-- ✅ **Widget properties exist và accept suggested values**
-- ✅ **Provider patterns match actual implementation**
-- ✅ **Error handling matches actual patterns**
-- ✅ **Async patterns match actual method signatures**
-- ✅ **Store isolation is properly implemented**
-
-**ANY FAILURE IN THESE CHECKPOINTS = HALLUCINATION RISK**
-
-**WHEN IN DOUBT, READ THE ACTUAL FILES. NEVER ASSUME ANYTHING.**
-
-### Q. Prevention Strategies Cần Thêm Vào Requirements
-
-**Những lỗi AI Hallucination hiện tại thường xuyên gặp phải:**
-
-61. **HALLUCINATION VỀ API METHODS:** Thường tự suy đoán method names không tồn tại như `getSelectedCustomer()`, `checkStoreCodeAvailability()`, `_showAddProductDialog()`.
-
-62. **HALLUCINATION VỀ PROPERTY NAMES:** Giả định property names như `_selectedProductIds`, `_isSelectionMode`, `_sortOption` mà không verify actual variable names trong class.
-
-63. **HALLUCINATION VỀ STATE VARIABLES:** Tự tạo ra state variables như `_stockFilter`, `_selectedCategory` không tồn tại trong actual implementation.
-
-64. **HALLUCINATION VỀ IMPORT PATHS:** Đoán import statements như `import '../../../../shared/utils/responsive.dart'` mà không check actual file structure.
-
-65. **HALLUCINATION VỀ WIDGET PROPERTIES:** Giả định widget properties như `const VerticalDivider(width: 1, thickness: 1)` với wrong constructor signature.
-
-66. **HALLUCINATION VỀ NAVIGATION ROUTES:** Tạo route names như `/pos` mà không verify RouteNames class và actual route definitions.
-
-67. **HALLUCINATION VỀ DATABASE SCHEMA:** Đoán column names như `expiring_batches.store_id`, `low_stock_products.current_stock` không tồn tại.
-
-68. **HALLUCINATION VỀ RPC FUNCTIONS:** Reference RPC functions như `searchTransactions` mà không verify actual function existence trong database.
-
-69. **HALLUCINATION VỀ WIDGET CONSTRUCTORS:** Tự tạo constructor parameters không tồn tại như `VerticalDivider(width: 1, thickness: 1)` thay vì `VerticalDivider(width: 1)`.
-
-70. **HALLUCINATION VỀ METHOD SIGNATURES:** Đoán method signatures như `setState(() => variable = value)` trong context không có setState method.
-
-71. **HALLUCINATION VỀ PROVIDER METHODS:** Reference provider methods như `context.read<Provider>().nonExistentMethod()` mà không verify actual provider API.
-
-72. **HALLUCINATION VỀ FLUTTER WIDGET PROPERTIES:** Giả định widget properties có default values như parameters trong non-optional context.
-
-73. **HALLUCINATION VỀ COMPILATION ERRORS:** Ignore syntax errors như missing imports, undefined variables, wrong type annotations.
-
-74. **HALLUCINATION VỀ RESPONSIVE SYSTEM:** Tự tạo responsive breakpoints thay vì sử dụng existing responsive system trong project.
-
-75. **HALLUCINATION VỀ DEBUG LOGGING:** Tự thêm debug prints mà không được yêu cầu hoặc cần thiết.
-
-**Prevention Strategies Cần Thêm Vào Requirements:**
-
-76. **MANDATORY FILE READING:** Before referencing ANY method/property/variable, MUST read the actual file containing the class/service/provider.
-
-77. **VERIFY CONSTRUCTOR SIGNATURES:** Before using ANY widget or class constructor, MUST check actual constructor parameters và their types.
-
-78. **CHECK ROUTE DEFINITIONS:** Before using Navigator.pushNamed(), MUST verify route names trong RouteNames class và route registration.
-
-79. **VALIDATE DATABASE SCHEMA:** Before referencing ANY table/column/view, MUST check migration files hoặc supabase schema.
-
-80. **CONFIRM RPC FUNCTION EXISTENCE:** Before calling ANY Supabase RPC, MUST verify function exists với exact parameters trong database.
-
-81. **VERIFY IMPORT AVAILABILITY:** Before adding ANY import statement, MUST check file structure và confirm import path exists.
-
-82. **VALIDATE STATE MANAGEMENT PATTERNS:** Before accessing Provider state, MUST verify actual Provider class implementation và available methods.
-
-83. **CHECK WIDGET PROPERTY SIGNATURES:** Before setting ANY widget property, MUST verify property exists với correct type expectations.
-
-84. **VERIFY ERROR HANDLING PATTERNS:** Before implementing try/catch blocks, MUST check actual exception types thrown by methods.
-
-85. **CONFIRM ASYNC/AWAIT PATTERNS:** Before adding async/await, MUST verify methods actually return Future types.
-
-86. **VALIDATE CLASS STRUCTURE:** Before accessing class members, MUST verify class inheritance, mixins, và actual available methods/properties.
-
-87. **CHECK COMPILATION REQUIREMENTS:** Before suggesting code changes, MUST verify all imports, type annotations, và syntax correctness.
-
-88. **VERIFY RESPONSIVE SYSTEM USAGE:** MUST use existing responsive system (`lib/shared/utils/responsive.dart`) instead of creating custom breakpoints.
-
-**🚨 CRITICAL VERIFICATION WORKFLOW:**
-
-**Step 1: READ ACTUAL CODE** - Always `str_replace_editor view` relevant files FIRST
-**Step 2: VERIFY EXACT NAMES** - Check actual method/property/variable names được used
-**Step 3: VALIDATE SIGNATURES** - Confirm exact method signatures, parameters, return types  
-**Step 4: CHECK DEPENDENCIES** - Verify imports, route registrations, database schema
-**Step 5: TEST COMPATIBILITY** - Ensure suggested code matches existing patterns
-
-**FAILURE TO FOLLOW THIS WORKFLOW = GUARANTEED HALLUCINATION AND BROKEN CODE**
-
-### R. Responsive Design System Requirements - SYSTEM ĐÃ HOÀN THIỆN
-
-**AgriPOS ALREADY HAS COMPLETE RESPONSIVE SYSTEM - ĐÃ PRODUCTION READY:**
-
-79. **NEVER RECREATE RESPONSIVE LOGIC:** System đã có `lib/shared/utils/responsive.dart` hoàn chỉnh với đầy đủ breakpoints, platform detection, adaptive widgets.
-
-80. **ALWAYS USE EXISTING HELPERS:** MUST use `context.adaptiveWidget()`, `context.isMobile/isTablet/isDesktop`, `context.sectionPadding` thay vì hard-code values.
-
-81. **FOLLOW ESTABLISHED PATTERNS:** Đã có working examples trong LoginScreen, RegisterScreen, StoreCodeScreen, HomeScreen, CustomerListScreen, ProductListScreen.
-
-82. **WEB PLATFORM DESKTOP TREATMENT:** Web platform (Chrome) ALWAYS treated as Desktop regardless of window width để ensure proper web app UX (không có AppBar/BottomNav).
-
-83. **AUTH SCREENS USE SPECIAL WRAPPER:** Auth screens MUST use `ResponsiveAuthScaffold` thay vì `ResponsiveScaffold` để có proper desktop split layout.
-
-84. **DESKTOP NO APPBAR RULE:** Desktop layouts should NOT show AppBar - use integrated toolbars trong `ResponsiveScaffold` desktop mode.
-
-85. **SEARCH BAR ADAPTIVE PATTERNS:** Mobile uses search trong AppBar, Desktop uses dedicated search bars trong content area.
-
-86. **RESPONSIVE SCAFFOLD THAY THẾ SCAFFOLD:** Use `ResponsiveScaffold` instead of `Scaffold` để automatic responsive behavior.
-
-87. **IMPORT RESPONSIVE UTILITIES:** Always import `import '../../../shared/utils/responsive.dart'` (đúng path) before using.
-
-88. **PLATFORM-AWARE FEATURES:** Biometric chỉ show trên mobile devices (`context.shouldShowBiometric`), không show trên web.
-
-89. **AUTOMATIC LAYOUT ADAPTATION:** System tự động adapt grid columns (1→2→3), spacing (16→24→32px), form width constraints.
-
-90. **NO HARD-CODED BREAKPOINTS:** Never use `MediaQuery.of(context).size.width > 600` - use `context.isDesktop` instead.
-
-**RESPONSIVE IMPLEMENTATION WORKFLOW:**
-
-```dart
-// Step 1: Import responsive utilities
-import '../../../shared/utils/responsive.dart';
-
-// Step 2: Replace Scaffold với ResponsiveScaffold
-return ResponsiveScaffold(
-  title: 'Screen Title',
-  body: _buildContent(),
-  actions: _buildActions(),
-  floatingActionButton: _buildFAB(),
-);
-
-// Step 3: Use responsive helpers
-Widget _buildContent() {
-  return Container(
-    padding: EdgeInsets.all(context.sectionPadding), // Auto 16/24/32px
-    child: GridView.builder(
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: context.gridColumns, // Auto 1/2/3 columns
-        crossAxisSpacing: context.cardSpacing, // Auto 8/12/16px
-      ),
-      itemBuilder: _buildItem,
-    ),
-  );
-}
-
-// Step 4: Platform-specific features
-Widget _buildAuthActions() {
-  return Column(
-    children: [
-      _buildLoginButton(),
-      if (context.shouldShowBiometric) _buildBiometricButton(), // Mobile only
-      _buildForgotPassword(),
-    ],
-  );
-}
-```
-
-**AUTH SCREENS SPECIAL CASE:**
-
-```dart
-return ResponsiveAuthScaffold( // Special auth wrapper
-  title: 'Login',
-  child: _buildLoginForm(), // Auto desktop split layout
-);
-```
-
-**PRODUCTION RESULTS ACHIEVED:**
-
-- ✅ Universal responsive system works across all device types
-- ✅ Web platform gets proper desktop experience (no mobile AppBar/BottomNav)
-- ✅ Platform-aware feature detection (biometric, etc.)
-- ✅ Automatic layout adaptation (grids, spacing, forms)
-- ✅ Zero breaking changes to existing screens
-- ✅ Enterprise-grade responsive design patterns
-- ✅ Consistent 8px grid system throughout app
-
-**System đã được verified và hoạt động perfect trong production!** 🚀
 
 # Context (Phần Bối Cảnh Dự Án)
 

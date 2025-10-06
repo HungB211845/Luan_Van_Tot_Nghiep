@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/purchase_order_provider.dart';
@@ -618,39 +619,43 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       controller: item.sellingPriceController,
       decoration: InputDecoration(
         labelText: 'Giá bán mới (tùy chọn)',
-        hintText: 'Để trống để giữ nguyên giá bán hiện tại',
+        hintText: 'Để trống để giữ nguyên',
         border: const OutlineInputBorder(),
         prefixIcon: const Icon(Icons.sell_outlined),
-        suffixText: 'VND',
       ),
       keyboardType: TextInputType.number,
       onTap: () {
-        item.sellingPriceController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: item.sellingPriceController.text.length,
-        );
+        if (item.sellingPriceController.text == '0') {
+          item.sellingPriceController.clear();
+        }
       },
       onChanged: (value) {
+        String numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+        double? price = numericValue.isEmpty ? null : double.tryParse(numericValue);
+
         if (value.isEmpty) {
           poProvider.updatePOCartItem(item.product.id, clearSellingPrice: true);
-          return;
+        } else {
+          poProvider.updatePOCartItem(item.product.id, newSellingPrice: price ?? 0.0);
         }
-        final price = double.tryParse(value);
-        if (price != null && price >= 0) {
-          poProvider.updatePOCartItem(item.product.id, newSellingPrice: price);
-        } else if (price == null) {
-          item.sellingPriceController.text =
-              item.sellingPrice?.toStringAsFixed(0) ?? '';
-          item.sellingPriceController.selection = TextSelection.fromPosition(
-            TextPosition(offset: item.sellingPriceController.text.length),
-          );
+
+        if (price != null) {
+          String formattedValue = AppFormatter.formatNumber(price);
+          if (formattedValue != value) {
+            item.sellingPriceController.value = TextEditingValue(
+              text: formattedValue,
+              selection: TextSelection.fromPosition(
+                TextPosition(offset: formattedValue.length),
+              ),
+            );
+          }
         }
       },
       validator: (value) {
         if (value == null || value.isEmpty) {
           return null; // Optional field
         }
-        final price = double.tryParse(value);
+        final price = double.tryParse(value.replaceAll(RegExp(r'[^0-9]'), ''));
         if (price == null) {
           return 'Vui lòng nhập số hợp lệ';
         }
@@ -735,51 +740,44 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       controller: item.unitCostController,
       decoration: InputDecoration(
         labelText: 'Giá nhập / đơn vị',
-        hintText: 'Nhập giá nhập (ví dụ: 25,000 hoặc 25,000.5)',
+        hintText: 'Nhập giá nhập',
         border: const OutlineInputBorder(),
         prefixIcon: const Icon(Icons.attach_money),
-        suffixText: 'VND',
       ),
       keyboardType: TextInputType.number,
       onTap: () {
-        // Select all text on tap for easy editing
-        item.unitCostController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: item.unitCostController.text.length,
-        );
+        if (item.unitCostController.text == '0') {
+          item.unitCostController.clear();
+        }
       },
       onChanged: (value) {
-        // Handle empty string gracefully
-        if (value.isEmpty) {
-          poProvider.updatePOCartItem(item.product.id, newUnitCost: 0.0);
-          return;
-        }
+        String numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+        double cost = double.tryParse(numericValue) ?? 0.0;
 
-        final cost = double.tryParse(value);
-        if (cost != null && cost >= 0) {
-          poProvider.updatePOCartItem(item.product.id, newUnitCost: cost);
-        } else if (cost == null) {
-          // If input is invalid, revert controller text to previous valid value
-          item.unitCostController.text = item.unitCost.toStringAsFixed(0);
-          item.unitCostController.selection = TextSelection.fromPosition(
-            TextPosition(offset: item.unitCostController.text.length),
+        poProvider.updatePOCartItem(item.product.id, newUnitCost: cost);
+
+        String formattedValue = AppFormatter.formatNumber(cost);
+        if (formattedValue != value) {
+          item.unitCostController.value = TextEditingValue(
+            text: formattedValue,
+            selection: TextSelection.fromPosition(
+              TextPosition(offset: formattedValue.length),
+            ),
           );
         }
       },
       validator: (value) {
-        // Allow empty (will be treated as 0)
         if (value == null || value.isEmpty) {
-          return null; // Valid - will be 0
+          return null; // Allow empty, will be treated as 0
         }
-
-        final cost = double.tryParse(value);
+        final cost = double.tryParse(value.replaceAll(RegExp(r'[^0-9]'), ''));
         if (cost == null) {
           return 'Vui lòng nhập số hợp lệ';
         }
         if (cost < 0) {
           return 'Giá không được âm';
         }
-        return null; // Valid
+        return null;
       },
     );
   }

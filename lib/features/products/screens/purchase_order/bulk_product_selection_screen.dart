@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
-import '../../models/company.dart';
-import '../../providers/product_provider.dart';
 import '../../providers/purchase_order_provider.dart';
+import '../../services/product_service.dart'; // Import service
 import 'widgets/product_selection_header.dart';
 import 'widgets/live_cart_summary.dart';
 import 'widgets/simple_product_card.dart';
@@ -26,10 +25,14 @@ class BulkProductSelectionScreen extends StatefulWidget {
       _BulkProductSelectionScreenState();
 }
 
-class _BulkProductSelectionScreenState
-    extends State<BulkProductSelectionScreen> {
+class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen> {
+  final ProductService _productService = ProductService(); // Instantiate service
   final TextEditingController _searchController = TextEditingController();
-  final Map<String, POCartItem> _localCartItems = {}; // Local cart state
+
+  // Local state for this screen
+  List<Product> _supplierProducts = [];
+  bool _isLoading = true;
+  final Map<String, POCartItem> _localCartItems = {};
   ProductCategory? _selectedCategory;
   String _searchQuery = '';
   bool _isCartExpanded = false;
@@ -37,16 +40,14 @@ class _BulkProductSelectionScreenState
   @override
   void initState() {
     super.initState();
-
-    // Initialize with existing cart items
     for (var item in widget.existingCartItems) {
       _localCartItems[item.product.id] = item;
     }
-
-    // Load products for this supplier ONLY
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // FIXED: Load products filtered by supplier instead of all products
-      context.read<ProductProvider>().loadProductsByCompany(widget.supplierId);
+    _fetchProductsForSupplier();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text;
+      });
     });
   }
 
@@ -56,38 +57,40 @@ class _BulkProductSelectionScreenState
     super.dispose();
   }
 
-  void _onSearchChanged(String query) {
-    setState(() {
-      _searchQuery = query;
-    });
+  Future<void> _fetchProductsForSupplier() async {
+    setState(() => _isLoading = true);
+    try {
+      final products = await _productService.getProductsByCompany(widget.supplierId);
+      if (mounted) {
+        setState(() {
+          _supplierProducts = products;
+        });
+      }
+    } catch (e) {
+      // Handle error
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _onCategoryChanged(ProductCategory? category) {
     setState(() {
       _selectedCategory = category;
     });
-    // FIXED: Reload products with both company and category filters
-    context.read<ProductProvider>().loadProductsByCompany(
-      widget.supplierId,
-      category: category,
-    );
   }
 
-  void _showProductEntrySheet(
-    Product product,
-    int? existingQuantity,
-    double? existingPrice,
-    String? existingUnit,
-  ) {
+  void _showProductEntrySheet(Product product, POCartItem? cartItem) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => ProductEntryBottomSheet(
         product: product,
-        existingQuantity: existingQuantity,
-        existingPrice: existingPrice,
-        existingUnit: existingUnit,
+        existingQuantity: cartItem?.quantity,
+        existingPrice: cartItem?.unitCost,
+        existingUnit: cartItem?.unit,
         onAdd: (quantity, price, unit) {
           setState(() {
             _localCartItems[product.id] = POCartItem(
@@ -125,51 +128,38 @@ class _BulkProductSelectionScreenState
   }
 
   void _finishSelection() {
-    // Update PurchaseOrderProvider with all selected items
     final poProvider = context.read<PurchaseOrderProvider>();
-
-    // Clear only cart items, preserve supplier selection
     poProvider.clearPOCart();
     for (var item in _localCartItems.values) {
       poProvider.addPOCartItem(item);
     }
-
-    // Return to previous screen (Create PO) with supplier preserved
     Navigator.pop(context);
   }
 
-  List<Product> _getFilteredProducts(List<Product> products) {
-    // NOTE: Company/supplier and category filtering are now done server-side
-    // Only client-side search query filtering remains
-
-    if (_searchQuery.isEmpty) {
-      return products; // No search query, return all server-filtered products
+  List<Product> _getDisplayedProducts() {
+    List<Product> products = _supplierProducts;
+    if (_selectedCategory != null) {
+      products = products.where((p) => p.category == _selectedCategory).toList();
     }
-
-    // Filter by search query only
-    return products.where((product) {
+    if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
-      return product.name.toLowerCase().contains(query) ||
-          (product.sku?.toLowerCase().contains(query) ?? false);
-    }).toList();
-  }
-
-  double _getLocalCartTotal() {
-    return _localCartItems.values.fold(0.0, (sum, item) {
-      return sum + (item.quantity * item.unitCost);
-    });
+      products = products.where((product) {
+        return product.name.toLowerCase().contains(query) ||
+            (product.sku?.toLowerCase().contains(query) ?? false);
+      }).toList();
+    }
+    return products;
   }
 
   @override
   Widget build(BuildContext context) {
+    final displayedProducts = _getDisplayedProducts();
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            // Header with supplier context
             ProductSelectionHeader(supplierName: widget.supplierName),
-
-            // Live cart summary
             LiveCartSummary(
               cartItems: _localCartItems.values.toList(),
               isExpanded: _isCartExpanded,
@@ -179,13 +169,10 @@ class _BulkProductSelectionScreenState
               onRemoveItem: _removeFromLocalCart,
               onUpdateQuantity: _updateLocalCartItem,
             ),
-
-            // Search bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: TextField(
                 controller: _searchController,
-                onChanged: _onSearchChanged,
                 decoration: InputDecoration(
                   hintText: 'Tìm sản phẩm của ${widget.supplierName}...',
                   prefixIcon: const Icon(Icons.search),
@@ -202,8 +189,6 @@ class _BulkProductSelectionScreenState
                 ),
               ),
             ),
-
-            // Category filters
             Container(
               height: 50,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -220,68 +205,28 @@ class _BulkProductSelectionScreenState
                 ],
               ),
             ),
-
-            // Product list
             Expanded(
-              child: Consumer<ProductProvider>(
-                builder: (context, provider, child) {
-                  if (provider.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : displayedProducts.isEmpty
+                      ? const Center(child: Text('Không có sản phẩm nào.'))
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: displayedProducts.length,
+                          itemBuilder: (context, index) {
+                            final product = displayedProducts[index];
+                            final cartItem = _localCartItems[product.id];
+                            final bool isInCart = cartItem != null && cartItem.quantity > 0;
 
-                  final products = _getFilteredProducts(provider.products);
-
-                  if (products.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 64,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _searchQuery.isNotEmpty
-                                ? 'Không tìm thấy sản phẩm nào'
-                                : 'Chưa có sản phẩm nào',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: products.length,
-                    itemBuilder: (context, index) {
-                      final product = products[index];
-                      final isInCart = _localCartItems.containsKey(product.id);
-                      final cartItem = _localCartItems[product.id];
-
-                      return SimpleProductCard(
-                        product: product,
-                        currentStock: provider.getProductStock(product.id),
-                        lastPrice: provider.getCurrentPrice(product.id),
-                        isInCart: isInCart,
-                        cartQuantity: cartItem?.quantity ?? 0,
-                        onTap: () => _showProductEntrySheet(
-                          product,
-                          cartItem?.quantity,
-                          cartItem?.unitCost,
-                          cartItem?.unit,
+                            return SimpleProductCard(
+                              product: product,
+                              currentStock: product.availableStock ?? 0,
+                              isInCart: isInCart,
+                              cartQuantity: cartItem?.quantity ?? 0,
+                              onTap: () => _showProductEntrySheet(product, cartItem),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -291,7 +236,6 @@ class _BulkProductSelectionScreenState
 
   Widget _buildCategoryChip(String label, ProductCategory? category) {
     final isSelected = _selectedCategory == category;
-
     return FilterChip(
       label: Text(label),
       selected: isSelected,

@@ -176,12 +176,12 @@ class ProductService extends BaseService {
   /// Get products filtered by company (for PO creation)
   Future<List<Product>> getProductsByCompany(String? companyId) async {
     try {
-      var query = _supabase.from('products_with_details').select('''
+      var query = addStoreFilter(_supabase.from('products_with_details').select('''
         id, sku, name, category, company_id, attributes, is_active, is_banned,
         image_url, description, created_at, updated_at, min_stock_level, npk_ratio,
         active_ingredient, seed_strain, current_price, available_stock,
         company_name, store_id
-      ''');
+      '''));
 
       // Filter by company if provided
       if (companyId != null) {
