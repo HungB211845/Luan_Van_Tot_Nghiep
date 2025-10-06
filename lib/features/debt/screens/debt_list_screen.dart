@@ -32,7 +32,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
     _searchController.addListener(() {
       if (mounted) setState(() => _searchQuery = _searchController.text);
     });
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
   @override

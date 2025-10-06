@@ -109,10 +109,7 @@ class DebtProvider extends ChangeNotifier {
   }
 
   /// Load all debts in store
-  Future<void> loadAllDebts({
-    String? status,
-    bool onlyOverdue = false,
-  }) async {
+  Future<void> loadAllDebts({String? status, bool onlyOverdue = false}) async {
     try {
       _isLoading = true;
       _errorMessage = '';
@@ -174,10 +171,7 @@ class DebtProvider extends ChangeNotifier {
       if (success && _debts.isNotEmpty) {
         _debts = _debts.map((debt) {
           if (debt.id == debtId) {
-            return Debt.fromJson({
-              ...debt.toJson(),
-              'status': 'cancelled',
-            });
+            return Debt.fromJson({...debt.toJson(), 'status': 'cancelled'});
           }
           return debt;
         }).toList();
@@ -189,6 +183,38 @@ class DebtProvider extends ChangeNotifier {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Create a manual debt record for a customer
+  Future<bool> createManualDebt({
+    required String customerId,
+    required double amount,
+    String? notes,
+  }) async {
+    try {
+      _isLoading = true;
+      _errorMessage = '';
+      notifyListeners();
+
+      await _debtService.createManualDebt(
+        customerId: customerId,
+        amount: amount,
+        notes: notes,
+      );
+
+      // Refresh data after creation
+      await loadCustomerDebts(customerId);
+      await loadCustomerDebtSummary(customerId);
+
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 

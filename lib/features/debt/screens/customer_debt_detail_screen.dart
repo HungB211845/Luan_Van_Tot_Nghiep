@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../customers/models/customer.dart';
 import '../../customers/services/customer_service.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/input_formatters.dart'; // <--- ADD THIS IMPORT
 import '../../../../shared/widgets/loading_widget.dart';
 import '../models/debt.dart';
 import '../models/debt_payment.dart';
@@ -54,16 +55,14 @@ class LedgerFilter {
     this.onlyOverdue = false,
   });
 
-  bool get isActive => startDate != null || endDate != null || entryType != null || onlyOverdue;
+  bool get isActive =>
+      startDate != null || endDate != null || entryType != null || onlyOverdue;
 }
 
 class CustomerDebtDetailScreen extends StatefulWidget {
   final String customerId;
 
-  const CustomerDebtDetailScreen({
-    super.key,
-    required this.customerId,
-  });
+  const CustomerDebtDetailScreen({super.key, required this.customerId});
 
   @override
   State<CustomerDebtDetailScreen> createState() =>
@@ -92,7 +91,9 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
   Future<void> _loadData() async {
     final debtProvider = context.read<DebtProvider>();
     await Future.wait([
-      _customerService.getCustomerById(widget.customerId).then((c) => _customer = c),
+      _customerService
+          .getCustomerById(widget.customerId)
+          .then((c) => _customer = c),
       debtProvider.loadCustomerDebts(widget.customerId),
       debtProvider.loadCustomerPayments(widget.customerId),
       debtProvider.loadCustomerDebtSummary(widget.customerId),
@@ -100,30 +101,50 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     if (mounted) setState(() {});
   }
 
-  List<MonthlyLedgerGroup> _createGroupedLedger(List<Debt> debts, List<DebtPayment> payments) {
+  List<MonthlyLedgerGroup> _createGroupedLedger(
+    List<Debt> debts,
+    List<DebtPayment> payments,
+  ) {
     List<LedgerEntry> allEntries = [];
 
     final filteredDebts = debts.where((d) {
       if (_filter.onlyOverdue && !d.isOverdue) return false;
-      if (_filter.startDate != null && d.createdAt.isBefore(_filter.startDate!)) return false;
-      if (_filter.endDate != null && d.createdAt.isAfter(_filter.endDate!)) return false;
+      if (_filter.startDate != null && d.createdAt.isBefore(_filter.startDate!))
+        return false;
+      if (_filter.endDate != null && d.createdAt.isAfter(_filter.endDate!))
+        return false;
       return true;
     }).toList();
 
     final filteredPayments = payments.where((p) {
-       if (_filter.startDate != null && p.paymentDate.isBefore(_filter.startDate!)) return false;
-       if (_filter.endDate != null && p.paymentDate.isAfter(_filter.endDate!)) return false;
-       return true;
+      if (_filter.startDate != null &&
+          p.paymentDate.isBefore(_filter.startDate!))
+        return false;
+      if (_filter.endDate != null && p.paymentDate.isAfter(_filter.endDate!))
+        return false;
+      return true;
     }).toList();
 
     if (_filter.entryType != LedgerEntryType.payment) {
       for (var debt in filteredDebts) {
-        allEntries.add(LedgerEntry(entry: debt, date: debt.createdAt, type: LedgerEntryType.debt));
+        allEntries.add(
+          LedgerEntry(
+            entry: debt,
+            date: debt.createdAt,
+            type: LedgerEntryType.debt,
+          ),
+        );
       }
     }
     if (_filter.entryType != LedgerEntryType.debt) {
       for (var payment in filteredPayments) {
-        allEntries.add(LedgerEntry(entry: payment, date: payment.paymentDate, type: LedgerEntryType.payment));
+        allEntries.add(
+          LedgerEntry(
+            entry: payment,
+            date: payment.paymentDate,
+            type: LedgerEntryType.payment,
+          ),
+        );
       }
     }
 
@@ -132,12 +153,13 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       allEntries.removeWhere((entry) {
         if (isDebtEntry(entry)) {
           final Debt debt = entry.entry;
-          return !(debt.transactionId?.toLowerCase().contains(query) ?? false) &&
-                 !(debt.originalAmount.toString().contains(query));
+          return !(debt.transactionId?.toLowerCase().contains(query) ??
+                  false) &&
+              !(debt.originalAmount.toString().contains(query));
         } else {
           final DebtPayment payment = entry.entry;
           return !(payment.amount.toString().contains(query)) &&
-                 !(payment.notes?.toLowerCase().contains(query) ?? false);
+              !(payment.notes?.toLowerCase().contains(query) ?? false);
         }
       });
     }
@@ -147,8 +169,12 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     Map<String, MonthlyLedgerGroup> groupedMap = {};
     for (var entry in allEntries) {
       String monthKey = DateFormat('yyyy-MM').format(entry.date);
-      double debtIncurred = isDebtEntry(entry) ? (entry.entry as Debt).originalAmount : 0;
-      double amountPaid = !isDebtEntry(entry) ? (entry.entry as DebtPayment).amount : 0;
+      double debtIncurred = isDebtEntry(entry)
+          ? (entry.entry as Debt).originalAmount
+          : 0;
+      double amountPaid = !isDebtEntry(entry)
+          ? (entry.entry as DebtPayment).amount
+          : 0;
 
       groupedMap.update(
         monthKey,
@@ -178,7 +204,9 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final tx = await context.read<TransactionProvider>().getTransactionById(transactionId);
+      final tx = await context.read<TransactionProvider>().getTransactionById(
+        transactionId,
+      );
       Navigator.pop(context);
       if (tx != null && mounted) {
         Navigator.push(
@@ -189,14 +217,20 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
         );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không tìm thấy chi tiết giao dịch.'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Không tìm thấy chi tiết giao dịch.'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
       Navigator.pop(context);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi tải giao dịch: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Lỗi tải giao dịch: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -211,10 +245,24 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     if (result != null) setState(() => _filter = result);
   }
 
+  void _showAddTransactionSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _AddTransactionSheet(
+        customerId: widget.customerId,
+        onSuccess: () {
+          _loadData(); // Reload data on success
+        },
+      ),
+    );
+  }
+
   String _buildAppBarTitle() {
     if (!_filter.isActive) return 'Sổ Cái Công Nợ';
     if (_filter.onlyOverdue) return 'Sổ Cái (Quá hạn)';
-    if (_filter.entryType == LedgerEntryType.debt) return 'Sổ Cái (Nợ phát sinh)';
+    if (_filter.entryType == LedgerEntryType.debt)
+      return 'Sổ Cái (Nợ phát sinh)';
     if (_filter.entryType == LedgerEntryType.payment) return 'Sổ Cái (Đã trả)';
     return 'Sổ Cái (Đã lọc)';
   }
@@ -226,7 +274,10 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
         onRefresh: _loadData,
         child: Consumer<DebtProvider>(
           builder: (context, provider, _) {
-            final groupedLedger = _createGroupedLedger(provider.debts, provider.payments);
+            final groupedLedger = _createGroupedLedger(
+              provider.debts,
+              provider.payments,
+            );
             return CustomScrollView(
               slivers: [
                 SliverAppBar(
@@ -237,7 +288,16 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
                   floating: true,
                   actions: [
                     IconButton(
-                      icon: Icon(_filter.isActive ? Icons.filter_alt : Icons.filter_alt_outlined),
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: _showAddTransactionSheet, // Wired up
+                      tooltip: 'Thêm Giao Dịch',
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        _filter.isActive
+                            ? Icons.filter_alt
+                            : Icons.filter_alt_outlined,
+                      ),
                       onPressed: _showFilterSheet,
                       tooltip: 'Lọc',
                     ),
@@ -266,9 +326,12 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
+          // Keep this for quick payment, but our new button is more versatile
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => AddPaymentScreen(customerId: widget.customerId)),
+            MaterialPageRoute(
+              builder: (_) => AddPaymentScreen(customerId: widget.customerId),
+            ),
           ).then((_) => _loadData());
         },
         icon: const Icon(Icons.payment),
@@ -278,21 +341,23 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     );
   }
 
-  Widget _buildLedgerContent(DebtProvider provider, List<MonthlyLedgerGroup> groupedLedger) {
+  Widget _buildLedgerContent(
+    DebtProvider provider,
+    List<MonthlyLedgerGroup> groupedLedger,
+  ) {
     if (provider.isLoading && groupedLedger.isEmpty) {
       return const SliverFillRemaining(child: Center(child: LoadingWidget()));
     }
     if (groupedLedger.isEmpty) {
-      return const SliverFillRemaining(child: Center(child: Text('Không có hoạt động nào khớp bộ lọc.')));
+      return const SliverFillRemaining(
+        child: Center(child: Text('Không có hoạt động nào khớp bộ lọc.')),
+      );
     }
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final monthGroup = groupedLedger[index];
-          return _buildMonthGroup(monthGroup);
-        },
-        childCount: groupedLedger.length,
-      ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final monthGroup = groupedLedger[index];
+        return _buildMonthGroup(monthGroup);
+      }, childCount: groupedLedger.length),
     );
   }
 
@@ -303,18 +368,35 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 8),
+          padding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 24,
+            bottom: 8,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(formattedMonth, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                formattedMonth,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('Phát sinh: ${AppFormatter.formatCurrency(group.debtIncurred)}', style: const TextStyle(fontSize: 12, color: Colors.orange)),
-                  Text('Đã trả: ${AppFormatter.formatCurrency(group.amountPaid)}', style: const TextStyle(fontSize: 12, color: Colors.green)),
+                  Text(
+                    'Phát sinh: ${AppFormatter.formatCurrency(group.debtIncurred)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.orange),
+                  ),
+                  Text(
+                    'Đã trả: ${AppFormatter.formatCurrency(group.amountPaid)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.green),
+                  ),
                 ],
-              )
+              ),
             ],
           ),
         ),
@@ -326,19 +408,33 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
   Widget _buildLedgerItem(LedgerEntry ledgerEntry) {
     final bool isDebtEntry = ledgerEntry.type == LedgerEntryType.debt;
     final Debt? debt = isDebtEntry ? ledgerEntry.entry as Debt : null;
-    final DebtPayment? payment = !isDebtEntry ? ledgerEntry.entry as DebtPayment : null;
-    final String title = isDebtEntry ? 'Giao dịch bán hàng' : 'Thanh toán (${payment!.paymentMethod})';
+    final DebtPayment? payment = !isDebtEntry
+        ? ledgerEntry.entry as DebtPayment
+        : null;
+    final String title = isDebtEntry
+        ? (debt!.notes?.contains('Ghi nợ thủ công') ?? false)
+            ? 'Ghi nợ thủ công'
+            : 'Giao dịch bán hàng'
+        : 'Thanh toán (${payment!.paymentMethod})';
     final String dateSubtitle;
     if (isDebtEntry) {
       final isOverdue = debt!.isOverdue;
-      dateSubtitle = 'Ngày tạo: ${AppFormatter.formatDate(debt.createdAt)} • Đáo hạn: ${debt.dueDate != null ? AppFormatter.formatDate(debt.dueDate!) : 'N/A'}';
+      dateSubtitle =
+          'Ngày tạo: ${AppFormatter.formatDate(debt.createdAt)} • Đáo hạn: ${debt.dueDate != null ? AppFormatter.formatDate(debt.dueDate!) : 'N/A'}';
     } else {
-      dateSubtitle = 'Ngày trả: ${AppFormatter.formatDate(payment!.paymentDate)}';
+      dateSubtitle =
+          'Ngày trả: ${AppFormatter.formatDate(payment!.paymentDate)}';
     }
-    final String amountText = isDebtEntry ? '+ ${AppFormatter.formatCurrency(debt!.originalAmount)}' : '- ${AppFormatter.formatCurrency(payment!.amount)}';
+    final String amountText = isDebtEntry
+        ? '+ ${AppFormatter.formatCurrency(debt!.originalAmount)}'
+        : '- ${AppFormatter.formatCurrency(payment!.amount)}';
     final Color amountColor = isDebtEntry ? Colors.orange : Colors.green;
-    final IconData icon = isDebtEntry ? Icons.add_shopping_cart : Icons.check_circle;
-    final VoidCallback? onTap = isDebtEntry && debt!.transactionId != null ? () => _navigateToTransactionDetails(debt.transactionId!) : null;
+    final IconData icon = isDebtEntry
+        ? Icons.add_shopping_cart
+        : Icons.check_circle;
+    final VoidCallback? onTap = isDebtEntry && debt!.transactionId != null
+        ? () => _navigateToTransactionDetails(debt.transactionId!)
+        : null;
 
     return Material(
       color: Colors.white,
@@ -348,14 +444,19 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
           if (isDebtEntry && debt?.transactionId != null) {
             Clipboard.setData(ClipboardData(text: debt!.transactionId!));
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Đã sao chép Mã Giao Dịch'), backgroundColor: Colors.green),
+              const SnackBar(
+                content: Text('Đã sao chép Mã Giao Dịch'),
+                backgroundColor: Colors.green,
+              ),
             );
           }
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
+            border: Border(
+              bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+            ),
           ),
           child: Row(
             children: [
@@ -365,11 +466,22 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       dateSubtitle,
-                      style: TextStyle(fontSize: 12, color: (isDebtEntry && debt!.isOverdue) ? Colors.red : Colors.grey[600]),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: (isDebtEntry && debt!.isOverdue)
+                            ? Colors.red
+                            : Colors.grey[600],
+                      ),
                     ),
                   ],
                 ),
@@ -377,7 +489,11 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
               const SizedBox(width: 8),
               Text(
                 amountText,
-                style: TextStyle(fontWeight: FontWeight.bold, color: amountColor, fontSize: 16),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: amountColor,
+                  fontSize: 16,
+                ),
               ),
             ],
           ),
@@ -409,16 +525,160 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Hiện còn nợ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                  const Text(
+                    'Hiện còn nợ',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
                   Text(
                     AppFormatter.formatCurrency(remaining),
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.red),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
                   ),
                 ],
               );
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+// The new Bottom Sheet for adding transactions (Refactored and Simplified)
+class _AddTransactionSheet extends StatefulWidget {
+  final String customerId;
+  final VoidCallback onSuccess;
+
+  const _AddTransactionSheet({
+    required this.customerId,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_AddTransactionSheet> createState() => _AddTransactionSheetState();
+}
+
+class _AddTransactionSheetState extends State<_AddTransactionSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _amountController = TextEditingController();
+  final _notesController = TextEditingController();
+  bool _isProcessing = false;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _isProcessing = true);
+
+    final amount = double.tryParse(_amountController.text.replaceAll('.', '')) ?? 0;
+    final notes = _notesController.text;
+    final provider = context.read<DebtProvider>();
+
+    try {
+      final success = await provider.createManualDebt(
+        customerId: widget.customerId,
+        amount: amount,
+        notes: notes,
+      );
+
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ghi nợ thành công!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context); // Close the sheet
+          widget.onSuccess(); // Trigger data reload
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(provider.errorMessage.isNotEmpty
+                  ? provider.errorMessage
+                  : 'Đã có lỗi xảy ra khi ghi nợ.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi nghiêm trọng: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ghi Nợ Thủ Công', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _amountController,
+              decoration: const InputDecoration(labelText: 'Số tiền nợ', border: OutlineInputBorder()),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
+              validator: (value) {
+                if (value == null || value.isEmpty) return 'Vui lòng nhập số tiền';
+                final amount = double.tryParse(value.replaceAll('.', '')) ?? 0;
+                if (amount <= 0) return 'Số tiền phải lớn hơn 0';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _notesController,
+              decoration: const InputDecoration(labelText: 'Ghi chú (tùy chọn)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green, // Correct color
+                  foregroundColor: Colors.white, // Set text color for better contrast
+                ),
+                onPressed: _isProcessing ? null : _submit,
+                child: _isProcessing
+                    ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Colors.white))
+                    : const Text('Xác nhận Ghi Nợ'),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -449,7 +709,10 @@ class _FilterSheetState extends State<_FilterSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Lọc Sổ Cái', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text(
+            'Lọc Sổ Cái',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
           const Divider(height: 24),
           _buildDateRangePicker(),
           const SizedBox(height: 16),
@@ -481,21 +744,37 @@ class _FilterSheetState extends State<_FilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Khoảng thời gian', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Khoảng thời gian',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.date_range, size: 18),
-                label: Text(_localFilter.startDate == null ? 'Từ ngày' : AppFormatter.formatDate(_localFilter.startDate!)),
+                label: Text(
+                  _localFilter.startDate == null
+                      ? 'Từ ngày'
+                      : AppFormatter.formatDate(_localFilter.startDate!),
+                ),
                 onPressed: () async {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: _localFilter.startDate ?? DateTime.now(),
-                    firstDate: DateTime(2020), lastDate: DateTime(2100),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
                   );
-                  if (picked != null) setState(() => _localFilter = LedgerFilter(startDate: picked, endDate: _localFilter.endDate, entryType: _localFilter.entryType, onlyOverdue: _localFilter.onlyOverdue));
+                  if (picked != null)
+                    setState(
+                      () => _localFilter = LedgerFilter(
+                        startDate: picked,
+                        endDate: _localFilter.endDate,
+                        entryType: _localFilter.entryType,
+                        onlyOverdue: _localFilter.onlyOverdue,
+                      ),
+                    );
                 },
               ),
             ),
@@ -503,14 +782,27 @@ class _FilterSheetState extends State<_FilterSheet> {
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.date_range, size: 18),
-                label: Text(_localFilter.endDate == null ? 'Đến ngày' : AppFormatter.formatDate(_localFilter.endDate!)),
+                label: Text(
+                  _localFilter.endDate == null
+                      ? 'Đến ngày'
+                      : AppFormatter.formatDate(_localFilter.endDate!),
+                ),
                 onPressed: () async {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: _localFilter.endDate ?? DateTime.now(),
-                    firstDate: DateTime(2020), lastDate: DateTime(2100),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
                   );
-                  if (picked != null) setState(() => _localFilter = LedgerFilter(startDate: _localFilter.startDate, endDate: picked, entryType: _localFilter.entryType, onlyOverdue: _localFilter.onlyOverdue));
+                  if (picked != null)
+                    setState(
+                      () => _localFilter = LedgerFilter(
+                        startDate: _localFilter.startDate,
+                        endDate: picked,
+                        entryType: _localFilter.entryType,
+                        onlyOverdue: _localFilter.onlyOverdue,
+                      ),
+                    );
                 },
               ),
             ),
@@ -524,7 +816,10 @@ class _FilterSheetState extends State<_FilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Loại giao dịch', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Loại giao dịch',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -533,21 +828,45 @@ class _FilterSheetState extends State<_FilterSheet> {
               label: const Text('Tất cả'),
               selected: _localFilter.entryType == null,
               onSelected: (selected) {
-                if (selected) setState(() => _localFilter = LedgerFilter(startDate: _localFilter.startDate, endDate: _localFilter.endDate, entryType: null, onlyOverdue: _localFilter.onlyOverdue));
+                if (selected)
+                  setState(
+                    () => _localFilter = LedgerFilter(
+                      startDate: _localFilter.startDate,
+                      endDate: _localFilter.endDate,
+                      entryType: null,
+                      onlyOverdue: _localFilter.onlyOverdue,
+                    ),
+                  );
               },
             ),
             ChoiceChip(
               label: const Text('Nợ phát sinh'),
               selected: _localFilter.entryType == LedgerEntryType.debt,
               onSelected: (selected) {
-                if (selected) setState(() => _localFilter = LedgerFilter(startDate: _localFilter.startDate, endDate: _localFilter.endDate, entryType: LedgerEntryType.debt, onlyOverdue: _localFilter.onlyOverdue));
+                if (selected)
+                  setState(
+                    () => _localFilter = LedgerFilter(
+                      startDate: _localFilter.startDate,
+                      endDate: _localFilter.endDate,
+                      entryType: LedgerEntryType.debt,
+                      onlyOverdue: _localFilter.onlyOverdue,
+                    ),
+                  );
               },
             ),
             ChoiceChip(
               label: const Text('Đã trả'),
               selected: _localFilter.entryType == LedgerEntryType.payment,
               onSelected: (selected) {
-                if (selected) setState(() => _localFilter = LedgerFilter(startDate: _localFilter.startDate, endDate: _localFilter.endDate, entryType: LedgerEntryType.payment, onlyOverdue: _localFilter.onlyOverdue));
+                if (selected)
+                  setState(
+                    () => _localFilter = LedgerFilter(
+                      startDate: _localFilter.startDate,
+                      endDate: _localFilter.endDate,
+                      entryType: LedgerEntryType.payment,
+                      onlyOverdue: _localFilter.onlyOverdue,
+                    ),
+                  );
               },
             ),
           ],
@@ -561,7 +880,14 @@ class _FilterSheetState extends State<_FilterSheet> {
       title: const Text('Chỉ xem nợ quá hạn'),
       value: _localFilter.onlyOverdue,
       onChanged: (value) {
-        setState(() => _localFilter = LedgerFilter(startDate: _localFilter.startDate, endDate: _localFilter.endDate, entryType: _localFilter.entryType, onlyOverdue: value));
+        setState(
+          () => _localFilter = LedgerFilter(
+            startDate: _localFilter.startDate,
+            endDate: _localFilter.endDate,
+            entryType: _localFilter.entryType,
+            onlyOverdue: value,
+          ),
+        );
       },
       contentPadding: EdgeInsets.zero,
     );

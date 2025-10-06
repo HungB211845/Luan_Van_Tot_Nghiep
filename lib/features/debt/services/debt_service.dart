@@ -58,6 +58,41 @@ class DebtService extends BaseService {
     }
   }
 
+  /// Create a manual debt record for a customer
+  Future<String> createManualDebt({
+    required String customerId,
+    required double amount,
+    String? notes,
+  }) async {
+    try {
+      ensureAuthenticated();
+      final storeId = currentStoreId!;
+
+      if (amount <= 0) {
+        throw Exception('Số tiền ghi nợ phải lớn hơn 0');
+      }
+
+      // Call RPC function for atomic manual debt creation
+      final response = await _supabase.rpc(
+        'create_manual_debt',
+        params: {
+          'p_store_id': storeId,
+          'p_customer_id': customerId,
+          'p_amount': amount,
+          'p_notes': notes,
+        },
+      );
+
+      if (response == null) {
+        throw Exception('Lỗi ghi nợ thủ công: Không có phản hồi từ server');
+      }
+
+      return response as String;
+    } catch (e) {
+      throw Exception('Lỗi ghi nợ thủ công: $e');
+    }
+  }
+
   /// Get all debts for a customer
   Future<List<Debt>> getCustomerDebts(String customerId) async {
     try {
