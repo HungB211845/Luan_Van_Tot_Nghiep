@@ -40,43 +40,37 @@ class ProductBatch {
   });
 
   factory ProductBatch.fromJson(Map<String, dynamic> json) {
+    // Safe access for nested product name
     String? resolvedProductName;
-    if (json.containsKey('product_name')) {
-      resolvedProductName = json['product_name'] as String?;
-    } else if (json.containsKey('products') && json['products'] is Map) {
-      final prod = json['products'] as Map;
-      final nameVal = prod['name'];
-      if (nameVal is String) resolvedProductName = nameVal;
+    if (json['products'] != null && json['products'] is Map) {
+      resolvedProductName = json['products']['name'] as String?;
     }
+
+    // Safe access for nested company name
     String? resolvedSupplierName;
-    if (json.containsKey('supplier_name')) {
-      resolvedSupplierName = json['supplier_name'] as String?;
-    } else if (json.containsKey('companies') && json['companies'] is Map) {
-      final comp = json['companies'] as Map;
-      final nameVal = comp['name'];
-      if (nameVal is String) resolvedSupplierName = nameVal;
+    if (json['companies'] != null && json['companies'] is Map) {
+      resolvedSupplierName = json['companies']['name'] as String?;
     }
+
     return ProductBatch(
-      id: json['id'],
-      productId: json['product_id'],
+      id: json['id'] ?? '',
+      productId: json['product_id'] ?? '',
       purchaseOrderId: json['purchase_order_id'],
       supplierId: json['supplier_id'],
-      batchNumber: json['batch_number'],
-      quantity: json['quantity'],
-      costPrice: (json['cost_price']).toDouble(),
+      batchNumber: json['batch_number'] ?? 'N/A',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      costPrice: (json['cost_price'] as num?)?.toDouble() ?? 0.0,
       sellingPrice: (json['selling_price'] as num?)?.toDouble(),
-      receivedDate: DateTime.parse(json['received_date']),
-      expiryDate: json['expiry_date'] != null
-          ? DateTime.parse(json['expiry_date'])
-          : null,
+      receivedDate: json['received_date'] != null ? DateTime.parse(json['received_date']) : DateTime.now(),
+      expiryDate: json['expiry_date'] != null ? DateTime.parse(json['expiry_date']) : null,
       supplierBatchId: json['supplier_batch_id'],
       notes: json['notes'],
       isAvailable: json['is_available'] ?? true,
-      storeId: json['store_id'], // Add storeId
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
-      productName: resolvedProductName,
-      supplierName: resolvedSupplierName,
+      storeId: json['store_id'] ?? '',
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : DateTime.now(),
+      productName: resolvedProductName ?? json['product_name'],
+      supplierName: resolvedSupplierName ?? json['supplier_name'],
     );
   }
 

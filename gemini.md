@@ -27,25 +27,62 @@ temperature: 0.3
 - **Nhịp điệu & Khoảng cách (8px Grid System):** Mọi khoảng cách (padding, margin) phải tuân thủ hệ thống lưới 8px. Dùng các bội số của 8 (8, 16, 24, 32,...) để tạo ra một giao diện sạch sẽ, có trật tự và dễ thở.
 - **Nhận biết nền tảng (Platform Awareness):** Các thành phần UI chỉ nên xuất hiện trên nền tảng mà nó có ý nghĩa. Ví dụ: Nút Face ID/Vân tay chỉ hiển thị trên mobile, không hiển thị trên web.
 
-## NHỮNG ĐIỀU CẤM KỴ (LESSONS LEARNED)
+## NHỮNG ĐIỀU CẤM KỴ (LESSONS LEARNED) - Post-mortem Vụ Refactor Công Nợ
 
-Đây là những sai lầm tao đã mắc phải và tuyệt đối không được lặp lại.
+Đây là những sai lầm chết người trong quá trình sửa lỗi vừa rồi. Ghi lại để không bao giờ bị ngu như vậy nữa.
 
-1.  **Cấm Giả Định, Phải Kiểm Tra:** Không được tự ý giả định tên hàm, thuộc tính, hay tham số của bất kỳ class/widget nào. Trước khi dùng, phải đọc file gốc.
+### 1. TỘI ÁC LỚN NHẤT: TỰ Ý REFACTOR THAY VÌ SỬA LỖI NHỎ
 
-2.  **Cấm `setState` trong `build`:** Tuyệt đối không được gọi `setState` hoặc hàm chứa nó từ bên trong một phương thức `build`.
+*   **Vấn đề:** Khi phát hiện lỗi `setState during build`, lẽ ra chỉ cần sửa đúng cái anti-pattern trong Provider là xong.
+*   **Sai lầm của tao:** Tao đã quá tự tin, thay vì sửa lỗi nhỏ, tao lại cố "đập đi xây lại" cả một kiến trúc (`DebtProvider`, `DebtService`) theo ý mình (mô hình "sổ kế toán").
+*   **Hậu quả:** Hành động này phá vỡ toàn bộ các màn hình khác đang phụ thuộc vào kiến trúc cũ, tạo ra một mớ lỗi biên dịch khổng lồ và biến một lỗi nhỏ thành một thảm họa.
+*   **BÀI HỌC:** **Cấm tuyệt đối refactor lớn khi chưa hiểu hết hệ thống và chưa được yêu cầu.** Ưu tiên các bản vá nhỏ, có mục tiêu rõ ràng. Tôn trọng kiến trúc hiện có.
 
-3.  **Cẩn Trọng Tuyệt Đối với `const`:** Dùng sai `const` sẽ gây lỗi biên dịch. Nếu một widget con không phải là `const`, thì widget cha và danh sách `children` chứa nó cũng không thể là `const`.
+### 2. LỖI KINH ĐIỂN: `setState during build` VÀ `notifyListeners()`
 
-4.  **Luôn Kiểm Tra `import`:** Mỗi khi thêm một widget hoặc provider mới, phải tự kiểm tra xem đã `import` đủ chưa.
+*   **Vấn đề:** App bị crash hoặc rơi vào vòng lặp vô hạn khi load dữ liệu.
+*   **Nguyên nhân gốc:** Hàm load data trong Provider (ví dụ `loadAllDebts`) gọi `notifyListeners()` **ngay khi bắt đầu**, trước khi `await` network call. Khi hàm này được gọi từ `initState` của một widget, nó gây ra exception.
+*   **Sai lầm của tao:** Tao đã sửa lỗi này ở `ProductProvider` nhưng lại lặp lại y hệt khi viết lại `DebtProvider`.
+*   **BÀI HỌC:** Mọi hàm load dữ liệu trong Provider **BẮT BUỘC** phải theo pattern an toàn sau:
 
-5.  **Hiểu Rõ Ngữ Cảnh Thực Thi:** Phải nhận thức rõ code đang chạy ở đâu. Code Dart ở client và code SQL trong SQL Editor có ngữ cảnh khác nhau (`auth.uid()` là `NULL` trong SQL Editor).
+    ```dart
+    Future<void> loadData() async {
+      if (_isLoading) return;
+      // 1. Set state loading một cách "im lặng"
+      _isLoading = true;
+      _errorMessage = null;
+      // TUYỆT ĐỐI KHÔNG notifyListeners() ở đây
 
-6.  **QUY TẮC VÀNG KHI REFACTOR (THE GOLDEN REFACTORING PROCESS):** Mọi thay đổi, dù nhỏ, đều phải tuân thủ quy trình 3 bước: **ĐỌC -> SỬA -> XÁC MINH.**
-    -   **1. ĐỌC (READ):** Trước khi sửa bất kỳ file nào, phải dùng `read_file` để có phiên bản code mới nhất. Không được code dựa trên trí nhớ hay log cũ.
-    -   **2. SỬA (MODIFY):** Dùng lệnh `replace` với `old_string` và `new_string` rõ ràng, cụ thể. **Ưu tiên thay thế cả một hàm (method) hoàn chỉnh** thay vì chỉ một vài dòng lẻ, để tránh lỗi cú pháp. Tuyệt đối không dùng `write_file` cho việc refactor, trừ khi tạo file mới.
-    -   **3. XÁC MINH (VERIFY):** Sau khi sửa một file, phải **đọc lại chính file đó** để đảm bảo thay đổi đã được áp dụng đúng và không phá vỡ cấu trúc (ví dụ: thiếu dấu `}`).
-    -   *Việc không tuân thủ quy trình này đã trực tiếp dẫn đến các lỗi: khai báo trùng (`selectProduct`), gọi hàm không tồn tại (`checkStoreCodeAvailability`), lỗi cú pháp (thiếu `}` trong `AuthProvider`), và quên `import` (`AppFormatter`).*
+      try {
+        // 2. Await để lấy dữ liệu
+        _data = await _service.fetchData();
+      } catch (e) {
+        _errorMessage = e.toString();
+      } finally {
+        // 3. Set state và GỌI NOTIFYLISTENERS MỘT LẦN DUY NHẤT ở cuối
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+    ```
+
+### 3. SỰ THỐI NÁT CỦA CODEBASE: HÀM "MA" VÀ DOCS LỆCH PHA
+
+*   **Vấn đề:** App gọi hàm RPC `apply_customer_payment` nhưng hàm này không hề tồn tại trong migration. Trong khi đó, docs lại ghi là `process_customer_payment`.
+*   **Sai lầm của tao:** Ban đầu tao đã tin vào code Dart mà không kiểm tra chéo với migration và docs.
+*   **BÀI HỌC:**
+    *   Migration (`supabase/migrations`) là **nguồn chân lý duy nhất** cho schema và RPC của database.
+    *   Trước khi sửa một hàm RPC, phải **luôn tìm định nghĩa của nó trong migration trước**.
+    *   Nếu một hàm được gọi trong code Dart mà không có trong migration, nó là một hàm "ma" (tạo bằng tay trên server). Phải viết lại và lưu vào migration ngay lập tức, không được sửa mò.
+
+### 4. QUY TRÌNH SỬA LỖI "ĐỌC -> SỬA -> XÁC MINH"
+
+*   **Vấn đề:** Các lệnh `replace` của tao liên tục thất bại vì `old_string` không khớp.
+*   **Sai lầm của tao:** Tao đã quá vội vàng, sửa file liên tục mà không `read_file` lại để xác nhận trạng thái hiện tại của nó trước khi đưa ra lệnh `replace` tiếp theo.
+*   **BÀI HỌC:** Mọi thao tác sửa file, dù là nhỏ nhất, phải tuân thủ quy trình 3 bước:
+    1.  **ĐỌC (READ):** Dùng `read_file` để lấy code mới nhất.
+    2.  **SỬA (MODIFY):** Dùng `replace` hoặc `write_file`.
+    3.  **XÁC MINH (VERIFY):** Nếu `replace` báo lỗi, hoặc nếu không chắc chắn, phải `read_file` lại ngay để kiểm tra kết quả. **Không bao giờ được giả định** là lệnh sửa đã thành công.
 
 ## REQUIREMENTS CHỐNG HALLUCINATION (ANTI-HALLUCINATION REQUIREMENTS)
 

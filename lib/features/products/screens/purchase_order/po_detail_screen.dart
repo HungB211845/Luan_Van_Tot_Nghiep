@@ -158,11 +158,12 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     return Consumer<PurchaseOrderProvider>(
       builder: (context, provider, child) {
         final po = provider.selectedPO;
-        if (po == null) return const SizedBox.shrink();
+        if (po == null || provider.status == POStatus.loading) {
+          return const SizedBox.shrink();
+        }
 
-        // Show different actions based on PO status
+        // Case 1: PO has been successfully delivered
         if (po.status == PurchaseOrderStatus.delivered) {
-          // Already delivered - show info
           return Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
@@ -199,88 +200,85 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           );
         }
 
-        if (po.status != PurchaseOrderStatus.sent && po.status != PurchaseOrderStatus.confirmed) {
-          return const SizedBox.shrink();
+        // Case 2: PO has been sent, waiting for supplier confirmation
+        if (po.status == PurchaseOrderStatus.sent) {
+          return _buildActionButton(
+            title: 'Xác nhận Đơn Hàng',
+            icon: Icons.thumb_up_alt_outlined,
+            color: Colors.blue.shade600,
+            isLoading: provider.isLoading,
+            onPressed: () async {
+              final success = await provider.updatePOStatus(po.id, PurchaseOrderStatus.confirmed);
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Đã xác nhận đơn hàng.'), backgroundColor: Colors.green),
+                );
+              }
+            },
+          );
         }
 
-        // Show goods receipt action for pending POs
-        return Container(
-          padding: const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                offset: const Offset(0, -2),
-                blurRadius: 4,
-                color: Colors.black12,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Summary info
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.local_shipping, color: Colors.orange.shade600),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Đơn hàng đã sẵn sàng để nhận',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.orange.shade700,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      AppFormatter.formatCurrency(po.totalAmount),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange.shade700,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Action button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: provider.isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
-                        )
-                      : const Icon(Icons.inventory, size: 24),
-                  label: Text(
-                    provider.isLoading ? 'Đang xử lý...' : 'Xác Nhận Nhận Hàng',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 2,
-                  ),
-                  onPressed: provider.isLoading ? null : () => _showGoodsReceiptDialog(context, po, provider),
-                ),
-              ),
-            ],
-          ),
-        );
+        // Case 3: PO is confirmed, ready to receive goods
+        if (po.status == PurchaseOrderStatus.confirmed) {
+          return _buildActionButton(
+            title: 'Xác Nhận Nhận Hàng',
+            icon: Icons.inventory,
+            color: Colors.green.shade600,
+            isLoading: provider.isLoading,
+            onPressed: () => _showGoodsReceiptDialog(context, po, provider),
+          );
+        }
+
+        // Default: For DRAFT, CANCELLED, or other states, show nothing
+        return const SizedBox.shrink();
       },
+    );
+  }
+
+  // Helper widget to build consistent action buttons
+  Widget _buildActionButton({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required bool isLoading,
+    required VoidCallback? onPressed,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            offset: const Offset(0, -2),
+            blurRadius: 4,
+            color: Colors.black12,
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          icon: isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                )
+              : Icon(icon, size: 24),
+          label: Text(
+            isLoading ? 'Đang xử lý...' : title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            elevation: 2,
+          ),
+          onPressed: isLoading ? null : onPressed,
+        ),
+      ),
     );
   }
 

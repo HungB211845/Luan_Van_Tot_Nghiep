@@ -6,12 +6,12 @@ class PurchaseOrderItem {
   final String productId;
   final int quantity;
   final double unitCost;
-  final double? sellingPrice; // ADDED
-  final String? unit; // Thêm trường unit
+  final double sellingPrice;
+  final String? unit;
   final double totalCost;
   final int receivedQuantity;
   final String? notes;
-  final String storeId; // Add storeId
+  final String storeId;
   final DateTime createdAt;
   final String? productName; // Optional: enriched from join with products
 
@@ -21,12 +21,12 @@ class PurchaseOrderItem {
     required this.productId,
     required this.quantity,
     required this.unitCost,
-    this.sellingPrice, // ADDED
+    required this.sellingPrice,
     this.unit,
     required this.totalCost,
     this.receivedQuantity = 0,
     this.notes,
-    required this.storeId, // Add storeId
+    required this.storeId,
     required this.createdAt,
     this.productName,
   });
@@ -38,11 +38,11 @@ class PurchaseOrderItem {
       'product_id': productId,
       'quantity': quantity,
       'unit_cost': unitCost,
-      'selling_price': sellingPrice, // ADDED
-      'unit': unit, // Thêm vào map
+      'selling_price': sellingPrice,
+      'unit': unit,
       'received_quantity': receivedQuantity,
       'notes': notes,
-      'store_id': storeId, // Add storeId
+      'store_id': storeId,
     };
   }
 
@@ -62,12 +62,12 @@ class PurchaseOrderItem {
       productId: map['product_id'] ?? '',
       quantity: map['quantity']?.toInt() ?? 0,
       unitCost: (map['unit_cost'] as num?)?.toDouble() ?? 0.0,
-      sellingPrice: (map['selling_price'] as num?)?.toDouble(), // ADDED
-      unit: map['unit'], // Thêm từ map
+      sellingPrice: (map['selling_price'] as num?)?.toDouble() ?? 0.0,
+      unit: map['unit'],
       totalCost: (map['total_cost'] as num?)?.toDouble() ?? 0.0,
       receivedQuantity: map['received_quantity']?.toInt() ?? 0,
       notes: map['notes'],
-      storeId: map['store_id'] ?? '', // Add storeId
+      storeId: map['store_id'] ?? '',
       createdAt: DateTime.parse(map['created_at']),
       productName: resolvedProductName,
     );

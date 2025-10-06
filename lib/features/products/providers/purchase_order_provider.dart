@@ -610,7 +610,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
             productId: cartItem.product.id,
             quantity: cartItem.quantity,
             unitCost: cartItem.unitCost,
-            sellingPrice: cartItem.sellingPrice, // ADDED
+            sellingPrice: cartItem.sellingPrice ?? cartItem.product.currentSellingPrice, // Use new price or default to current
             unit: cartItem.unit,
             totalCost: cartItem.quantity * cartItem.unitCost,
             createdAt: DateTime.now(),

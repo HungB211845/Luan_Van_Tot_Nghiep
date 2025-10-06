@@ -135,23 +135,21 @@ class PurchaseOrderService extends BaseService {
   // Nhận hàng cho một PO
   Future<PurchaseOrder> receivePurchaseOrder(String poId) async {
     try {
-      // Cập nhật trạng thái và ngày nhận hàng
       ensureAuthenticated();
-      final response = await _supabase
-          .from('purchase_orders')
-          .update({
-            'status': PurchaseOrderStatus.delivered.name,
-            'delivery_date': DateTime.now().toIso8601String(),
-          })
-          .eq('id', poId)
-          .eq('store_id', currentStoreId!)
-          .select()
-          .single();
 
-      // Gọi RPC để tạo product batches từ PO
+      // 1. Gọi RPC để xử lý toàn bộ logic nghiệp vụ một cách nguyên tử.
+      // Hàm RPC này đã bao gồm việc tạo lô, cập nhật giá bán, và cập nhật trạng thái PO.
       await _supabase.rpc('create_batches_from_po', params: {'po_id': poId});
 
-      return PurchaseOrder.fromMap(response);
+      // 2. Sau khi RPC chạy xong, lấy lại dữ liệu PO mới nhất để trả về cho UI.
+      // Dùng view 'purchase_orders_with_details' để có đầy đủ thông tin.
+      final updatedPoResponse = await addStoreFilter(
+        _supabase.from('purchase_orders_with_details').select('*'),
+      )
+          .eq('id', poId)
+          .single();
+
+      return PurchaseOrder.fromMap(updatedPoResponse);
     } catch (e) {
       throw Exception('Lỗi khi nhận hàng cho đơn nhập: $e');
     }

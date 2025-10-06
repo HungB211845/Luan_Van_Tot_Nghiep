@@ -589,12 +589,13 @@ class ProductService extends BaseService {
   /// Lấy all batches của một product
   Future<List<ProductBatch>> getProductBatches(String productId) async {
     try {
-      final response = await _supabase
-          .from('product_batches')
-          .select('*')
-          .eq('product_id', productId)
-          .eq('is_available', true)
-          .order('received_date', ascending: true); // FIFO order
+      final response = await addStoreFilter(
+        _supabase
+            .from('product_batches')
+            .select('*')
+            .eq('product_id', productId)
+            .eq('is_available', true),
+      ).order('received_date', ascending: true); // FIFO order
 
       return (response as List)
           .map((json) => ProductBatch.fromJson(json))
