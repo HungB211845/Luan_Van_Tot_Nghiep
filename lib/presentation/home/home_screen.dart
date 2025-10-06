@@ -186,9 +186,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   size: 20,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Tìm kiếm sản phẩm, giao dịch...',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                Expanded(
+                  child: Text(
+                    'Tìm kiếm sản phẩm, giao dịch...',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                  ),
                 ),
               ],
             ),

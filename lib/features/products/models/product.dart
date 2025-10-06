@@ -101,22 +101,20 @@ class Product {
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id.isEmpty ? null : id,
-      'sku': sku?.isEmpty == true ? null : sku,
+      // Remove id for insert, but keep for update
+      // 'id': id,
+      'sku': sku,
       'name': name,
-      'category': category.toString().split('.').last,
-      'company_id': companyId?.isEmpty == true ? null : companyId,
-      'attributes': jsonEncode(attributes),
+      'category': category.name,
+      'company_id': companyId,
       'is_active': isActive,
       'is_banned': isBanned,
       'image_url': imageUrl,
       'description': description,
-      'store_id': storeId.isEmpty ? null : storeId,
       'min_stock_level': minStockLevel,
       'current_selling_price': currentSellingPrice,
-      'unit': unit,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'store_id': storeId,
+      'attributes': attributes,
     };
   }
 
