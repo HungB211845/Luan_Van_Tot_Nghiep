@@ -40,9 +40,25 @@ class _StoreCodeScreenState extends State<StoreCodeScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    return ResponsiveAuthScaffold(
-      title: 'Mã cửa hàng',
-      child: _buildStoreCodeForm(auth),
+    return Stack(
+      children: [
+        ResponsiveAuthScaffold(
+          title: 'Mã cửa hàng',
+          child: _buildStoreCodeForm(auth),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          right: 16,
+          child: FloatingActionButton(
+            mini: true,
+            backgroundColor: Colors.green,
+            onPressed: () {
+              Navigator.of(context).pushNamed(RouteNames.signupStep1);
+            },
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 

@@ -21,9 +21,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // PageController for QuickAccess Carousel (per HIG spec)
+  PageController? _quickAccessPageController;
+  int _currentQuickAccessPage = 0;
+
   @override
   void initState() {
     super.initState();
+    
+    // Initialize PageController for carousel
+    _quickAccessPageController = PageController();
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final productProvider = context.read<ProductProvider>();
       productProvider.loadDashboardStats();
@@ -33,6 +41,12 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<QuickAccessProvider>().loadConfiguration();
       context.read<DashboardProvider>().fetchRevenueData();
     });
+  }
+
+  @override
+  void dispose() {
+    _quickAccessPageController?.dispose();
+    super.dispose();
   }
 
   Future<void> _refreshData() async {
@@ -50,81 +64,186 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      body: CustomScrollView(
-        slivers: [
-          // Minimal AppBar - Clean Navigation Bar
-          SliverAppBar(
-            floating: false,
-            pinned: true,
-            backgroundColor: Colors.green,
-            elevation: 0,
-            leading: Consumer<AuthProvider>(
-              builder: (context, auth, child) {
-                final initial = (auth.currentUser?.fullName ?? 'U')
-                    .substring(0, 1)
-                    .toUpperCase();
-                return GestureDetector(
-                  onTap: () {
-                    context.read<NavigationProvider>().goToProfile();
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: CircleAvatar(
-                      backgroundColor: Colors.white,
-                      child: Text(
-                        initial,
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Desktop breakpoint: 1024px+ for true multi-column dashboard
+          if (constraints.maxWidth >= 1024) {
+            return _buildDesktopLayout();
+          }
+          // Mobile/tablet: traditional single column layout
+          return _buildMobileLayout();
+        },
+      ),
+    );
+  }
+
+  // Traditional single-column layout for mobile/tablet
+  Widget _buildMobileLayout() {
+    return CustomScrollView(
+      slivers: [
+        // Minimal AppBar - Clean Navigation Bar
+        SliverAppBar(
+          floating: false,
+          pinned: true,
+          backgroundColor: Colors.green,
+          elevation: 0,
+          leading: Consumer<AuthProvider>(
+            builder: (context, auth, child) {
+              final initial = (auth.currentUser?.fullName ?? 'U')
+                  .substring(0, 1)
+                  .toUpperCase();
+              return GestureDetector(
+                onTap: () {
+                  context.read<NavigationProvider>().goToProfile();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                );
+                ),
+              );
+            },
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(CupertinoIcons.bell),
+              onPressed: () {
+                // TODO: Navigate to notifications screen
               },
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(CupertinoIcons.bell),
-                onPressed: () {
-                  // TODO: Navigate to notifications screen
+          ],
+        ),
+
+        // Pull to refresh
+        CupertinoSliverRefreshControl(onRefresh: _refreshData),
+
+        // Widget Dashboard Content
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              // Dynamic Greeting Widget
+              _buildGreetingWidget(),
+              const SizedBox(height: 16),
+
+              // Global Search Bar
+              _buildSearchBar(),
+              const SizedBox(height: 24),
+
+              // Revenue Chart Widget
+              _buildRevenueChartWidget(),
+              const SizedBox(height: 16),
+
+              // Smart "For You" Widget (Alerts + Recent Activity)
+              _buildForYouWidget(),
+              const SizedBox(height: 16),
+
+              // HIG-Compliant Carousel Quick Actions
+              _buildQuickActionsWidget(),
+              const SizedBox(height: 32),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Multi-column dashboard for desktop/wide screens (HIG Spec)
+  Widget _buildDesktopLayout() {
+    return CustomScrollView(
+      slivers: [
+        // Minimal AppBar for desktop
+        SliverAppBar(
+          floating: false,
+          pinned: true,
+          backgroundColor: Colors.green,
+          elevation: 0,
+          leading: Consumer<AuthProvider>(
+            builder: (context, auth, child) {
+              final initial = (auth.currentUser?.fullName ?? 'U')
+                  .substring(0, 1)
+                  .toUpperCase();
+              return GestureDetector(
+                onTap: () {
+                  context.read<NavigationProvider>().goToProfile();
                 },
-              ),
-            ],
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-
-          // Pull to refresh
-          CupertinoSliverRefreshControl(onRefresh: _refreshData),
-
-          // Widget Dashboard Content
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Dynamic Greeting Widget
-                _buildGreetingWidget(),
-                const SizedBox(height: 16),
-
-                // Global Search Bar
-                _buildSearchBar(),
-                const SizedBox(height: 24),
-
-                // Revenue Chart Widget
-                _buildRevenueChartWidget(),
-                const SizedBox(height: 16),
-
-                // Smart "For You" Widget (Alerts + Recent Activity)
-                _buildForYouWidget(),
-                const SizedBox(height: 16),
-
-                // Customizable Quick Actions Grid
-                _buildQuickActionsWidget(),
-                const SizedBox(height: 32),
-              ]),
+          actions: [
+            IconButton(
+              icon: const Icon(CupertinoIcons.bell),
+              onPressed: () {
+                // TODO: Navigate to notifications screen
+              },
             ),
+          ],
+        ),
+
+        // Pull to refresh
+        CupertinoSliverRefreshControl(onRefresh: _refreshData),
+
+        // Desktop Grid Layout per HIG Spec
+        SliverPadding(
+          padding: const EdgeInsets.all(24), // Increased padding for desktop
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              // Greeting + Search (full width)
+              _buildGreetingWidget(),
+              const SizedBox(height: 16),
+              _buildSearchBar(),
+              const SizedBox(height: 24),
+
+              // Multi-column dashboard layout per HIG spec
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left column: Revenue chart (2/3 width)
+                  Expanded(
+                    flex: 2,
+                    child: _buildRevenueChartWidget(),
+                  ),
+                  
+                  const SizedBox(width: 24), // Gap between columns
+                  
+                  // Right column: Alerts + Recent Activity (1/3 width)
+                  Expanded(
+                    flex: 1,
+                    child: _buildForYouWidget(),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Full-width Quick Access Carousel (bottom row)
+              _buildQuickActionsWidget(),
+              const SizedBox(height: 32),
+            ]),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -638,7 +757,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ⚡ Customizable Quick Actions Grid
+  // ⚡ 8px Grid System Compliant QuickAccess Widget  
   Widget _buildQuickActionsWidget() {
     return Container(
       decoration: BoxDecoration(
@@ -652,127 +771,221 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
       child: Column(
+        mainAxisSize: MainAxisSize.min, // Critical: prevent overflow
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Truy cập nhanh',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+          // Section Header với 8px grid padding
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0), // Consistent padding
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'TRUY CẬP NHANH',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF8E8E93), // iOS secondary label
+                    letterSpacing: 0.5,
+                  ),
                 ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await Navigator.of(
-                    context,
-                    rootNavigator: true,
-                  ).pushNamed(RouteNames.editQuickAccess);
-                  if (context.mounted) {
-                    context.read<QuickAccessProvider>().loadConfiguration();
-                  }
-                },
-                child: const Text(
-                  'Sửa',
-                  style: TextStyle(color: Colors.green, fontSize: 14),
+                TextButton(
+                  onPressed: () async {
+                    await Navigator.of(
+                      context,
+                      rootNavigator: true,
+                    ).pushNamed(RouteNames.editQuickAccess);
+                    if (context.mounted) {
+                      context.read<QuickAccessProvider>().loadConfiguration();
+                    }
+                  },
+                  child: const Text(
+                    'Sửa',
+                    style: TextStyle(
+                      fontSize: 17, // iOS button standard
+                      color: Colors.green,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-
-          // Dynamic Grid from QuickAccessProvider
+          
+          // Exact 16px spacing per 8px grid system
+          const SizedBox(height: 16.0),
+          
+          // Grid Content với chính xác calculated height
           Consumer<QuickAccessProvider>(
             builder: (context, provider, child) {
               if (provider.isLoading) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
+                return const SizedBox(
+                  height: 120, // 8px grid compliant
+                  child: Center(child: CircularProgressIndicator()),
                 );
               }
 
               final items = provider.visibleItems;
               if (items.isEmpty) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
+                return const SizedBox(
+                  height: 120,
+                  child: Center(
                     child: Text(
                       'Chưa có mục nào. Nhấn "Sửa" để thêm.',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: Color(0xFF8E8E93)),
                     ),
                   ),
                 );
               }
 
-              return GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.5,
-                ),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return _buildQuickActionCard(
-                    icon: item.icon,
-                    label: item.label,
-                    color: item.color,
-                    onTap: () => Navigator.of(
-                      context,
-                      rootNavigator: true,
-                    ).pushNamed(item.route),
-                  );
-                },
-              );
+              return _build8pxGridCarousel(items);
             },
           ),
+
+          // Add bottom padding to match card style
+          const SizedBox(height: 16.0),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ],
+  Widget _build8pxGridCarousel(List<dynamic> items) {
+    const int itemsPerPage = 8; // 4x2 grid
+    final int totalPages = (items.length / itemsPerPage).ceil();
+    
+    // ✅ PRECISE Height Calculation per 8px Grid System
+    const double iconContainerSize = 60.0;  // 8px grid: 60 = 8 * 7.5
+    const double iconTextSpacing = 8.0;     // 8px grid: 8 = 8 * 1
+    const double textHeight = 32.0;         // 8px grid: 32 = 8 * 4
+    const double mainAxisSpacing = 24.0;    // 8px grid: 24 = 8 * 3
+    const double numberOfRows = 2;
+    
+    // Formula: (itemHeight * rows) + (spacing * (rows - 1))
+    final double calculatedHeight = (iconContainerSize + iconTextSpacing + textHeight) * numberOfRows + 
+                                   mainAxisSpacing * (numberOfRows - 1);
+    
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // PageView với calculated height (NO magic numbers)
+        SizedBox(
+          height: calculatedHeight, // Dynamic calculation, not fixed 200
+          child: PageView.builder(
+            controller: _quickAccessPageController,
+            itemCount: totalPages,
+            itemBuilder: (context, pageIndex) {
+              final startIndex = pageIndex * itemsPerPage;
+              final endIndex = (startIndex + itemsPerPage).clamp(0, items.length);
+              final pageItems = items.sublist(startIndex, endIndex);
+              
+              return _build8pxGridPage(pageItems);
+            },
           ),
         ),
+        
+        const SizedBox(height: 16.0), // 8px grid spacing
+        
+        // Page indicator với iOS styling
+        if (totalPages > 1)
+          _buildIOSPageIndicator(_currentQuickAccessPage, totalPages),
+      ],
+    );
+  }
+
+  Widget _build8pxGridPage(List<dynamic> items) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0), // 8px grid
+      child: GridView.builder(
+        padding: EdgeInsets.zero, // No extra padding
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4, // Apple HIG standard
+          crossAxisSpacing: 24.0,  // 8px grid: 24 = 8 * 3
+          mainAxisSpacing: 24.0,   // 8px grid: 24 = 8 * 3
+          childAspectRatio: 0.75, // Adjust for shorter, single-line text content
+        ),
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return _build8pxGridCard(
+            icon: item.icon,
+            label: item.label,
+            onTap: () => Navigator.of(
+              context,
+              rootNavigator: true,
+            ).pushNamed(item.route),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildIOSPageIndicator(int currentPage, int totalPages) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        totalPages,
+        (index) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4.0), // 8px grid
+          width: 8.0,  // 8px grid: 8 = 8 * 1
+          height: 8.0, // 8px grid: 8 = 8 * 1
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: index == currentPage
+                ? Colors.green // Active indicator
+                : const Color(0xFFD1D1D6), // iOS inactive gray
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ⚡ 8px Grid System Card (NO StatefulBuilder, NO AnimatedScale)
+  Widget _build8pxGridCard({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min, // Critical for grid layout
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Icon Container với 8px grid dimensions
+          Container(
+            width: 60.0,   // 8px grid: 60 = 8 * 7.5
+            height: 60.0,  // 8px grid: 60 = 8 * 7.5
+            decoration: BoxDecoration(
+              // User request: Revert to default Colors.green
+              color: Colors.green, 
+              borderRadius: BorderRadius.circular(16.0), // 8px grid: 16 = 8 * 2
+            ),
+            child: Icon(
+              icon,
+              size: 30.0, // Optimal size for 60px container
+              color: Colors.white, // Maximum contrast
+            ),
+          ),
+          
+          // Exact 8px spacing per grid system
+          const SizedBox(height: 8.0), // 8px grid: 8 = 8 * 1
+          
+          // Text label with single-line enforcement
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1, // ENFORCE: Single line only
+            overflow: TextOverflow.ellipsis, // ENFORCE: Use ellipsis for long text
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF1D1D1F),
+            ),
+          ),
+        ],
       ),
     );
   }
