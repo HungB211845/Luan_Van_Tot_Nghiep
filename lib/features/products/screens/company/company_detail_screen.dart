@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/responsive.dart';
 import '../../models/company.dart';
 import '../../models/product.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/product_provider.dart';
 import '../products/product_detail_screen.dart';
 import 'company_transaction_history_screen.dart';
+import 'bulk_product_add_screen.dart';
 
 class CompanyDetailScreen extends StatefulWidget {
   final Company company;
@@ -142,6 +145,14 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     );
   }
 
+  void _addBulkProducts(Company company) {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (context) => BulkProductAddScreen(company: company),
+      ),
+    );
+  }
+
   List<Product> _getFilteredProducts(List<Product> products) {
     ProductCategory? category;
     switch (_tabController.index) {
@@ -175,85 +186,94 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
       orElse: () => widget.company,
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(liveCompany.name),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'Lịch sử Giao dịch',
-            onPressed: () => _viewTransactionHistory(liveCompany),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit),
-            tooltip: 'Sửa',
-            onPressed: () => _editCompany(liveCompany),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
-          labelStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-          tabs: const [
-            Tab(text: 'Tất Cả'),
-            Tab(text: 'Thuốc BVTV'),
-            Tab(text: 'Phân Bón'),
-            Tab(text: 'Lúa Giống'),
+    return ResponsiveScaffold(
+      title: liveCompany.name,
+      showBackButton: true,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.history),
+          tooltip: 'Lịch sử Giao dịch',
+          onPressed: () => _viewTransactionHistory(liveCompany),
+        ),
+        IconButton(
+          icon: const Icon(Icons.edit),
+          tooltip: 'Sửa',
+          onPressed: () => _editCompany(liveCompany),
+        ),
+      ],
+        body: Column(
+          children: [
+            // Tab bar
+            Container(
+              color: Colors.green,
+              child: TabBar(
+                controller: _tabController,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: Colors.white,
+                labelStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                tabs: const [
+                  Tab(text: 'Tất Cả'),
+                  Tab(text: 'Thuốc BVTV'),
+                  Tab(text: 'Phân Bón'),
+                  Tab(text: 'Lúa Giống'),
+                ],
+              ),
+            ),
+            
+            // Contact info card (collapsible)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              height: _showContactInfo ? null : 0,
+              curve: Curves.easeInOut,
+              child: _showContactInfo ? _buildContactInfoCard(liveCompany) : const SizedBox.shrink(),
+            ),
+
+            // Product list
+            Expanded(
+              child: Consumer<CompanyProvider>(
+                builder: (context, provider, child) {
+                  if (provider.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final allProducts = provider.companyProducts;
+                  final filteredProducts = _getFilteredProducts(allProducts);
+
+                  if (filteredProducts.isEmpty) {
+                    return _buildEmptyWidget();
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await provider.loadCompanyProducts(liveCompany.id);
+                    },
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.all(context.sectionPadding),
+                      itemCount: filteredProducts.length,
+                      itemBuilder: (context, index) {
+                        final product = filteredProducts[index];
+                        return _buildProductCard(context, product, provider);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
-      ),
-      body: Column(
-        children: [
-          // Contact info card (collapsible)
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            height: _showContactInfo ? null : 0,
-            curve: Curves.easeInOut,
-            child: _showContactInfo ? _buildContactInfoCard(liveCompany) : const SizedBox.shrink(),
-          ),
-
-          // Product list
-          Expanded(
-            child: Consumer<CompanyProvider>(
-              builder: (context, provider, child) {
-                if (provider.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final allProducts = provider.companyProducts;
-                final filteredProducts = _getFilteredProducts(allProducts);
-
-                if (filteredProducts.isEmpty) {
-                  return _buildEmptyWidget();
-                }
-
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    await provider.loadCompanyProducts(liveCompany.id);
-                  },
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = filteredProducts[index];
-                      return _buildProductCard(context, product, provider);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _addBulkProducts(liveCompany),
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+          tooltip: 'Thêm nhiều sản phẩm cùng lúc',
+          child: const Icon(Icons.add_box),
+        ),
+      );
   }
 
   Widget _buildContactInfoCard(Company company) {
@@ -274,12 +294,44 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                   Icon(Icons.phone, color: Colors.grey[600], size: 20),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Text(company.phone!, style: const TextStyle(fontSize: 16)),
+                    child: GestureDetector(
+                      onLongPress: () {
+                        Clipboard.setData(ClipboardData(text: company.phone!));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Đã sao chép: ${company.phone!}'),
+                            duration: const Duration(seconds: 2),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          company.phone!, 
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.call, color: Colors.green),
                     onPressed: () => _makePhoneCall(company),
                     tooltip: 'Gọi điện',
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy, color: Colors.grey),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: company.phone!));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Đã sao chép: ${company.phone!}'),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    },
+                    tooltip: 'Copy số điện thoại',
                   ),
                 ],
               ),

@@ -282,6 +282,9 @@ class ResponsiveScaffold extends StatelessWidget {
   final int currentIndex;
   final Function(int)? onBottomNavTap;
   final bool showBackButton;
+  final Color appBarColor;
+  final Color appBarForegroundColor;
+  final bool centerTitle;
   
   const ResponsiveScaffold({
     Key? key,
@@ -293,7 +296,10 @@ class ResponsiveScaffold extends StatelessWidget {
     this.bottomNavItems,
     this.currentIndex = 0,
     this.onBottomNavTap,
-    this.showBackButton = false,
+    this.showBackButton = true,
+    this.appBarColor = Colors.green,
+    this.appBarForegroundColor = Colors.white,
+    this.centerTitle = true,
   }) : super(key: key);
   
   @override
@@ -311,6 +317,9 @@ class ResponsiveScaffold extends StatelessWidget {
         title: title != null ? Text(title!) : null,
         actions: actions,
         automaticallyImplyLeading: showBackButton,
+        backgroundColor: appBarColor,
+        foregroundColor: appBarForegroundColor,
+        centerTitle: centerTitle,
       ),
       body: body,
       drawer: drawer,
@@ -332,6 +341,9 @@ class ResponsiveScaffold extends StatelessWidget {
         title: title != null ? Text(title!) : null,
         actions: actions,
         automaticallyImplyLeading: showBackButton,
+        backgroundColor: appBarColor,
+        foregroundColor: appBarForegroundColor,
+        centerTitle: centerTitle,
       ),
       body: Row(
         children: [

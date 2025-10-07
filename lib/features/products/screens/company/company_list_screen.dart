@@ -70,6 +70,7 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
       appBar: AppBar(
         title: Text((widget.isSelectionMode ?? false) ? 'Chọn Nhà Cung Cấp' : 'Nhà Cung Cấp'),
         backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
       ),
       body: _buildListContent(isMasterDetail: false),
       floatingActionButton: (widget.isSelectionMode ?? false)
@@ -95,6 +96,7 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
       appBar: AppBar(
         title: const Text('Quản Lý Nhà Cung Cấp'),
         backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -301,7 +303,9 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
         ),
       ),
       title: Text(company.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(company.phone ?? 'Không có SĐT'),
+      subtitle: company.contactPerson != null && company.contactPerson!.isNotEmpty 
+          ? Text(company.contactPerson!)
+          : const Text('Không có thông tin liên hệ'),
       onTap: () async {
         provider.selectCompany(company);
         if (!isMasterDetail) {
