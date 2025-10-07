@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../shared/utils/responsive.dart';
 import '../../customers/models/customer.dart';
 import '../../customers/services/customer_service.dart';
 import '../../../../shared/utils/formatter.dart';
@@ -87,7 +88,9 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
   }
 
   @override
@@ -340,7 +343,25 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ResponsiveScaffold(
+      title: _buildAppBarTitle(),
+      showBackButton: true,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: _showAddTransactionSheet,
+          tooltip: 'Thêm Giao Dịch',
+        ),
+        IconButton(
+          icon: Icon(
+            _filter.isActive
+                ? Icons.filter_alt
+                : Icons.filter_alt_outlined,
+          ),
+          onPressed: _showFilterSheet,
+          tooltip: 'Lọc',
+        ),
+      ],
       body: RefreshIndicator(
         onRefresh: _loadData,
         child: Consumer<DebtProvider>(
@@ -351,29 +372,6 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
             );
             return CustomScrollView(
               slivers: [
-                SliverAppBar(
-                  title: Text(_buildAppBarTitle()),
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  pinned: true,
-                  floating: true,
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: _showAddTransactionSheet, // Wired up
-                      tooltip: 'Thêm Giao Dịch',
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        _filter.isActive
-                            ? Icons.filter_alt
-                            : Icons.filter_alt_outlined,
-                      ),
-                      onPressed: _showFilterSheet,
-                      tooltip: 'Lọc',
-                    ),
-                  ],
-                ),
                 SliverToBoxAdapter(child: _buildCustomerHeader()),
                 SliverToBoxAdapter(
                   child: Padding(

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../shared/utils/responsive.dart';
 import '../providers/debt_provider.dart';
 import '../models/debt.dart';
 import 'customer_debt_detail_screen.dart';
@@ -119,24 +120,29 @@ class _DebtListScreenState extends State<DebtListScreen> {
   }
 
   Widget _buildMobileLayout() {
-    return Scaffold(
-      body: _buildListContent(isMasterDetail: false),
-      bottomNavigationBar: _buildSummaryFooter(),
+    return ResponsiveScaffold(
+      title: 'Quản Lý Công Nợ',
+      showBackButton: true,
+      actions: [_buildSortButton()],
+      body: Column(
+        children: [
+          Expanded(child: _buildListContent(isMasterDetail: false)),
+          _buildSummaryFooter(),
+        ],
+      ),
     );
   }
 
   Widget _buildDesktopLayout() {
-    return Scaffold(
+    return ResponsiveScaffold(
+      title: 'Quản Lý Công Nợ',
+      showBackButton: true,
+      actions: [_buildSortButton()],
       body: Row(
         children: [
           Expanded(
             flex: 4,
-            child: Column(
-              children: [
-                AppBar(title: const Text('Quản Lý Công Nợ'), backgroundColor: Colors.green, foregroundColor: Colors.white, actions: [_buildSortButton()]),
-                Expanded(child: _buildListContent(isMasterDetail: true)),
-              ],
-            ),
+            child: _buildListContent(isMasterDetail: true),
           ),
           const VerticalDivider(width: 1, thickness: 1),
           Expanded(
@@ -172,15 +178,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
           onRefresh: _loadData,
           child: CustomScrollView(
             slivers: [
-              if (!isMasterDetail)
-                SliverAppBar(
-                  title: const Text('Quản Lý Công Nợ'),
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  pinned: true,
-                  floating: true,
-                  actions: [_buildSortButton()],
-                ),
               SliverToBoxAdapter(child: _buildSegmentedControl()),
               SliverToBoxAdapter(
                 child: Padding(

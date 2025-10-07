@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../../shared/utils/responsive.dart';
 import '../providers/debt_provider.dart';
 import '../models/debt.dart';
 
@@ -188,16 +189,13 @@ class _AdjustDebtScreenState extends State<AdjustDebtScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Điều Chỉnh Công Nợ'),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-      ),
+    return ResponsiveScaffold(
+      title: 'Điều Chỉnh Công Nợ',
+      showBackButton: true,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(context.sectionPadding),
               child: Form(
                 key: _formKey,
                 child: Column(
