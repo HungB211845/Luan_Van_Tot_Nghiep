@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 
 import '../../../../core/routing/route_names.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/responsive.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../models/purchase_order.dart';
 import '../../models/purchase_order_status.dart';
@@ -23,6 +25,7 @@ class _PurchaseOrderListScreenState extends State<PurchaseOrderListScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
   final ScrollController _scrollController = ScrollController();
+  bool _showFAB = true; // FAB visibility state
 
   @override
   void initState() {
@@ -36,6 +39,21 @@ class _PurchaseOrderListScreenState extends State<PurchaseOrderListScreen> {
 
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
+    _scrollController.addListener(_onScrollForFAB);
+  }
+
+  void _onScrollForFAB() {
+    if (_scrollController.position.userScrollDirection == ScrollDirection.reverse) {
+      // Scrolling down - hide FAB
+      if (_showFAB) {
+        setState(() => _showFAB = false);
+      }
+    } else if (_scrollController.position.userScrollDirection == ScrollDirection.forward) {
+      // Scrolling up - show FAB
+      if (!_showFAB) {
+        setState(() => _showFAB = true);
+      }
+    }
   }
 
   Widget _buildQuickChips() {
@@ -43,42 +61,48 @@ class _PurchaseOrderListScreenState extends State<PurchaseOrderListScreen> {
     final hasDateFilter = provider.fromDate != null || provider.toDate != null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Row(
-        children: [
-          ActionChip(
-            label: const Text('Hôm nay'),
-            onPressed: () {
-              provider.quickToday();
-              provider.applyFiltersAndSearch();
-            },
+      child: SizedBox(
+        height: 48,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ActionChip(
+                label: const Text('Hôm nay'),
+                onPressed: () {
+                  provider.quickToday();
+                  provider.applyFiltersAndSearch();
+                },
+              ),
+              const SizedBox(width: 8),
+              ActionChip(
+                label: const Text('7 ngày'),
+                onPressed: () {
+                  provider.quickLast7Days();
+                  provider.applyFiltersAndSearch();
+                },
+              ),
+              const SizedBox(width: 8),
+              ActionChip(
+                label: const Text('30 ngày'),
+                onPressed: () {
+                  provider.quickLast30Days();
+                  provider.applyFiltersAndSearch();
+                },
+              ),
+              const SizedBox(width: 8),
+              if (hasDateFilter)
+                ActionChip(
+                  avatar: const Icon(Icons.clear, size: 16),
+                  label: const Text('Xóa ngày'),
+                  onPressed: () {
+                    provider.setDateRange(from: null, to: null);
+                    provider.applyFiltersAndSearch();
+                  },
+                ),
+            ],
           ),
-          const SizedBox(width: 8),
-          ActionChip(
-            label: const Text('7 ngày'),
-            onPressed: () {
-              provider.quickLast7Days();
-              provider.applyFiltersAndSearch();
-            },
-          ),
-          const SizedBox(width: 8),
-          ActionChip(
-            label: const Text('30 ngày'),
-            onPressed: () {
-              provider.quickLast30Days();
-              provider.applyFiltersAndSearch();
-            },
-          ),
-          const SizedBox(width: 8),
-          if (hasDateFilter)
-            ActionChip(
-              avatar: const Icon(Icons.clear, size: 16),
-              label: const Text('Xóa ngày'),
-              onPressed: () {
-                provider.setDateRange(from: null, to: null);
-                provider.applyFiltersAndSearch();
-              },
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -89,6 +113,7 @@ class _PurchaseOrderListScreenState extends State<PurchaseOrderListScreen> {
     _searchController.dispose();
     _debounce?.cancel();
     _scrollController.removeListener(_onScroll);
+    _scrollController.removeListener(_onScrollForFAB);
     _scrollController.dispose();
     super.dispose();
   }
@@ -113,16 +138,15 @@ class _PurchaseOrderListScreenState extends State<PurchaseOrderListScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<PurchaseOrderProvider>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lịch sử Nhập Hàng'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterSortSheet,
-          ),
-        ],
-      ),
+    return ResponsiveScaffold(
+      title: 'Lịch sử Nhập Hàng',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.filter_list),
+          onPressed: _showFilterSortSheet,
+        ),
+      ],
       body: Column(
         children: [
           _buildSearchBar(),
@@ -130,12 +154,22 @@ class _PurchaseOrderListScreenState extends State<PurchaseOrderListScreen> {
           Expanded(child: _buildBody(provider)),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).pushNamed(RouteNames.createPurchaseOrder);
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Tạo Đơn Nhập'),
+      floatingActionButton: AnimatedSlide(
+        duration: const Duration(milliseconds: 300),
+        offset: _showFAB ? Offset.zero : const Offset(0, 2),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 300),
+          opacity: _showFAB ? 1.0 : 0.0,
+          child: FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.of(context).pushNamed(RouteNames.createPurchaseOrder);
+            },
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('Tạo Đơn Nhập'),
+          ),
+        ),
       ),
     );
   }

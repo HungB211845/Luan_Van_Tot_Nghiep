@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/responsive.dart';
 import '../../models/purchase_order.dart';
 import '../../models/purchase_order_status.dart';
 import '../../providers/purchase_order_provider.dart';
 import '../../providers/product_provider.dart';
-import '../../../../core/routing/route_names.dart';
 
 class PurchaseOrderDetailScreen extends StatefulWidget {
   final PurchaseOrder purchaseOrder;
@@ -33,10 +33,9 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.purchaseOrder.poNumber ?? 'Chi tiết đơn hàng'),
-      ),
+    return ResponsiveScaffold(
+      title: widget.purchaseOrder.poNumber ?? 'Chi tiết đơn hàng',
+      showBackButton: true,
       body: Consumer<PurchaseOrderProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.selectedPO == null) {
@@ -50,111 +49,358 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           final po = provider.selectedPO!;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(context.sectionPadding),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(po),
-                const SizedBox(height: 24),
-                _buildPOItems(provider),
-                const SizedBox(height: 24),
-                if (po.status == PurchaseOrderStatus.delivered)
-                  _buildGeneratedBatches(provider),
+                // Prominent Status Section
+                _buildStatusSection(po),
+                SizedBox(height: context.sectionPadding),
+                
+                // Grouped List Style
+                _buildGroupedContent(po, provider),
               ],
             ),
           );
         },
       ),
-      bottomNavigationBar: _buildBottomBar(),
+      floatingActionButton: _buildFloatingActionButton(),
     );
   }
 
-  Widget _buildHeader(PurchaseOrder po) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('PO: ${po.poNumber}', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Chip(
-              label: Text(po.status.name),
-              backgroundColor: Colors.orange[100],
+  // Prominent Status Section - HIG Guideline #2
+  Widget _buildStatusSection(PurchaseOrder po) {
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+    
+    switch (po.status) {
+      case PurchaseOrderStatus.delivered:
+        statusColor = Colors.green;
+        statusText = 'ĐÃ NHẬN HÀNG';
+        statusIcon = Icons.check_circle;
+        break;
+      case PurchaseOrderStatus.confirmed:
+        statusColor = Colors.blue;
+        statusText = 'ĐÃ XÁC NHẬN';
+        statusIcon = Icons.verified;
+        break;
+      case PurchaseOrderStatus.draft:
+        statusColor = Colors.grey;
+        statusText = 'BẢN NHÁP';
+        statusIcon = Icons.edit_document;
+        break;
+      default:
+        statusColor = Colors.orange;
+        statusText = po.status.name.toUpperCase();
+        statusIcon = Icons.info;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(context.sectionPadding),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(statusIcon, color: statusColor, size: 28),
+              SizedBox(width: context.cardSpacing),
+              Text(
+                statusText,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: context.cardSpacing),
+          Text(
+            'Đơn hàng: ${po.poNumber}',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[700],
             ),
-            const Divider(height: 24),
-            _buildInfoRow('Nhà cung cấp:', po.supplierName ?? 'N/A'),
-            _buildInfoRow('Ngày đặt:', AppFormatter.formatDate(po.orderDate)),
-            _buildInfoRow('Tổng tiền:', AppFormatter.formatCurrency(po.totalAmount)),
+          ),
+          if (po.status == PurchaseOrderStatus.delivered) ...[
+            SizedBox(height: context.cardSpacing / 2),
+            Text(
+              'Ngày nhận: ${AppFormatter.formatDate(po.orderDate)}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildPOItems(PurchaseOrderProvider provider) {
+  // Grouped List Content - HIG Guideline #1
+  Widget _buildGroupedContent(PurchaseOrder po, PurchaseOrderProvider provider) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Các sản phẩm đã đặt', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: provider.selectedPOItems.length,
-          itemBuilder: (context, index) {
-            final item = provider.selectedPOItems[index];
-            final titleText = item.productName != null && item.productName!.isNotEmpty
-                ? item.productName!
-                : 'Sản phẩm: ${item.productId}';
-            return ListTile(
-              title: Text(titleText),
-              subtitle: Text('SL: ${item.quantity} ${item.unit ?? ''}'),
-              trailing: Text(AppFormatter.formatCurrency(item.totalCost)),
-            );
-          },
-        ),
+        // Group 1: Thông tin chính
+        _buildInfoSection(po),
+        SizedBox(height: context.sectionPadding),
+        
+        // Group 2: Danh sách sản phẩm
+        _buildProductsSection(provider),
+        SizedBox(height: context.sectionPadding),
+        
+        // Group 3: Các lô hàng (chỉ hiện khi delivered)
+        if (po.status == PurchaseOrderStatus.delivered)
+          _buildBatchesSection(provider),
       ],
     );
   }
 
-  Widget _buildGeneratedBatches(PurchaseOrderProvider provider) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Các lô hàng đã tạo', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        if (provider.batchesForPO.isEmpty)
-          const Text('Chưa có lô hàng nào được tạo từ đơn này.'),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: provider.batchesForPO.length,
-          itemBuilder: (context, index) {
-            final batch = provider.batchesForPO[index];
-            final productTitle = batch.productName ?? 'ID: ${batch.productId}';
-            final supplierLine = batch.supplierName != null && batch.supplierName!.isNotEmpty
-                ? 'NCC: ${batch.supplierName}'
-                : null;
-            return ListTile(
-              title: Text(productTitle),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Lô: ${batch.batchNumber}'),
-                  if (supplierLine != null) Text(supplierLine),
-                ],
+  Widget _buildInfoSection(PurchaseOrder po) {
+    return _buildGroupContainer(
+      title: 'THÔNG TIN CHÍNH',
+      child: Column(
+        children: [
+          _buildInfoRow('Nhà cung cấp', po.supplierName ?? 'N/A'),
+          _buildInfoRow('Ngày đặt hàng', AppFormatter.formatDate(po.orderDate)),
+          _buildInfoRow('Tổng giá trị', AppFormatter.formatCurrency(po.totalAmount)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductsSection(PurchaseOrderProvider provider) {
+    return _buildGroupContainer(
+      title: 'DANH SÁCH SẢN PHẨM',
+      child: Column(
+        children: provider.selectedPOItems.asMap().entries.map((entry) {
+          final index = entry.key;
+          final item = entry.value;
+          final isLast = index == provider.selectedPOItems.length - 1;
+          
+          return Column(
+            children: [
+              _buildProductRow(item),
+              if (!isLast) Divider(height: 1, color: Colors.grey[300]),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBatchesSection(PurchaseOrderProvider provider) {
+    return _buildGroupContainer(
+      title: 'CÁC LÔ HÀNG ĐÃ TẠO',
+      child: provider.batchesForPO.isEmpty
+          ? Padding(
+              padding: EdgeInsets.all(context.sectionPadding),
+              child: Text(
+                'Chưa có lô hàng nào được tạo',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
               ),
-              trailing: Text('SL: ${batch.quantity}'),
-            );
-          },
-        ),
-      ],
+            )
+          : Column(
+              children: provider.batchesForPO.asMap().entries.map((entry) {
+                final index = entry.key;
+                final batch = entry.value;
+                final isLast = index == provider.batchesForPO.length - 1;
+                
+                return Column(
+                  children: [
+                    _buildBatchRow(batch),
+                    if (!isLast) Divider(height: 1, color: Colors.grey[300]),
+                  ],
+                );
+              }).toList(),
+            ),
     );
   }
 
-  Widget _buildBottomBar() {
+  // Grouped Container Helper
+  Widget _buildGroupContainer({required String title, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section Header - HIG Typography
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(context.sectionPadding),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          // Content
+          child,
+        ],
+      ),
+    );
+  }
+
+  // Invoice-style Product Row - HIG Guideline #3
+  Widget _buildProductRow(dynamic item) {
+    final titleText = item.productName != null && item.productName!.isNotEmpty
+        ? item.productName!
+        : 'Sản phẩm: ${item.productId}';
+    
+    return Padding(
+      padding: EdgeInsets.all(context.sectionPadding),
+      child: Row(
+        children: [
+          // Product info (left)
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titleText,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: context.cardSpacing / 2),
+                Text(
+                  'SL: ${item.quantity} ${item.unit ?? ''}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Price info (right)
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  AppFormatter.formatCurrency(item.totalCost),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchRow(dynamic batch) {
+    final productTitle = batch.productName ?? 'ID: ${batch.productId}';
+    
+    return Padding(
+      padding: EdgeInsets.all(context.sectionPadding),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Lô hàng cho: $productTitle',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: context.cardSpacing / 2),
+                Text(
+                  'Mã lô: ${batch.batchNumber}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                if (batch.supplierName != null && batch.supplierName!.isNotEmpty)
+                  Text(
+                    'NCC: ${batch.supplierName}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            'SL: ${batch.quantity}',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.all(context.sectionPadding),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingActionButton() {
     return Consumer<PurchaseOrderProvider>(
       builder: (context, provider, child) {
         final po = provider.selectedPO;
@@ -383,13 +629,25 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 // Optional: reload products list to refresh available_stock from view
                 await productProvider.loadProductsPaginated();
 
-                // Check mounted again before navigation
+                // Check mounted again before showing SnackBar
                 if (!mounted) return;
 
-                // Navigate to success screen, then back to PO list
-                navigator.pushNamed(
-                  RouteNames.purchaseOrderReceiveSuccess,
-                  arguments: po.poNumber,
+                // Show temporary success SnackBar (HIG Guideline #4)
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.check_circle, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('Đã nhận hàng thành công cho đơn ${po.poNumber}'),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 3), // 3 seconds as per HIG
+                    behavior: SnackBarBehavior.floating,
+                  ),
                 );
               } else {
                 // Check mounted before showing SnackBar
@@ -411,35 +669,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 );
               }
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: TextStyle(color: Colors.grey[600]),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-            ),
           ),
         ],
       ),
