@@ -408,42 +408,9 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           return const SizedBox.shrink();
         }
 
-        // Case 1: PO has been successfully delivered
+        // Case 1: PO has been successfully delivered - NO SUCCESS MESSAGE (HIG #4)
         if (po.status == PurchaseOrderStatus.delivered) {
-          return Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              border: Border(top: BorderSide(color: Colors.green.shade200)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green.shade600, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Đã nhận hàng thành công',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green.shade700,
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (po.deliveryDate != null)
-                        Text(
-                          'Ngày nhận: ${AppFormatter.formatDate(po.deliveryDate!)}',
-                          style: TextStyle(color: Colors.green.shade600, fontSize: 14),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
+          return const SizedBox.shrink(); // Clean UI, no permanent success banner
         }
 
         // Case 2: PO has been sent, waiting for supplier confirmation
