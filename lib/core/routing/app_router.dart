@@ -141,8 +141,10 @@ class AppRouter {
         );
 
       case RouteNames.companies:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final isSelectionMode = args?['isSelectionMode'] as bool? ?? false;
         return IOSPageRoute(
-          child: const CompanyListScreen(),
+          child: CompanyListScreen(isSelectionMode: isSelectionMode),
           settings: settings,
         );
 

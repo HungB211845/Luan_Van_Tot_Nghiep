@@ -1,14 +1,17 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../../core/routing/route_names.dart';
+import '../../../../shared/utils/responsive.dart';
 import '../../models/company.dart';
 import '../../providers/company_provider.dart';
+import 'company_detail_screen.dart';
 
 class CompanyListScreen extends StatefulWidget {
-  const CompanyListScreen({Key? key}) : super(key: key);
+  final bool? isSelectionMode;
 
-  static const String routeName = RouteNames.companies;
+  const CompanyListScreen({Key? key, this.isSelectionMode})
+      : super(key: key);
 
   @override
   _CompanyListScreenState createState() => _CompanyListScreenState();
@@ -16,353 +19,327 @@ class CompanyListScreen extends StatefulWidget {
 
 class _CompanyListScreenState extends State<CompanyListScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    // Load companies when the screen is initialized
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CompanyProvider>().loadCompanies();
+      // Use a local variable to avoid holding a reference to the provider.
+      final provider = context.read<CompanyProvider>();
+      provider.loadCompanies();
+      // Clear any previously selected company when entering the screen.
+      provider.selectCompany(null);
     });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _scrollController.dispose();
-    _debounce?.cancel();
     super.dispose();
   }
 
-  void _onSearchChanged(String query) {
-    // Debounce search để tránh lag khi user đang gõ
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      context.read<CompanyProvider>().setSearchQuery(query);
-    });
+  List<dynamic> _getGroupedCompanyList(List<Company> companies) {
+    if (companies.isEmpty) return [];
+    List<CompanyInfo> companyInfoList = companies.map((company) {
+      String tag = company.name.isNotEmpty ? company.name.substring(0, 1).toUpperCase() : '#';
+      return CompanyInfo(company: company, tag: tag);
+    }).toList();
+    companyInfoList.sort((a, b) => a.company.name.compareTo(b.company.name));
+    List<dynamic> groupedList = [];
+    String? lastTag;
+    for (var info in companyInfoList) {
+      if (info.tag != lastTag) {
+        lastTag = info.tag;
+        groupedList.add(lastTag!);
+      }
+      groupedList.add(info);
+    }
+    return groupedList;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) {    return context.adaptiveWidget(
+      mobile: _buildMobileLayout(),
+      tablet: (widget.isSelectionMode ?? false) ? _buildMobileLayout() : _buildTabletLayout(),
+      desktop: _buildDesktopLayout(),
+    );
+  }
+
+  Widget _buildMobileLayout() {
     return Scaffold(
-      body: Consumer<CompanyProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading && provider.companies.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (provider.hasError) {
-            return Center(
-              child: Text('Đã xảy ra lỗi: ${provider.errorMessage}'),
-            );
-          }
-
-          return Stack(
-            children: [
-              CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  // AppBar với title only
-                  SliverAppBar(
-                    pinned: true,
-                    floating: false,
-                    title: const Text('Nhà Cung Cấp'),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        tooltip: 'Thêm nhà cung cấp',
-                        onPressed: () {
-                          Navigator.of(context).pushNamed(RouteNames.addCompany);
-                        },
-                      ),
-                    ],
-                  ),
-
-                  // Search bar (separate sliver)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: _onSearchChanged,
-                        decoration: InputDecoration(
-                          hintText: 'Tìm theo tên, SĐT, người liên hệ...',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: provider.searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    provider.setSearchQuery('');
-                                  },
-                                )
-                              : null,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey[100],
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Filter chips (separate sliver)
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 50,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        children: [
-                          _buildFilterChip(
-                            context,
-                            'Có SĐT',
-                            CompanyFilterType.hasPhone,
-                            Icons.phone,
-                            provider,
-                          ),
-                          _buildFilterChip(
-                            context,
-                            'Có địa chỉ',
-                            CompanyFilterType.hasAddress,
-                            Icons.location_on,
-                            provider,
-                          ),
-                          _buildFilterChip(
-                            context,
-                            'Có sản phẩm',
-                            CompanyFilterType.hasProducts,
-                            Icons.inventory_2_outlined,
-                            provider,
-                          ),
-                          _buildFilterChip(
-                            context,
-                            'Có đơn hàng',
-                            CompanyFilterType.hasOrders,
-                            Icons.receipt_long,
-                            provider,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SliverToBoxAdapter(child: SizedBox(height: 8)),
-
-                  // Grouped company list với section headers
-                  _buildGroupedCompanyList(provider),
-                ],
-              ),
-
-              // Alphabet index bar (bên phải)
-              if (provider.availableSections.isNotEmpty)
-                Positioned(
-                  right: 2,
-                  top: MediaQuery.of(context).padding.top + 200,
-                  bottom: 100,
-                  child: _buildAlphabetIndex(provider.availableSections),
-                ),
-            ],
-          );
-        },
+      appBar: AppBar(
+        title: Text((widget.isSelectionMode ?? false) ? 'Chọn Nhà Cung Cấp' : 'Nhà Cung Cấp'),
+        backgroundColor: Colors.green,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.receipt_long),
-        label: const Text('Tạo Đơn Nhập Hàng'),
-        onPressed: () {
-          Navigator.of(context).pushNamed(RouteNames.createPurchaseOrder);
-        },
-      ),
+      body: _buildListContent(isMasterDetail: false),
+      floatingActionButton: (widget.isSelectionMode ?? false)
+          ? null
+          : FloatingActionButton(
+              onPressed: () async {
+                await Navigator.pushNamed(context, RouteNames.addCompany);
+                // Refresh the list after returning from the add/edit screen.
+                if (mounted) {
+                  context
+                      .read<CompanyProvider>()
+                      .loadCompanies(forceReload: true);
+                }
+              },
+              backgroundColor: Colors.green,
+              child: const Icon(Icons.add),
+            ),
     );
   }
 
-  // Build filter chip
-  Widget _buildFilterChip(
-    BuildContext context,
-    String label,
-    CompanyFilterType filterType,
-    IconData icon,
-    CompanyProvider provider,
-  ) {
-    final isActive = provider.activeFilters.contains(filterType);
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: FilterChip(
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16),
-            const SizedBox(width: 4),
-            Text(label),
-          ],
-        ),
-        selected: isActive,
-        onSelected: (_) => provider.toggleFilter(filterType),
-        selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
-        checkmarkColor: Theme.of(context).primaryColor,
-      ),
-    );
-  }
-
-  // Build grouped list với section headers
-  Widget _buildGroupedCompanyList(CompanyProvider provider) {
-    final groupedCompanies = provider.groupedCompanies;
-
-    if (groupedCompanies.isEmpty) {
-      return const SliverFillRemaining(
-        child: Center(child: Text('Không tìm thấy nhà cung cấp nào')),
-      );
-    }
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          // Calculate which section and item
-          int currentIndex = 0;
-          for (var section in provider.availableSections) {
-            final companies = groupedCompanies[section]!;
-
-            // Section header
-            if (currentIndex == index) {
-              return _buildSectionHeader(section);
-            }
-            currentIndex++;
-
-            // Company items
-            for (var company in companies) {
-              if (currentIndex == index) {
-                return _buildCompanyTile(company);
+  Widget _buildTabletLayout() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Quản Lý Nhà Cung Cấp'),
+        backgroundColor: Colors.green,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              await Navigator.pushNamed(context, RouteNames.addCompany);
+              if (mounted) {
+                context
+                    .read<CompanyProvider>()
+                    .loadCompanies(forceReload: true);
               }
-              currentIndex++;
-            }
-          }
-          return null;
-        },
-        childCount: _calculateTotalItems(groupedCompanies, provider.availableSections),
-      ),
-    );
-  }
-
-  int _calculateTotalItems(
-    Map<String, List<Company>> groupedCompanies,
-    List<String> sections,
-  ) {
-    int total = 0;
-    for (var section in sections) {
-      total += 1; // Section header
-      total += groupedCompanies[section]!.length; // Company items
-    }
-    return total;
-  }
-
-  // Section header (A, B, C, ...)
-  Widget _buildSectionHeader(String section) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.grey[200],
-      child: Text(
-        section,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-        ),
-      ),
-    );
-  }
-
-  // Company tile
-  Widget _buildCompanyTile(Company company) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.primaries[
-          company.name.hashCode % Colors.primaries.length
+            },
+            tooltip: 'Thêm nhà cung cấp',
+          ),
         ],
+      ),
+      body: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: _buildListContent(isMasterDetail: true),
+          ),
+          const VerticalDivider(width: 1, thickness: 1),
+          Expanded(
+            flex: 6,
+            child: Consumer<CompanyProvider>(
+              builder: (context, provider, child) {
+                if (provider.selectedCompany == null) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.business_center_outlined, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text('Chọn một nhà cung cấp để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                }
+                // Use a key to ensure the detail screen rebuilds when the company changes.
+                return CompanyDetailScreen(
+                  key: ValueKey(provider.selectedCompany!.id),
+                  company: provider.selectedCompany!,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildDesktopLayout() {
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildDesktopToolbar(),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: _buildListContent(isMasterDetail: true),
+                ),
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(
+                  flex: 6,
+                  child: Consumer<CompanyProvider>(
+                    builder: (context, provider, child) {
+                      if (provider.selectedCompany == null) {
+                        return const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.business_center_outlined, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text('Chọn một nhà cung cấp để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                            ],
+                          ),
+                        );
+                      }
+                      return CompanyDetailScreen(
+                        key: ValueKey(provider.selectedCompany!.id),
+                        company: provider.selectedCompany!,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopToolbar() {
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: context.sectionPadding),
+          const Text(
+            'Quản Lý Nhà Cung Cấp',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const Spacer(),
+          ElevatedButton.icon(
+            onPressed: () async {
+              await Navigator.pushNamed(context, RouteNames.addCompany);
+              if (mounted) {
+                context
+                    .read<CompanyProvider>()
+                    .loadCompanies(forceReload: true);
+              }
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Thêm nhà cung cấp'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          SizedBox(width: context.sectionPadding),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListContent({required bool isMasterDetail}) {
+    return RefreshIndicator(
+      onRefresh: () =>
+          context.read<CompanyProvider>().loadCompanies(forceReload: true),
+      child: Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.all(context.sectionPadding),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Tìm theo tên, SĐT, người liên hệ...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        context.read<CompanyProvider>().setSearchQuery('');
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: (query) => context.read<CompanyProvider>().setSearchQuery(query),
+          ),
+        ),
+        Expanded(
+          child: Consumer<CompanyProvider>(
+            builder: (context, provider, child) {
+              if (provider.isLoading && provider.companies.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (provider.hasError) {
+                return Center(child: Text('Lỗi: ${provider.errorMessage}'));
+              }
+              final companies = provider.filteredCompanies;
+              final groupedList = _getGroupedCompanyList(companies);
+              if (groupedList.isEmpty) {
+                return const Center(child: Text('Không tìm thấy nhà cung cấp nào'));
+              }
+              return ListView.builder(
+                itemCount: groupedList.length,
+                itemBuilder: (context, index) {
+                  final item = groupedList[index];
+                  if (item is String) {
+                    return _buildSuspensionWidget(item);
+                  } else if (item is CompanyInfo) {
+                    return _buildCompanyListItem(item.company, isMasterDetail);
+                  }
+                  return const SizedBox.shrink();
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    ));
+  }
+
+  Widget _buildCompanyListItem(Company company, bool isMasterDetail) {
+    final provider = context.read<CompanyProvider>();
+    final bool isSelected = isMasterDetail && provider.selectedCompany?.id == company.id;
+
+    return ListTile(
+      tileColor: isSelected ? Colors.green.withOpacity(0.1) : null,
+      leading: CircleAvatar(
+        backgroundColor: Colors.green.withOpacity(0.2),
         child: Text(
           company.name.isNotEmpty ? company.name[0].toUpperCase() : '?',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
         ),
       ),
-      title: Text(
-        company.name,
-        style: const TextStyle(fontWeight: FontWeight.w500),
-      ),
-      subtitle: Text(
-        company.phone ?? 'Không có SĐT',
-        style: TextStyle(color: Colors.grey[600]),
-      ),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        Navigator.of(context).pushNamed(
-          RouteNames.companyDetail,
-          arguments: company,
-        );
+      title: Text(company.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(company.phone ?? 'Không có SĐT'),
+      onTap: () async {
+        provider.selectCompany(company);
+        if (!isMasterDetail) {
+          if ((widget.isSelectionMode ?? false)) {
+            Navigator.pop(context, company);
+          } else {
+            // Use pushNamed for consistency and await the result.
+            await Navigator.pushNamed(
+              context,
+              RouteNames.companyDetail,
+              arguments: company,
+            );
+            // After returning, refresh the list to reflect any changes.
+            if (mounted) {
+              context.read<CompanyProvider>().loadCompanies(forceReload: true);
+            }
+          }
+        }
       },
     );
   }
 
-  // Alphabet index bar (A-Z)
-  Widget _buildAlphabetIndex(List<String> sections) {
+  Widget _buildSuspensionWidget(String tag) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-      decoration: BoxDecoration(
-        color: Colors.grey[300]?.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: sections.map((section) {
-          return GestureDetector(
-            onTap: () => _scrollToSection(section),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Text(
-                section,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+      height: 24,
+      width: double.infinity,
+      padding: const EdgeInsets.only(left: 16.0),
+      color: Colors.grey[200],
+      alignment: Alignment.centerLeft,
+      child: Text(tag, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54)),
     );
   }
+}
 
-  // Scroll to section khi tap vào index (iOS-style smooth scroll)
-  void _scrollToSection(String section) {
-    final provider = context.read<CompanyProvider>();
-    final sections = provider.availableSections;
-    final sectionIndex = sections.indexOf(section);
+// Wrapper class to hold tag information
+class CompanyInfo {
+  final Company company;
+  final String tag;
 
-    if (sectionIndex == -1) return;
-
-    // Calculate exact scroll offset
-    // AppBar height (56) + Search bar (80) + Filter chips (58) + spacing (8)
-    double estimatedOffset = 0;
-
-    // Add heights of all sections before target section
-    for (int i = 0; i < sectionIndex; i++) {
-      estimatedOffset += 40; // Section header height
-      estimatedOffset += provider.groupedCompanies[sections[i]]!.length * 72; // ListTile height
-    }
-
-    // Clamp to valid range
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final targetOffset = estimatedOffset.clamp(0.0, maxScroll);
-
-    // iOS-style smooth scroll với easeOut curve
-    _scrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-    );
-  }
+  CompanyInfo({required this.company, required this.tag});
 }

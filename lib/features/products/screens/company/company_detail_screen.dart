@@ -49,6 +49,15 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
   }
 
   @override
+  void didUpdateWidget(CompanyDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.company.id != oldWidget.company.id) {
+      // Company has changed in the master-detail view, load the new products.
+      context.read<CompanyProvider>().loadCompanyProducts(widget.company.id);
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     _scrollController.dispose();
@@ -59,8 +68,8 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     setState(() {}); // Rebuild to apply filter
   }
 
-  Future<void> _makePhoneCall() async {
-    final phone = widget.company.phone;
+  Future<void> _makePhoneCall(Company company) async {
+    final phone = company.phone;
     if (phone == null || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Không có số điện thoại'), backgroundColor: Colors.red),
@@ -80,13 +89,13 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     }
   }
 
-  Future<void> _deleteCompany() async {
+  Future<void> _deleteCompany(Company company) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Xác nhận xóa'),
-          content: Text('Mày có chắc muốn xóa nhà cung cấp "${widget.company.name}" không?'),
+          content: Text('Mày có chắc muốn xóa nhà cung cấp "${company.name}" không?'),
           actions: <Widget>[
             TextButton(
               child: const Text('Hủy'),
@@ -104,7 +113,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
 
     if (confirmed == true) {
       final provider = context.read<CompanyProvider>();
-      final success = await provider.deleteCompany(widget.company.id);
+      final success = await provider.deleteCompany(company.id);
 
       if (mounted) {
         if (success) {
@@ -121,14 +130,14 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     }
   }
 
-  void _editCompany() {
-    Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.editCompany, arguments: widget.company);
+  void _editCompany(Company company) {
+    Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.editCompany, arguments: company);
   }
 
-  void _viewTransactionHistory() {
+  void _viewTransactionHistory(Company company) {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
-        builder: (context) => CompanyTransactionHistoryScreen(company: widget.company),
+        builder: (context) => CompanyTransactionHistoryScreen(company: company),
       ),
     );
   }
@@ -153,21 +162,34 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Get the company ID from the initial widget.company
+    final companyId = widget.company.id;
+
+    // WATCH the CompanyProvider to get the latest list of companies
+    final companyProvider = context.watch<CompanyProvider>();
+
+    // Find the specific company from the provider's current list
+    // Fallback to widget.company if not found (e.g., during initial load or if deleted)
+    final liveCompany = companyProvider.companies.firstWhere(
+      (c) => c.id == companyId,
+      orElse: () => widget.company,
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.company.name),
+        title: Text(liveCompany.name),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Lịch sử Giao dịch',
-            onPressed: _viewTransactionHistory,
+            onPressed: () => _viewTransactionHistory(liveCompany),
           ),
           IconButton(
             icon: const Icon(Icons.edit),
             tooltip: 'Sửa',
-            onPressed: _editCompany,
+            onPressed: () => _editCompany(liveCompany),
           ),
         ],
         bottom: TabBar(
@@ -194,7 +216,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
             duration: const Duration(milliseconds: 300),
             height: _showContactInfo ? null : 0,
             curve: Curves.easeInOut,
-            child: _showContactInfo ? _buildContactInfoCard() : const SizedBox.shrink(),
+            child: _showContactInfo ? _buildContactInfoCard(liveCompany) : const SizedBox.shrink(),
           ),
 
           // Product list
@@ -214,7 +236,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
 
                 return RefreshIndicator(
                   onRefresh: () async {
-                    await provider.loadCompanyProducts(widget.company.id);
+                    await provider.loadCompanyProducts(liveCompany.id);
                   },
                   child: ListView.builder(
                     controller: _scrollController,
@@ -234,7 +256,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     );
   }
 
-  Widget _buildContactInfoCard() {
+  Widget _buildContactInfoCard(Company company) {
     return Card(
       margin: const EdgeInsets.all(16),
       elevation: 2,
@@ -243,28 +265,28 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            if (widget.company.contactPerson != null && widget.company.contactPerson!.isNotEmpty)
-              _buildContactRow(Icons.person, widget.company.contactPerson!),
-            if (widget.company.phone != null && widget.company.phone!.isNotEmpty) ...[
+            if (company.contactPerson != null && company.contactPerson!.isNotEmpty)
+              _buildContactRow(Icons.person, company.contactPerson!),
+            if (company.phone != null && company.phone!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
                   Icon(Icons.phone, color: Colors.grey[600], size: 20),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Text(widget.company.phone!, style: const TextStyle(fontSize: 16)),
+                    child: Text(company.phone!, style: const TextStyle(fontSize: 16)),
                   ),
                   IconButton(
                     icon: const Icon(Icons.call, color: Colors.green),
-                    onPressed: _makePhoneCall,
+                    onPressed: () => _makePhoneCall(company),
                     tooltip: 'Gọi điện',
                   ),
                 ],
               ),
             ],
-            if (widget.company.address != null && widget.company.address!.isNotEmpty) ...[
+            if (company.address != null && company.address!.isNotEmpty) ...[
               const SizedBox(height: 8),
-              _buildContactRow(Icons.location_on, widget.company.address!),
+              _buildContactRow(Icons.location_on, company.address!),
             ],
           ],
         ),
@@ -287,8 +309,11 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     Product product,
     CompanyProvider provider,
   ) {
-    final stock = product.availableStock ?? 0;
-    final currentPrice = product.currentPrice ?? 0;
+    // By watching the ProductProvider here, this card will rebuild whenever the specific
+    // product's stock or price changes in the provider, ensuring the UI is always fresh.
+    final stock = context.watch<ProductProvider>().getProductStock(product.id);
+    final currentPrice = context.watch<ProductProvider>().getCurrentPrice(product.id);
+
     final isLowStock = stock <= 10;
     final isBanned = product.isBanned;
 
