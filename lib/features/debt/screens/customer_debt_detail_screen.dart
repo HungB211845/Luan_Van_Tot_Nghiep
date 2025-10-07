@@ -70,8 +70,13 @@ class LedgerFilter {
 
 class CustomerDebtDetailScreen extends StatefulWidget {
   final String customerId;
+  final bool isMasterDetailMode; // Add explicit flag
 
-  const CustomerDebtDetailScreen({super.key, required this.customerId});
+  const CustomerDebtDetailScreen({
+    super.key, 
+    required this.customerId,
+    this.isMasterDetailMode = false, // Default to mobile mode
+  });
 
   @override
   State<CustomerDebtDetailScreen> createState() =>
@@ -101,14 +106,28 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
 
   Future<void> _loadData() async {
     final debtProvider = context.read<DebtProvider>();
-    await Future.wait([
-      _customerService
-          .getCustomerById(widget.customerId)
-          .then((c) => _customer = c),
-      debtProvider.loadCustomerDebts(widget.customerId),
-      debtProvider.loadCustomerPayments(widget.customerId),
-      debtProvider.loadCustomerDebtSummary(widget.customerId),
-    ]);
+    
+    if (widget.isMasterDetailMode) {
+      // Master-detail: Only load payments and summary, preserve global debts
+      await Future.wait([
+        _customerService
+            .getCustomerById(widget.customerId)
+            .then((c) => _customer = c),
+        debtProvider.loadCustomerPayments(widget.customerId),
+        debtProvider.loadCustomerDebtSummary(widget.customerId),
+      ]);
+    } else {
+      // Mobile navigation: Load all customer data including debts
+      await Future.wait([
+        _customerService
+            .getCustomerById(widget.customerId)
+            .then((c) => _customer = c),
+        debtProvider.loadCustomerDebts(widget.customerId),
+        debtProvider.loadCustomerPayments(widget.customerId),
+        debtProvider.loadCustomerDebtSummary(widget.customerId),
+      ]);
+    }
+    
     if (mounted) setState(() {});
   }
 
@@ -366,8 +385,12 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
         onRefresh: _loadData,
         child: Consumer<DebtProvider>(
           builder: (context, provider, _) {
+            final customerDebts = widget.isMasterDetailMode 
+                ? provider.debts.where((debt) => debt.customerId == widget.customerId).toList()
+                : provider.debts; // Mobile: provider.debts already filtered to this customer
+                
             final groupedLedger = _createGroupedLedger(
-              provider.debts,
+              customerDebts,
               provider.payments,
             );
             return CustomScrollView(

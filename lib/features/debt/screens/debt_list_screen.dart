@@ -68,6 +68,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
       }
     }
 
+    // Apply search filter if query exists
     if (_searchQuery.isNotEmpty) {
       final customerProvider = context.read<CustomerProvider>();
       final query = _searchQuery.toLowerCase();
@@ -81,6 +82,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
 
     var sortedEntries = debtsByCustomer.entries.toList();
     final customerProvider = context.read<CustomerProvider>();
+    
     sortedEntries.sort((a, b) {
       switch (_sortOption) {
         case DebtSortOption.highestDebt:
@@ -107,15 +109,10 @@ class _DebtListScreenState extends State<DebtListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Consistent breakpoint: 600px
-        const double tabletBreakpoint = 600;
-        if (constraints.maxWidth >= tabletBreakpoint) {
-          return _buildDesktopLayout();
-        }
-        return _buildMobileLayout();
-      },
+    return context.adaptiveWidget(
+      mobile: _buildMobileLayout(),
+      tablet: _buildDesktopLayout(), // Use desktop layout for tablet too
+      desktop: _buildDesktopLayout(),
     );
   }
 
@@ -161,7 +158,10 @@ class _DebtListScreenState extends State<DebtListScreen> {
                     ),
                   );
                 }
-                return CustomerDebtDetailScreen(customerId: provider.selectedCustomerId!);
+                return CustomerDebtDetailScreen(
+                  customerId: provider.selectedCustomerId!,
+                  isMasterDetailMode: true, // Explicitly flag as master-detail mode
+                );
               },
             ),
           ),
