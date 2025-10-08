@@ -3,6 +3,7 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:agricultural_pos/shared/utils/responsive.dart';
 import 'models/layout_config.dart';
 import 'models/navigation_item.dart';
 import 'managers/app_bar_manager.dart';
@@ -33,9 +34,10 @@ class _ResponsiveLayoutWrapperState extends State<ResponsiveLayoutWrapper> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > 1200) {
+        final width = constraints.maxWidth;
+        if (ResponsiveBreakpoints.isDesktop(width)) {
           return _buildDesktopLayout(constraints);
-        } else if (constraints.maxWidth > 600) {
+        } else if (ResponsiveBreakpoints.isTablet(width)) {
           return _buildTabletLayout(constraints);
         } else {
           return _buildMobileLayout(constraints);
@@ -120,7 +122,7 @@ class _ResponsiveLayoutWrapperState extends State<ResponsiveLayoutWrapper> {
   }
 
   // ==========================================================================
-  // TABLET LAYOUT (600px - 1200px)
+  // TABLET LAYOUT (ResponsiveBreakpoints.mobile - ResponsiveBreakpoints.desktop)
   // ==========================================================================
   Widget _buildTabletLayout(BoxConstraints constraints) {
     return Scaffold(

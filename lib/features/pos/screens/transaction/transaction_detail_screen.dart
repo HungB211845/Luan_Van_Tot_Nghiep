@@ -10,10 +10,12 @@ import '../../models/payment_method.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final Transaction transaction;
+  final bool isEmbedded; // True when shown in desktop master-detail layout
 
   const TransactionDetailScreen({
     super.key,
     required this.transaction,
+    this.isEmbedded = false,
   });
 
   @override
@@ -42,7 +44,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: widget.isEmbedded ? Colors.grey[50] : null,
+      appBar: widget.isEmbedded ? null : AppBar(
         title: const Text('Chi tiết giao dịch'),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
@@ -99,10 +102,21 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           final items = provider.activeTransactionItems;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(widget.isEmbedded ? 24.0 : 16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (widget.isEmbedded) ...[
+                  // Desktop header
+                  const Text(
+                    'Chi tiết giao dịch',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
                 // Transaction Status Header
                 Container(
                   padding: const EdgeInsets.all(16),

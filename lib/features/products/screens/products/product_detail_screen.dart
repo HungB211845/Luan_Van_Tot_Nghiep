@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/input_formatters.dart';
@@ -17,7 +18,7 @@ import 'batch_detail_screen.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 
 class ProductDetailScreen extends StatefulWidget {
-  const ProductDetailScreen({Key? key}) : super(key: key);
+  const ProductDetailScreen({super.key});
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -186,7 +187,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final totalStock = batches.fold<int>(0, (sum, batch) => sum + batch.quantity);
 
         return Card(
-          margin: context.isDesktop ? EdgeInsets.zero : EdgeInsets.symmetric(horizontal: context.sectionPadding),
+          margin: EdgeInsets.zero,
           child: ExpansionTile(
             leading: Container(
               width: 40,
@@ -279,10 +280,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildPriceHistoryExpansionTile() {
     final currentPrice = context.watch<ProductProvider>().selectedProduct?.currentSellingPrice ?? 0;
-    final recentChanges = _priceHistory.take(3).length;
 
     return Card(
-      margin: context.isDesktop ? EdgeInsets.zero : EdgeInsets.symmetric(horizontal: context.sectionPadding),
+      margin: EdgeInsets.zero,
       child: ExpansionTile(
         title: Text(
           'Lịch Sử Giá',
@@ -291,17 +291,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             color: Colors.green[700],
           ),
         ),
+        subtitle: Text(
+          'Hiện tại: ${AppFormatter.formatCompactCurrency(currentPrice)}${_priceHistory.isNotEmpty ? ' • ${_priceHistory.length} thay đổi' : ''}',
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 13,
+          ),
+        ),
         trailing: GestureDetector(
           onTap: () => _navigateToPriceHistory(),
-          child: Text(
-            _priceHistory.isNotEmpty
-              ? 'Hiện tại: ${AppFormatter.formatCompactCurrency(currentPrice)} • ${_priceHistory.length} thay đổi >'
-              : 'Hiện tại: ${AppFormatter.formatCompactCurrency(currentPrice)} >',
-            style: TextStyle(
-              color: Colors.blue[600],
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+          child: Icon(
+            Icons.chevron_right,
+            color: Colors.blue[600],
           ),
         ),
         children: [
@@ -532,28 +533,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final product = context.watch<ProductProvider>().selectedProduct;
+    final screenWidth = MediaQuery.of(context).size.width;
 
+    // Responsive: Desktop layout only for wide screens (web or large tablets)
+    final useDesktopLayout = screenWidth >= 1024;
+    
     if (product == null) {
-      return context.adaptiveWidget(
-        mobile: _buildMobileNotFound(),
-        tablet: _buildTabletNotFound(),
-        desktop: _buildDesktopNotFound(),
-      );
+      return useDesktopLayout 
+          ? _buildDesktopNotFound() 
+          : _buildMobileNotFound();
     }
 
     if (_isLoading) {
-      return context.adaptiveWidget(
-        mobile: _buildMobileLoading(product),
-        tablet: _buildTabletLoading(product),
-        desktop: _buildDesktopLoading(product),
-      );
+      return useDesktopLayout 
+          ? _buildDesktopLoading(product) 
+          : _buildMobileLoading(product);
     }
 
-    return context.adaptiveWidget(
-      mobile: _buildMobileLayout(product),
-      tablet: _buildTabletLayout(product),
-      desktop: _buildDesktopLayout(product),
-    );
+    return useDesktopLayout 
+        ? _buildDesktopLayout(product) 
+        : _buildMobileLayout(product);
   }
 
   // Mobile layout (traditional single column)
@@ -580,7 +579,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.all(context.sectionPadding),
+          padding: const EdgeInsets.all(16),
           child: _buildMainContent(product),
         ),
       ),
@@ -607,10 +606,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.all(context.sectionPadding),
+          padding: const EdgeInsets.all(24),
           child: Center(
             child: Container(
-              constraints: BoxConstraints(maxWidth: context.contentWidth),
+              constraints: const BoxConstraints(maxWidth: 800),
               child: _buildMainContent(product),
             ),
           ),
@@ -619,19 +618,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  // Desktop layout (two-column master-detail)
+  // Desktop layout (optimized two-column with proper spacing)
   Widget _buildDesktopLayout(Product product) {
     return Scaffold(
+      backgroundColor: Colors.grey[100], // Light background for better separation
       body: Column(
         children: [
           // Desktop header toolbar
           Container(
             height: 60,
             decoration: BoxDecoration(
-              color: Colors.green,
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -639,85 +640,157 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
             child: Row(
               children: [
-                const SizedBox(width: 16),
+                const SizedBox(width: 24),
                 Expanded(
                   child: Text(
                     product.name,
                     style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                ..._buildAppBarActions(product),
-                const SizedBox(width: 16),
+                ..._buildDesktopAppBarActions(product),
+                const SizedBox(width: 24),
               ],
             ),
           ),
-          // Main content area
+          // Main content area with proper layout
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadDashboardData,
-                                child: Padding(
-                              padding: EdgeInsets.all(context.sectionPadding),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 1400),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Top section: Key Metrics (full width)
+                        KeyMetricsWidget(
+                          product: product,
+                          totalStock: _totalStock,
+                          averageCostPrice: _averageCostPrice,
+                          grossProfitPercentage: _grossProfitPercentage,
+                          isEditMode: _isEditMode,
+                          priceController: _priceController,
+                          onPriceTap: _enterEditMode,
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Bottom section: Two-column layout (responsive)
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            // If too narrow, stack vertically instead of horizontal
+                            final isTooNarrow = constraints.maxWidth < 800;
+                            
+                            if (isTooNarrow) {
+                              return Column(
                                 children: [
-                                  // Hàng 1: Key Metrics
-                                  KeyMetricsWidget(
+                                  QuickActionsWidget(
                                     product: product,
-                                    totalStock: _totalStock,
-                                    averageCostPrice: _averageCostPrice,
-                                    grossProfitPercentage: _grossProfitPercentage,
-                                    isEditMode: _isEditMode,
-                                    priceController: _priceController,
-                                    onPriceTap: _enterEditMode,
+                                    onBatchAdded: _loadDashboardData,
                                   ),
-              
-                                  SizedBox(height: context.cardSpacing), // Khoảng trống
-              
-                                  // Hàng 2: Bố cục 2 cột chính
-                                  Expanded(
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Cột trái cho danh sách lô hàng
-                                        Expanded(
-                                          flex: 6, // Chiếm 60% không gian
-                                          child: SingleChildScrollView(
-                                            child: _buildInventoryExpansionTile(),
-                                          ),
-                                        ),
-              
-                                        SizedBox(width: context.cardSpacing), // Khoảng trống giữa 2 cột
-              
-                                        // Cột phải cho các widget còn lại
-                                        Expanded(
-                                          flex: 4, // Chiếm 40% không gian
-                                          child: SingleChildScrollView(
-                                            child: Column(
-                                              children: [
-                                                QuickActionsWidget(
-                                                  product: product,
-                                                  onBatchAdded: _loadDashboardData,
-                                                ),
-                                                SizedBox(height: context.cardSpacing),
-                                                _buildPriceHistoryExpansionTile(),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildInventoryExpansionTile(),
+                                  const SizedBox(height: 16),
+                                  _buildPriceHistoryExpansionTile(),
                                 ],
-                              ),
-                            ),            ),
+                              );
+                            }
+                            
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Left column: Inventory & History (wider)
+                                Expanded(
+                                  flex: 6,
+                                  child: Column(
+                                    children: [
+                                      _buildInventoryExpansionTile(),
+                                      const SizedBox(height: 16),
+                                      _buildPriceHistoryExpansionTile(),
+                                    ],
+                                  ),
+                                ),
+                                
+                                const SizedBox(width: 24),
+                                
+                                // Right column: Quick Actions (narrower, flexible)
+                                Expanded(
+                                  flex: 4,
+                                  child: QuickActionsWidget(
+                                    product: product,
+                                    onBatchAdded: _loadDashboardData,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _buildDesktopAppBarActions(Product product) {
+    if (_isEditMode) {
+      return [
+        TextButton(
+          onPressed: _exitEditMode,
+          child: const Text(
+            'Hủy',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: _savePrice,
+          child: const Text(
+            'Xong',
+            style: TextStyle(
+              color: Colors.green,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ];
+    } else {
+      return [
+        IconButton(
+          icon: const Icon(Icons.settings, size: 24, color: Colors.grey),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => EditProductScreen(product: product),
+              ),
+            );
+          },
+          tooltip: 'Cài đặt sản phẩm',
+        ),
+        IconButton(
+          icon: const Icon(Icons.edit, size: 24, color: Colors.green),
+          onPressed: _enterEditMode,
+          tooltip: 'Chỉnh sửa giá bán',
+        ),
+      ];
+    }
   }
 
   // Shared content builder
@@ -733,14 +806,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           priceController: _priceController,
           onPriceTap: _enterEditMode,
         ),
-        SizedBox(height: context.cardSpacing),
+        const SizedBox(height: 16),
         QuickActionsWidget(
           product: product,
           onBatchAdded: _loadDashboardData,
         ),
-        SizedBox(height: context.cardSpacing),
+        const SizedBox(height: 16),
         _buildInventoryExpansionTile(),
-        SizedBox(height: context.cardSpacing),
+        const SizedBox(height: 16),
         _buildPriceHistoryExpansionTile(),
         const SizedBox(height: 16),
       ],
@@ -831,33 +904,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildDesktopNotFound() {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       body: Column(
         children: [
           Container(
             height: 60,
             decoration: BoxDecoration(
-              color: Colors.green,
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Row(
+            child: const Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(width: 16),
-                const Text(
+                SizedBox(width: 24),
+                Text(
                   'Chi Tiết Sản Phẩm',
                   style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
                 ),
               ],
@@ -867,7 +938,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Center(
               child: Text(
                 'Không tìm thấy sản phẩm',
-                style: TextStyle(fontSize: 20),
+                style: TextStyle(fontSize: 20, color: Colors.grey),
               ),
             ),
           ),
@@ -906,15 +977,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildDesktopLoading(Product product) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       body: Column(
         children: [
           Container(
             height: 60,
             decoration: BoxDecoration(
-              color: Colors.green,
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -922,17 +995,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 24),
                 Text(
                   product.name,
                   style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
                 ),
               ],

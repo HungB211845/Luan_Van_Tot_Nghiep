@@ -175,6 +175,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 1024;
+    
+    if (isDesktop) {
+      return _buildDesktopLayout();
+    }
+    
+    return _buildMobileLayout();
+  }
+
+  Widget _buildMobileLayout() {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -218,11 +229,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ... (Header card and other info cards remain unchanged)
-            Card(
+        child: _buildCustomerContent(),
+      ),
+    );
+  }
+
+  Widget _buildCustomerContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ... (Header card and other info cards remain unchanged)
+        Card(
               elevation: 3,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Container(
@@ -369,9 +386,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             // NEW DEBT LIST CARD - with corrected provider calls
             _buildDebtListCard(),
           ],
-        ),
-      ),
-    );
+        );
   }
 
   // New method to build the debt list card - iOS style collapsible
@@ -533,6 +548,91 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      body: Column(
+        children: [
+          // Desktop header toolbar (no back button)
+          Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Text(
+                    widget.customer.name,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.grey),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditCustomerScreen(customer: widget.customer),
+                      ),
+                    );
+                  },
+                  tooltip: 'Chỉnh sửa',
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'delete') _showDeleteDialog(context);
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Xóa khách hàng', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 24),
+              ],
+            ),
+          ),
+          // Main content area
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: _buildCustomerContent(),
+                ),
+              ),
             ),
           ),
         ],

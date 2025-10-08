@@ -160,47 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildDesktopLayout() {
     return CustomScrollView(
       slivers: [
-        // Minimal AppBar for desktop
-        SliverAppBar(
-          floating: false,
-          pinned: true,
-          backgroundColor: Colors.green,
-          elevation: 0,
-          leading: Consumer<AuthProvider>(
-            builder: (context, auth, child) {
-              final initial = (auth.currentUser?.fullName ?? 'U')
-                  .substring(0, 1)
-                  .toUpperCase();
-              return GestureDetector(
-                onTap: () {
-                  context.read<NavigationProvider>().goToProfile();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white,
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(CupertinoIcons.bell),
-              onPressed: () {
-                // TODO: Navigate to notifications screen
-              },
-            ),
-          ],
-        ),
-
         // Pull to refresh
         CupertinoSliverRefreshControl(onRefresh: _refreshData),
 
@@ -851,74 +810,112 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _build8pxGridCarousel(List<dynamic> items) {
-    const int itemsPerPage = 8; // 4x2 grid
-    final int totalPages = (items.length / itemsPerPage).ceil();
-    
-    // ✅ PRECISE Height Calculation per 8px Grid System
-    const double iconContainerSize = 60.0;  // 8px grid: 60 = 8 * 7.5
-    const double iconTextSpacing = 8.0;     // 8px grid: 8 = 8 * 1
-    const double textHeight = 32.0;         // 8px grid: 32 = 8 * 4
-    const double mainAxisSpacing = 24.0;    // 8px grid: 24 = 8 * 3
-    const double numberOfRows = 2;
-    
-    // Formula: (itemHeight * rows) + (spacing * (rows - 1))
-    final double calculatedHeight = (iconContainerSize + iconTextSpacing + textHeight) * numberOfRows + 
-                                   mainAxisSpacing * (numberOfRows - 1);
-    
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // PageView với calculated height (NO magic numbers)
-        SizedBox(
-          height: calculatedHeight, // Dynamic calculation, not fixed 200
-          child: PageView.builder(
-            controller: _quickAccessPageController,
-            itemCount: totalPages,
-            itemBuilder: (context, pageIndex) {
-              final startIndex = pageIndex * itemsPerPage;
-              final endIndex = (startIndex + itemsPerPage).clamp(0, items.length);
-              final pageItems = items.sublist(startIndex, endIndex);
-              
-              return _build8pxGridPage(pageItems);
-            },
-          ),
-        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Responsive columns based on available width
+        int columns;
+        if (constraints.maxWidth >= 1200) {
+          columns = 6; // Desktop: 6 columns
+        } else if (constraints.maxWidth >= 800) {
+          columns = 5; // Tablet landscape: 5 columns
+        } else if (constraints.maxWidth >= 600) {
+          columns = 4; // Tablet portrait: 4 columns
+        } else {
+          columns = 4; // Mobile: 4 columns
+        }
         
-        const SizedBox(height: 16.0), // 8px grid spacing
+        const int rows = 2;
+        final int itemsPerPage = columns * rows;
+        final int totalPages = (items.length / itemsPerPage).ceil();
         
-        // Page indicator với iOS styling
-        if (totalPages > 1)
-          _buildIOSPageIndicator(_currentQuickAccessPage, totalPages),
-      ],
+        // ✅ PRECISE Height Calculation per 8px Grid System
+        const double iconContainerSize = 60.0;  // 8px grid: 60 = 8 * 7.5
+        const double iconTextSpacing = 8.0;     // 8px grid: 8 = 8 * 1
+        const double textHeight = 32.0;         // 8px grid: 32 = 8 * 4
+        const double mainAxisSpacing = 24.0;    // 8px grid: 24 = 8 * 3
+        const double numberOfRows = 2;
+        
+        // Formula: (itemHeight * rows) + (spacing * (rows - 1))
+        final double calculatedHeight = (iconContainerSize + iconTextSpacing + textHeight) * numberOfRows + 
+                                       mainAxisSpacing * (numberOfRows - 1);
+        
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // PageView với calculated height (NO magic numbers)
+            SizedBox(
+              height: calculatedHeight, // Dynamic calculation, not fixed 200
+              child: PageView.builder(
+                controller: _quickAccessPageController,
+                itemCount: totalPages,
+                onPageChanged: (page) {
+                  setState(() {
+                    _currentQuickAccessPage = page;
+                  });
+                },
+                itemBuilder: (context, pageIndex) {
+                  final startIndex = pageIndex * itemsPerPage;
+                  final endIndex = (startIndex + itemsPerPage).clamp(0, items.length);
+                  final pageItems = items.sublist(startIndex, endIndex);
+                  
+                  return _build8pxGridPage(pageItems);
+                },
+              ),
+            ),
+            
+            const SizedBox(height: 16.0), // 8px grid spacing
+            
+            // Page indicator với iOS styling
+            if (totalPages > 1)
+              _buildIOSPageIndicator(_currentQuickAccessPage, totalPages),
+          ],
+        );
+      },
     );
   }
 
   Widget _build8pxGridPage(List<dynamic> items) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0), // 8px grid
-      child: GridView.builder(
-        padding: EdgeInsets.zero, // No extra padding
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4, // Apple HIG standard
-          crossAxisSpacing: 24.0,  // 8px grid: 24 = 8 * 3
-          mainAxisSpacing: 24.0,   // 8px grid: 24 = 8 * 3
-          childAspectRatio: 0.75, // Adjust for shorter, single-line text content
-        ),
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return _build8pxGridCard(
-            icon: item.icon,
-            label: item.label,
-            onTap: () => Navigator.of(
-              context,
-              rootNavigator: true,
-            ).pushNamed(item.route),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Responsive columns based on available width
+        int crossAxisCount;
+        if (constraints.maxWidth >= 1200) {
+          crossAxisCount = 6; // Desktop: 6 columns
+        } else if (constraints.maxWidth >= 800) {
+          crossAxisCount = 5; // Tablet landscape: 5 columns
+        } else if (constraints.maxWidth >= 600) {
+          crossAxisCount = 4; // Tablet portrait: 4 columns
+        } else {
+          crossAxisCount = 4; // Mobile: 4 columns (default)
+        }
+        
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0), // 8px grid
+          child: GridView.builder(
+            padding: EdgeInsets.zero, // No extra padding
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 24.0,  // 8px grid: 24 = 8 * 3
+              mainAxisSpacing: 24.0,   // 8px grid: 24 = 8 * 3
+              childAspectRatio: 0.75, // Adjust for shorter, single-line text content
+            ),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return _build8pxGridCard(
+                icon: item.icon,
+                label: item.label,
+                onTap: () => Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).pushNamed(item.route),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 

@@ -101,10 +101,11 @@ class _AccountScreenState extends State<AccountScreen> {
     final userProfile = authProvider.currentUser;
     final supabaseUser = Supabase.instance.client.auth.currentUser;
     final storeName = authProvider.currentStore?.storeName ?? 'hiện tại';
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
 
     return Scaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      appBar: AppBar(
+      appBar: isDesktop ? null : AppBar(
         title: const Text('Tài khoản'),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
@@ -112,6 +113,16 @@ class _AccountScreenState extends State<AccountScreen> {
       ),
       body: ListView(
         children: [
+          if (isDesktop) Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Text(
+              'Tài khoản',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           // User Profile Section
           if (userProfile != null)
             Container(

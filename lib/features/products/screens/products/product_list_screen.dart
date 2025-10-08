@@ -188,6 +188,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   Widget _buildDesktopLayout() {
     return Scaffold(
+      backgroundColor: Colors.grey[100], // Light background for separation
       body: Column(
         children: [
           _buildDesktopToolbar(),
@@ -195,25 +196,46 @@ class _ProductListScreenState extends State<ProductListScreen> {
           Expanded(
             child: Row(
               children: [
+                // Master pane - Product list (wider for better readability)
                 Expanded(
-                  flex: 3, // Master pane (list) - narrower
-                  child: _buildProductList(isMasterDetail: true),
-                ),
-                const VerticalDivider(width: 1, thickness: 1, color: Colors.grey), // More prominent divider
-                Expanded(
-                  flex: 7, // Detail pane - wider
+                  flex: 4, // Increased from 3 to 4 for better proportion
                   child: Container(
-                    color: Colors.grey[50], // Subtle background for separation
+                    color: Colors.white, // White background for master pane
+                    child: _buildProductList(isMasterDetail: true),
+                  ),
+                ),
+                // Prominent divider
+                Container(
+                  width: 1,
+                  color: Colors.grey[300],
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                // Detail pane - Product details (narrower, more focused)
+                Expanded(
+                  flex: 6, // Reduced from 7 to 6 for better balance
+                  child: Container(
+                    color: Colors.grey[50], // Subtle background for detail pane
                     child: Consumer<ProductProvider>(
                       builder: (context, provider, child) {
                         if (provider.selectedProduct == null) {
-                          return const Center(
+                          return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
-                                SizedBox(height: 16),
-                                Text('Chọn một sản phẩm để xem chi tiết', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                                Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 80,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  'Chọn một sản phẩm để xem chi tiết',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -589,7 +611,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
     final isChecked = _selectedProductIds.contains(product.id);
 
     return Container(
-      color: isSelected ? Colors.green.withOpacity(0.08) : Colors.white,
+      decoration: BoxDecoration(
+        color: isSelected ? Colors.green.withOpacity(0.12) : Colors.transparent,
+        border: isSelected ? Border(
+          left: BorderSide(color: Colors.green, width: 3),
+        ) : null,
+      ),
       child: Column(
         children: [
           Material(
@@ -609,12 +636,15 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 }
               },
               onLongPress: () {
-                if (!_isSelectionMode) {
+                if (!_isSelectionMode && !isMasterDetail) {
                   _toggleSelectionMode(initialProductId: product.id);
                 }
               },
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: context.sectionPadding, vertical: 12),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMasterDetail ? 16 : context.sectionPadding,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     if (_isSelectionMode)
@@ -633,7 +663,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                         width: 50,
                         height: 50,
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
+                          color: isSelected ? Colors.green.withOpacity(0.2) : Colors.green.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: product.imageUrl != null && product.imageUrl!.isNotEmpty
@@ -642,16 +672,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                 child: Image.network(
                                   product.imageUrl!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(
+                                  errorBuilder: (context, error, stackTrace) => Icon(
                                     Icons.inventory_2,
-                                    color: Colors.green,
+                                    color: isSelected ? Colors.green[700] : Colors.green,
                                     size: 28,
                                   ),
                                 ),
                               )
-                            : const Icon(
+                            : Icon(
                                 Icons.inventory_2,
-                                color: Colors.green,
+                                color: isSelected ? Colors.green[700] : Colors.green,
                                 size: 28,
                               ),
                       ),
@@ -662,9 +692,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
                         children: [
                           Text(
                             product.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 17,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                               color: CupertinoColors.black,
                             ),
                             maxLines: 1,
@@ -675,13 +705,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
                             'Tồn kho: $stock • ${AppFormatter.formatCurrency(price)}',
                             style: TextStyle(
                               fontSize: 15,
-                              color: CupertinoColors.systemGrey.withOpacity(0.9),
+                              color: isSelected 
+                                ? CupertinoColors.systemGrey.withOpacity(1.0)
+                                : CupertinoColors.systemGrey.withOpacity(0.9),
+                              fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    // Apple HIG: Chevron indicator (only show in normal mode)
+                    // Apple HIG: Only show chevron for navigation, not selection
                     if (!_isSelectionMode && !isMasterDetail)
                       const Icon(
                         CupertinoIcons.chevron_right,
@@ -695,7 +728,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
           ),
           // Apple HIG: Separator line (inset from left)
           Container(
-            margin: EdgeInsets.only(left: context.responsive.isMobile ? 78 : 16), // Align with text, not thumbnail
+            margin: EdgeInsets.only(
+              left: isMasterDetail ? 78 : (context.responsive.isMobile ? 78 : 16),
+            ),
             height: 0.5,
             color: CupertinoColors.separator,
           ),

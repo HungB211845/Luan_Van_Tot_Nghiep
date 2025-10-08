@@ -8,6 +8,7 @@ import 'managers/app_bar_manager.dart';
 import 'managers/bottom_nav_manager.dart';
 import 'managers/fab_manager.dart';
 import 'managers/drawer_manager.dart';
+import 'package:agricultural_pos/shared/utils/responsive.dart';
 
 class MainLayoutWrapper extends StatefulWidget {
   final LayoutConfig config;
@@ -158,24 +159,25 @@ class ResponsiveLayoutWrapper extends StatelessWidget {
     required this.tabletConfig,
     required this.desktopConfig,
     required this.child,
-    this.tabletBreakpoint = 768,
-    this.desktopBreakpoint = 1024,
+    this.tabletBreakpoint = ResponsiveBreakpoints.mobile,
+    this.desktopBreakpoint = ResponsiveBreakpoints.desktop,
   });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final width = constraints.maxWidth;
         LayoutConfig config;
-        
-        if (constraints.maxWidth >= desktopBreakpoint) {
+
+        if (ResponsiveBreakpoints.isDesktop(width)) {
           config = desktopConfig;
-        } else if (constraints.maxWidth >= tabletBreakpoint) {
+        } else if (ResponsiveBreakpoints.isTablet(width)) {
           config = tabletConfig;
         } else {
           config = mobileConfig;
         }
-        
+
         return MainLayoutWrapper(
           config: config,
           child: child,

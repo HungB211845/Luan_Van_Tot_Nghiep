@@ -69,6 +69,7 @@ class TransactionProvider extends ChangeNotifier {
   int _currentPage = 1;
   final int _pageSize = 20;
   bool _hasMore = true;
+  Transaction? _selectedTransaction; // For master-detail pattern
 
   // Getters
   TransactionStatus get status => _status;
@@ -78,6 +79,19 @@ class TransactionProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoading => _status == TransactionStatus.loading;
   bool get isLoadingMore => _status == TransactionStatus.loadingMore;
+  Transaction? get selectedTransaction => _selectedTransaction;
+
+  /// Select a transaction for detail view (desktop master-detail pattern)
+  void selectTransaction(Transaction transaction) {
+    _selectedTransaction = transaction;
+    notifyListeners();
+  }
+
+  /// Clear selected transaction
+  void clearSelection() {
+    _selectedTransaction = null;
+    notifyListeners();
+  }
 
   /// Groups transactions by date for the UI.
   Map<String, List<Transaction>> get groupedTransactions {

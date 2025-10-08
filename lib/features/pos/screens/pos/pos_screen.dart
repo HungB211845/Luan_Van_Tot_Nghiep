@@ -84,8 +84,10 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 600;
+    
     return Scaffold(
-      appBar: AppBar(
+      appBar: isDesktop ? null : AppBar(
         automaticallyImplyLeading: false,
         title: const Text('Bán Hàng (POS)'),
         backgroundColor: Colors.green,

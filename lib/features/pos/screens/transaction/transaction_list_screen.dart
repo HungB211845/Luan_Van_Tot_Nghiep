@@ -83,6 +83,12 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    
+    if (isDesktop) {
+      return _buildDesktopLayout();
+    }
+    
     return GestureDetector(
       // Add swipe gesture for iOS-style back navigation
       onHorizontalDragEnd: (DragEndDetails details) {
@@ -116,9 +122,89 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
           children: [
             _buildSearchBar(),
             _buildQuickChips(),
-            Expanded(child: _buildTransactionList()),
+            Expanded(child: _buildTransactionList(isMasterDetail: false)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildDesktopToolbar(),
+          _buildSearchBar(),
+          _buildQuickChips(),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3, // Master pane (list) - narrower
+                  child: _buildTransactionList(isMasterDetail: true),
+                ),
+                const VerticalDivider(width: 1, thickness: 1, color: Colors.grey),
+                Expanded(
+                  flex: 7, // Detail pane - wider
+                  child: Container(
+                    color: Colors.grey[50],
+                    child: Consumer<TransactionProvider>(
+                      builder: (context, provider, child) {
+                        final selectedTx = provider.selectedTransaction;
+                        if (selectedTx == null) {
+                          return const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.receipt_long, size: 64, color: Colors.grey),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Chọn một giao dịch để xem chi tiết',
+                                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return TransactionDetailScreen(
+                          key: ValueKey(selectedTx.id),
+                          transaction: selectedTx,
+                          isEmbedded: true,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopToolbar() {
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 24),
+          const Text(
+            'Lịch Sử Giao Dịch',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () => _showFilterSheet(context),
+            tooltip: 'Lọc giao dịch',
+          ),
+          const SizedBox(width: 24),
+        ],
       ),
     );
   }
@@ -218,7 +304,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     );
   }
 
-  Widget _buildTransactionList() {
+  Widget _buildTransactionList({bool isMasterDetail = false}) {
     return Consumer<TransactionProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && provider.transactions.isEmpty) {
@@ -274,7 +360,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                     ),
                   ),
                   ...transactionsOnDate.map(
-                    (tx) => _buildTransactionCard(context, tx),
+                    (tx) => _buildTransactionCard(context, tx, isMasterDetail: isMasterDetail),
                   ),
                 ],
               );
@@ -285,7 +371,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     );
   }
 
-  Widget _buildTransactionCard(BuildContext context, Transaction transaction) {
+  Widget _buildTransactionCard(BuildContext context, Transaction transaction, {bool isMasterDetail = false}) {
     // Smart primary info selection
     final hasCustomerName = transaction.customerName != null &&
                              transaction.customerName!.isNotEmpty &&
@@ -308,7 +394,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onLongPress: () {
+        onLongPress: isMasterDetail ? null : () {
           Clipboard.setData(
             ClipboardData(text: transaction.invoiceNumber ?? ''),
           );
@@ -320,12 +406,18 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
           );
         },
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) =>
-                  TransactionDetailScreen(transaction: transaction),
-            ),
-          );
+          if (isMasterDetail) {
+            // Desktop: Select transaction for detail pane
+            context.read<TransactionProvider>().selectTransaction(transaction);
+          } else {
+            // Mobile: Navigate to detail screen
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) =>
+                    TransactionDetailScreen(transaction: transaction),
+              ),
+            );
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(16),

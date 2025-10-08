@@ -46,9 +46,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    
     return Scaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      appBar: AppBar(
+      appBar: isDesktop ? null : AppBar(
         title: const Text('Tài khoản'),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
@@ -58,9 +60,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final user = authProvider.currentUser;
           final store = authProvider.currentStore;
 
-          return ListView(
-            children: [
-              const SizedBox(height: 20),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final contentWidth = constraints.maxWidth > 800 ? 600.0 : constraints.maxWidth;
+              
+              return Center(
+                child: Container(
+                  width: contentWidth,
+                  child: ListView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isDesktop ? 0 : 16,
+                      vertical: isDesktop ? 24 : 0,
+                    ),
+                    children: [
+                      if (isDesktop) ...[
+                        const Text(
+                          'Tài khoản',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ] else
+                        const SizedBox(height: 20),
 
               // Group 1: User Profile (Tappable)
               _buildGroupedList([
@@ -136,7 +159,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ]),
 
               const SizedBox(height: 30),
-            ],
+                    ],
+                  ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -145,8 +172,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Section Header (like "CỬA HÀNG", "CÀI ĐẶT & BẢO MẬT")
   Widget _buildSectionHeader(String title) {
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
     return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+      padding: EdgeInsets.only(
+        left: isDesktop ? 0 : 16,
+        right: isDesktop ? 0 : 16,
+        bottom: 8,
+      ),
       child: Text(
         title,
         style: const TextStyle(
@@ -160,8 +192,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Grouped List Container (white background with rounded corners)
   Widget _buildGroupedList(List<Widget> children) {
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: isDesktop ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
