@@ -9,16 +9,18 @@ import '../../pos/models/transaction.dart';
 import '../../pos/models/transaction_item.dart';
 import '../../pos/models/transaction_item_details.dart';
 import '../../pos/models/payment_method.dart';
-import '../models/company.dart';
 import '../services/product_service.dart';
 import '../../../shared/models/paginated_result.dart';
 import '../../../shared/services/base_service.dart';
 import '../../../shared/providers/memory_managed_provider.dart';
+import '../../../services/cached_product_service.dart';
+import '../../../core/config/cache_config.dart';
 
 enum ProductStatus { idle, loading, success, error }
 
 class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   final ProductService _productService = ProductService();
+  final CachedProductService _cachedService = CachedProductService();
   final TransactionService _transactionService = TransactionService();
 
   // =====================================================
@@ -108,6 +110,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   String get errorMessage => _errorMessage;
   bool get isLoading => _status == ProductStatus.loading;
   bool get hasError => _status == ProductStatus.error;
+
+  // Search state
+  String get searchQuery => _searchQuery;
+  bool get isSearching => _searchQuery.isNotEmpty;
 
   // Dashboard
   Map<String, dynamic> get dashboardStats => _dashboardStats;
@@ -353,7 +359,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
-  Future<void> searchProducts(String query) async {
+  /// Search products with cache support (used by ProductListScreen)
+  Future<void> searchProducts(String query, {bool useCache = true}) async {
     _searchQuery = query.trim();
 
     if (_searchQuery.isEmpty) {
@@ -363,33 +370,108 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
 
     _setStatus(ProductStatus.loading);
+    final stopwatch = Stopwatch()..start();
 
     try {
-      _filteredProducts = await _productService.searchProducts(_searchQuery);
+      if (useCache && CacheConfig.enableSearchCache) {
+        _filteredProducts = await _cachedService.searchProducts(
+          _searchQuery,
+          useCache: true,
+        );
+        if (CacheConfig.enablePerformanceLogging) {
+          stopwatch.stop();
+          final ms = stopwatch.elapsedMilliseconds;
+          print('🎯 Cached product search took: ${ms}ms');
+          CacheMetrics.recordHit();
+          CacheMetrics.recordOperationTime('search', ms);
+        }
+      } else {
+        _filteredProducts = await _productService.searchProducts(_searchQuery);
+        if (CacheConfig.enablePerformanceLogging) {
+          stopwatch.stop();
+          final ms = stopwatch.elapsedMilliseconds;
+          print('💾 Direct product search took: ${ms}ms');
+          CacheMetrics.recordMiss();
+          CacheMetrics.recordOperationTime('search_direct', ms);
+        }
+      }
+      
       _setStatus(ProductStatus.success);
       _clearError();
     } catch (e) {
+      // Graceful degradation
+      if (useCache) {
+        if (kDebugMode) {
+          print('Cache search failed, falling back to direct search: $e');
+        }
+        return searchProducts(query, useCache: false);
+      }
+      
       _setError(e.toString());
+      CacheMetrics.recordMiss();
     }
+  }
+
+  /// Clear search results and reset to show all products
+  void clearSearch() {
+    _searchQuery = '';
+    _filteredProducts = [];
+    notifyListeners();
   }
 
   /// Quick search cho POS screen
   List<Product> _posSearchResults = [];
+  List<Product> get posSearchResults => _posSearchResults;
   bool get hasPosSearchResults => _posSearchResults.isNotEmpty;
 
-  Future<void> quickSearchForPOS(String query) async {
+  /// Quick search for POS with cache support (HIGH PERFORMANCE IMPACT)
+  Future<void> quickSearchForPOS(String query, {bool useCache = true}) async {
     if (query.trim().isEmpty) {
       _posSearchResults = [];
       notifyListeners();
       return;
     }
 
+    // Performance logging
+    final stopwatch = Stopwatch()..start();
+    
     try {
-      _posSearchResults = await _productService.quickSearchForPOS(query.trim());
+      if (useCache && CacheConfig.enableSearchCache) {
+        _posSearchResults = await _cachedService.searchProducts(
+          query.trim(),
+          useCache: true,
+        );
+        if (CacheConfig.enablePerformanceLogging) {
+          stopwatch.stop();
+          final ms = stopwatch.elapsedMilliseconds;
+          print('🎯 Cached POS search took: ${ms}ms');
+          CacheMetrics.recordHit();
+          CacheMetrics.recordOperationTime('pos_search', ms);
+        }
+      } else {
+        _posSearchResults = await _productService.quickSearchForPOS(query.trim());
+        if (CacheConfig.enablePerformanceLogging) {
+          stopwatch.stop();
+          final ms = stopwatch.elapsedMilliseconds;
+          print('💾 Direct POS search took: ${ms}ms');
+          CacheMetrics.recordMiss();
+          CacheMetrics.recordOperationTime('pos_search_direct', ms);
+        }
+      }
+      
       notifyListeners();
     } catch (e) {
+      // Graceful degradation - fallback to non-cached
+      if (useCache) {
+        if (kDebugMode) {
+          print('Cache search failed, falling back to direct search: $e');
+        }
+        return quickSearchForPOS(query, useCache: false);
+      }
+      
       _posSearchResults = [];
       _setError('Lỗi tìm kiếm: ${e.toString()}');
+      CacheMetrics.recordMiss();
     }
   }
 
@@ -452,6 +534,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       final newProduct = await _productService.createProduct(product);
       _products.add(newProduct);
 
+      // Invalidate cache after product creation
+      await invalidateSearchCache();
+      await invalidateDashboardCache();
+
       // Reload all products to get updated data
       await loadProducts();
 
@@ -469,6 +555,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
     try {
       final updatedProduct = await _productService.updateProduct(product);
+
+      // Invalidate cache after product update
+      await invalidateSearchCache();
+      await invalidateDashboardCache();
 
       // Update in list
       final index = _products.indexWhere((p) => p.id == product.id);
@@ -512,12 +602,6 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
   void selectProduct(Product? product) {
     _selectedProduct = product;
-    notifyListeners();
-  }
-
-  void clearSearch() {
-    _searchQuery = '';
-    _filteredProducts = [];
     notifyListeners();
   }
 
@@ -1116,20 +1200,44 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // DASHBOARD & ANALYTICS
   // =====================================================
 
-  Future<void> loadDashboardStats() async {
+  /// Load dashboard statistics (direct load only - cache disabled)
+  Future<void> loadDashboardStats({bool useCache = false}) async {
+    final stopwatch = Stopwatch()..start();
+    
     try {
-      // Get product stats
+      // Get product stats directly  
       final productStats = await _productService.getProductDashboardStats();
-
+      
       // Get transaction stats
       final transactionStats = await _transactionService.getTodaySalesStats();
-
+      
       // Combine both
       _dashboardStats = {...productStats, ...transactionStats};
+      
+      if (CacheConfig.enablePerformanceLogging) {
+        stopwatch.stop();
+        final ms = stopwatch.elapsedMilliseconds;
+        print('💾 Direct dashboard stats loaded in: ${ms}ms');
+        CacheMetrics.recordMiss();
+        CacheMetrics.recordOperationTime('dashboard_direct', ms);
+      }
 
       notifyListeners();
     } catch (e) {
+      // Graceful degradation
+
+      notifyListeners();
+    } catch (e) {
+      // Graceful degradation
+      if (useCache) {
+        if (kDebugMode) {
+          print('Cache stats failed, falling back to direct load: $e');
+        }
+        return loadDashboardStats(useCache: false);
+      }
+      
       _setError(e.toString());
+      CacheMetrics.recordMiss();
     }
   }
 
@@ -1543,6 +1651,55 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       _setError('Lỗi lấy lịch sử giá: $e');
       return [];
     }
+  }
+
+  // =====================================================
+  // CACHE MANAGEMENT METHODS
+  // =====================================================
+
+  /// Invalidate search cache (call after product updates)
+  Future<void> invalidateSearchCache() async {
+    if (CacheConfig.enableSearchCache) {
+      await _cachedService.invalidateSearchCache();
+      if (CacheConfig.enableCacheLogging) {
+        print('🧹 Search cache invalidated');
+      }
+    }
+  }
+
+  /// Invalidate dashboard cache (DISABLED - no dashboard cache)
+  Future<void> invalidateDashboardCache() async {
+    // Dashboard cache disabled - no action needed
+    if (CacheConfig.enableCacheLogging) {
+      print('⏭️ Dashboard cache invalidation skipped (disabled)');
+    }
+  }
+
+  /// Force refresh all cached data
+  Future<void> refreshAllCache() async {
+    await invalidateSearchCache();
+    // Dashboard cache disabled - just reload directly
+    await loadDashboardStats(useCache: false);
+    
+    if (CacheConfig.enableCacheLogging) {
+      print('🔄 Search cache refreshed (dashboard direct load)');
+    }
+  }
+
+  /// Get cache performance metrics
+  Map<String, dynamic> getCacheStats() {
+    final cacheStats = CacheMetrics.getStats();
+    final providerStats = getProviderMemoryStats();
+    
+    return {
+      'cache_performance': cacheStats,
+      'provider_memory': providerStats,
+      'cache_config': {
+        'search_enabled': CacheConfig.enableSearchCache,
+        'stats_enabled': CacheConfig.enableStatsCache,
+        'logging_enabled': CacheConfig.enableCacheLogging,
+      },
+    };
   }
 }
 

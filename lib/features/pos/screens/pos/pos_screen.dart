@@ -275,16 +275,28 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     );
   }
 
-  // REBUILT to use 3 columns and new aspect ratio
+  // FIXED: Use POS search results when searching, otherwise show all products
   Widget _buildProductGrid() {
     return Consumer<ProductProvider>(
       builder: (context, productProvider, child) {
-        if (productProvider.isLoading && productProvider.products.isEmpty) {
+        // Determine which products to show based on search state
+        final isSearching = _searchController.text.trim().isNotEmpty;
+        final productsToShow = isSearching 
+            ? productProvider.posSearchResults
+            : productProvider.products;
+        
+        if (productProvider.isLoading && productsToShow.isEmpty) {
           return const Center(child: LoadingWidget());
         }
-        if (productProvider.products.isEmpty) {
-          return const Center(child: Text('Không có sản phẩm nào'));
+        
+        if (productsToShow.isEmpty) {
+          return Center(
+            child: Text(isSearching 
+                ? 'Không tìm thấy sản phẩm nào với từ khóa "${_searchController.text}"'
+                : 'Không có sản phẩm nào'),
+          );
         }
+        
         return GridView.builder(
           padding: const EdgeInsets.all(12),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -293,9 +305,9 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
           ),
-          itemCount: productProvider.products.length,
+          itemCount: productsToShow.length,
           itemBuilder: (context, index) {
-            final product = productProvider.products[index];
+            final product = productsToShow[index];
             final quantityInCart = _viewModel!.getProductQuantityInCart(product.id);
             return _buildProductCard(product, quantityInCart);
           },

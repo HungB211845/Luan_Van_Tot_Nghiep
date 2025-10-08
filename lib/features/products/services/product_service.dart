@@ -219,14 +219,11 @@ class ProductService extends BaseService {
 
       final paginationParams = params ?? PaginationParams.first();
 
-      // Build base query với full-text search
+      // Build base query với LIKE search (no search_vector column available)
       var queryBuilder = _supabase
           .from('products_with_details')
-          .select('''
-            *,
-            ts_rank(search_vector, plainto_tsquery('vietnamese', '$query')) as rank
-          ''')
-          .textSearch('search_vector', query, config: 'vietnamese')
+          .select('*')
+          .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
           .eq('is_active', true);
       queryBuilder = addStoreFilter(queryBuilder);
 
@@ -250,10 +247,9 @@ class ProductService extends BaseService {
         queryBuilder = queryBuilder.gt('available_stock', 0);
       }
 
-      // Execute paginated query
+      // Execute paginated query with simple ordering
       final response = await queryBuilder
-          .order('rank', ascending: false)
-          .order('name', ascending: true)
+          .order('name', ascending: true) // Simple name ordering
           .range(
             paginationParams.offset,
             paginationParams.offset + paginationParams.pageSize - 1,
@@ -403,20 +399,17 @@ class ProductService extends BaseService {
         }
       }
 
-      // Otherwise use full-text search với limit nhỏ cho tốc độ
+      // Use LIKE search with stock filter for POS (no search_vector column)
       final response =
           await addStoreFilter(
                 _supabase
                     .from('products_with_details')
                     .select('*')
-                    .textSearch('search_vector', query, config: 'vietnamese')
+                    .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
                     .eq('is_active', true)
                     .gt('available_stock', 0),
               ) // Chỉ hiện sản phẩm còn hàng
-              .order(
-                'ts_rank(search_vector, plainto_tsquery(\'vietnamese\', \'$query\'))',
-                ascending: false,
-              )
+              .order('name', ascending: true) // Đơn giản order by name
               .limit(10); // Limit nhỏ cho POS
 
       return (response as List).map((json) => Product.fromJson(json)).toList();

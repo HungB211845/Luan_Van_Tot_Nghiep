@@ -66,9 +66,9 @@ class POSViewModel {
 
   // === THÊM CÁC HELPER METHODS CHO UI ===
 
-  // Tìm kiếm sản phẩm
+  // Tìm kiếm sản phẩm cho POS (optimized với stock filtering)
   Future<void> searchProducts(String query) async {
-    await productProvider.searchProducts(query);
+    await productProvider.quickSearchForPOS(query);
   }
 
   // Tìm kiếm khách hàng

@@ -1,14 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/app/app_widget.dart';
 import 'core/config/supabase_config.dart';
 import 'shared/services/base_service.dart';
+import 'services/cache_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Supabase
   await SupabaseConfig.initialize();
+
+  // Initialize LRU Cache System
+  final cacheManager = CacheManager();
+  await cacheManager.initialize();
+  
+  // Preload essential data for faster app startup (optional)
+  if (kReleaseMode) {
+    try {
+      await cacheManager.preloadEssentialData();
+    } catch (e) {
+      // Silently fail preload in release mode
+      if (kDebugMode) {
+        print('Cache preload failed: $e');
+      }
+    }
+  }
 
   // Set up auth state listener to sync store_id with BaseService
   _setupAuthStateListener();

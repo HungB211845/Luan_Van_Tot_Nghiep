@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 //import 'package:agricultural_pos/features/products/models/product.dart'; 
 
 // Cache entry với expiry time
@@ -36,7 +37,7 @@ class CacheEntry<T> {
   }
 }
 
-class CacheManager {
+class CacheManager extends ChangeNotifier {
   static final CacheManager _instance = CacheManager._internal();
   factory CacheManager() => _instance;
   CacheManager._internal();
@@ -52,10 +53,10 @@ class CacheManager {
   // Persistent cache với SharedPreferences
   SharedPreferences? _prefs;
   
-  // Cache configurations
+  // Cache configurations  
   static const Duration _defaultExpiry = Duration(minutes: 5);
   static const Duration _longTermExpiry = Duration(hours: 1);
-  static const Duration _shortTermExpiry = Duration(minutes: 1);
+  // _shortTermExpiry removed as unused
   
   Future<void> initialize() async {
     _prefs ??= await SharedPreferences.getInstance();

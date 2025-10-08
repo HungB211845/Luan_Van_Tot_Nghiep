@@ -194,24 +194,27 @@ class CachedProductService {
     print('💾 Search cache MISS: Searching "$query"...');
 
     try {
+      // Use LIKE-based search instead of full-text search (no search_vector column)
       var baseQuery = _supabase
           .from('products_with_details')
-          .select('*, ts_rank(search_vector, plainto_tsquery(\'vietnamese\', \'$query\')) as rank')
-          .textSearch('search_vector', query, config: 'vietnamese')
+          .select('*')
+          .or('name.ilike.%$query%,sku.ilike.%$query%,description.ilike.%$query%')
           .eq('is_active', true);
 
       if (category != null) {
         baseQuery = baseQuery.eq('category', category.toString().split('.').last);
       }
 
-      final response = await baseQuery
-          .order('rank', ascending: false)
-          .order('name', ascending: true)
+      var response = await baseQuery
+          .order('name', ascending: true) // Simple name ordering
           .limit(50);
 
-      final results = (response as List)
+      var results = (response as List)
           .map((json) => Product.fromJson(json))
           .toList();
+
+      // Debug: Log search results for verification
+      print('🔍 Search "$query" found ${results.length} products: ${results.take(3).map((p) => p.name).join(", ")}${results.length > 3 ? "..." : ""}');
 
       // Cache search results nhưng không lâu vì có thể thay đổi
       await _cache.set(

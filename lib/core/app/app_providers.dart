@@ -14,9 +14,14 @@ import '../../features/debt/providers/debt_provider.dart';
 import '../../presentation/home/providers/quick_access_provider.dart';
 import '../../presentation/home/providers/dashboard_provider.dart';
 import '../providers/navigation_provider.dart';
+import '../../services/cache_manager.dart';
 
 class AppProviders {
   static List<SingleChildWidget> get list => [
+    // Core Cache Manager (Singleton)
+    ChangeNotifierProvider.value(value: CacheManager()),
+    
+    // Business Logic Providers
     ChangeNotifierProvider(create: (_) => CustomerProvider()),
     ChangeNotifierProvider(create: (_) => ProductProvider()),
     ChangeNotifierProvider(create: (_) => ProductEditModeProvider()),

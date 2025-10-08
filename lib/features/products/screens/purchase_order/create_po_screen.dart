@@ -156,7 +156,8 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                   productIds,
                 );
                 await productProvider.refreshAllInventoryData();
-                await productProvider.loadProductsPaginated();
+                // Force refresh cache with fresh data after PO completion
+                await productProvider.refreshAllCache();
 
                 // Show success message
                 scaffoldMessenger.hideCurrentSnackBar();
