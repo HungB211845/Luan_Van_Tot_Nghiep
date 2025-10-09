@@ -40,7 +40,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     _tabController!.addListener(_handleTabSelection);
     _searchController.addListener(() {
         _viewModel?.searchProducts(_searchController.text);
-        setState(() {});
+        setState(() {}); // 🔥 FIX: Rebuild UI to update clear button visibility
     });
   }
 
@@ -55,6 +55,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_isInitialized) {
+      // First time initialization (app start)
       final productProvider = context.read<ProductProvider>();
       final customerProvider = context.read<CustomerProvider>();
       _viewModel = POSViewModel(
@@ -66,11 +67,22 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
         _viewModel?.initialize();
       });
       _isInitialized = true;
-    } else {
-      // FIXED: Auto-refresh on hot restart or screen focus
+    } else if (_viewModel == null) {
+      // Hot restart detected (viewModel was cleared)
+      print('🔄 Hot restart detected, performing one-time refresh');
+      final productProvider = context.read<ProductProvider>();
+      final customerProvider = context.read<CustomerProvider>();
+      _viewModel = POSViewModel(
+        productProvider: productProvider,
+        customerProvider: customerProvider,
+        transactionProvider: context.read<TransactionProvider>(),
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _viewModel?.forceRefresh();
+        _viewModel?.initialize(forceRefresh: true); // Refresh on hot restart
       });
+    } else {
+      // Normal navigation - no refresh needed
+      print('🔄 POS Screen navigation, no refresh needed');
     }
   }
 
@@ -227,6 +239,16 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
             decoration: InputDecoration(
               hintText: 'Tìm hoặc quét sản phẩm...',
               prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {}); // Trigger rebuild to show all products
+                      },
+                      tooltip: 'Xóa tìm kiếm',
+                    )
+                  : null,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
@@ -279,8 +301,11 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
   Widget _buildProductGrid() {
     return Consumer<ProductProvider>(
       builder: (context, productProvider, child) {
-        // Determine which products to show based on search state
-        final isSearching = _searchController.text.trim().isNotEmpty;
+        // 🔥 FIX: Use POS search results logic properly
+        // When search field is empty OR query < 2 chars, show normal products
+        // When search field has >= 2 chars, show search results (even if empty)
+        final searchQuery = _searchController.text.trim();
+        final isSearching = searchQuery.isNotEmpty && searchQuery.length >= 2;
         final productsToShow = isSearching 
             ? productProvider.posSearchResults
             : productProvider.products;
@@ -291,9 +316,39 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
         
         if (productsToShow.isEmpty) {
           return Center(
-            child: Text(isSearching 
-                ? 'Không tìm thấy sản phẩm nào với từ khóa "${_searchController.text}"'
-                : 'Không có sản phẩm nào'),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isSearching ? Icons.search_off : Icons.inventory_2_outlined,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isSearching 
+                      ? 'Không tìm thấy sản phẩm nào\nvới từ khóa "$searchQuery"'
+                      : 'Không có sản phẩm nào',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+                if (isSearching) ...[
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {}); // Trigger rebuild to show all products
+                    },
+                    icon: const Icon(Icons.clear),
+                    label: const Text('Xóa tìm kiếm'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[100],
+                      foregroundColor: Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ],
+            ),
           );
         }
         
@@ -681,7 +736,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     );
     if (mounted) {
       _resetForNextCustomer();
-      context.read<ProductProvider>().loadProducts();
+      context.read<ProductProvider>().loadProductsPaginated(useCache: true);
       context.read<TransactionProvider>().loadTransactions();
     }
   }

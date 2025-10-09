@@ -46,7 +46,8 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
       ),
       body: Consumer<ProductProvider>(
         builder: (context, provider, child) {
-          if (provider.isLoading) {
+          // 🔥 FIX: Use separate transaction loading state
+          if (provider.isLoadingTransaction) {
             return const LoadingWidget();
           }
 

@@ -29,7 +29,7 @@ class ProductService extends BaseService {
       var query = _supabase.from('products_with_details').select('''
         id, sku, name, category, company_id, attributes, is_active, is_banned,
         image_url, description, created_at, updated_at, min_stock_level, npk_ratio,
-        active_ingredient, seed_strain, current_price, available_stock,
+        active_ingredient, seed_strain, current_selling_price, available_stock,
         company_name, store_id
       ''');
       query = addStoreFilter(query);
@@ -179,7 +179,7 @@ class ProductService extends BaseService {
       var query = addStoreFilter(_supabase.from('products_with_details').select('''
         id, sku, name, category, company_id, attributes, is_active, is_banned,
         image_url, description, created_at, updated_at, min_stock_level, npk_ratio,
-        active_ingredient, seed_strain, current_price, available_stock,
+        active_ingredient, seed_strain, current_selling_price, available_stock,
         company_name, store_id
       '''));
 

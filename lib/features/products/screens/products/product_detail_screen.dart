@@ -69,8 +69,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       // Load price history from service
       _priceHistory = await provider.getPriceHistory(product.id);
 
-      // Sync price from history if current price is 0
-      await _syncPriceFromHistoryIfNeeded(provider, product);
+      // 🔄 DISABLED: Auto price sync to prevent infinite loops
+      // Use manual sync instead: provider.syncProductPriceFromHistory(product.id)
+      // await _syncPriceFromHistoryIfNeeded(provider, product);
 
     } catch (e) {
       if (mounted) {
@@ -89,6 +90,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _syncPriceFromHistoryIfNeeded(ProductProvider provider, Product product) async {
+    // 🔥 CRITICAL FIX: DISABLE AUTO PRICE SYNC to prevent infinite loops
+    // Price sync should be handled by database migration, not by UI screens
+    // Commenting out the sync logic to prevent cache invalidation loops
+    
+    /*
     // Only sync if current selling price is 0 and we have price history
     if (product.currentSellingPrice == 0 && _priceHistory.isNotEmpty) {
       // Get the latest price from history (sorted by date desc in getPriceHistory)
@@ -108,6 +114,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         }
       }
     }
+    */
+    
+    // Price sync is now handled by database migration sync_prices_from_history.sql
+    // No need to do manual sync in UI to prevent cache invalidation loops
+    print('🚫 Auto price sync disabled to prevent infinite loops');
   }
 
   void _enterEditMode() {

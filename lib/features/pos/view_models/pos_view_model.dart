@@ -23,13 +23,24 @@ class POSViewModel {
 
   // Hàm khởi tạo, tải các dữ liệu cần thiết
   Future<void> initialize({bool forceRefresh = false}) async {
-    // FIXED: Always refresh products to get latest prices and stock
+    // 🔥 CRITICAL FIX: Always use cache to prevent infinite loops
+    // Cache invalidation should be handled separately if needed
     if (productProvider.products.isEmpty || forceRefresh) {
-      await productProvider.loadProducts();
+      if (forceRefresh) {
+        // Clear cache first if force refresh is requested
+        await productProvider.invalidateCache();
+      }
+      await productProvider.loadProductsPaginated(useCache: true); // Always use cache
     }
     if (customerProvider.customers.isEmpty) {
       await customerProvider.loadCustomers();
     }
+  }
+
+  // 🎯 FIXED: Force refresh method for POS screen
+  Future<void> forceRefresh() async {
+    // 🚨 EMERGENCY FIX: Use normal refresh to prevent loops
+    await productProvider.refresh(); // Use normal refresh instead of refreshWithPriceSync
   }
 
   // Xử lý khi quét mã vạch
@@ -187,14 +198,9 @@ class POSViewModel {
     ]);
   }
 
-  // FIXED: Force refresh products and customers (useful for POS)
-  Future<void> forceRefresh() async {
-    await initialize(forceRefresh: true);
-  }
-
   // Refresh chỉ sản phẩm
   Future<void> refreshProducts() async {
-    await productProvider.loadProducts();
+    await productProvider.loadProductsPaginated(useCache: true); // 🔥 FIX: Use cache to prevent infinite loops
   }
 
   // Refresh chỉ khách hàng

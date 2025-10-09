@@ -33,7 +33,7 @@ class _SimpleProductTestScreenState extends State<SimpleProductTestScreen> {
       final provider = context.read<ProductProvider>();
 
       // Just call basic load without any alerts
-      await provider.loadProducts();
+      await provider.loadProductsPaginated(useCache: true); // 🔥 FIX: Enable cache even in debug
 
       setState(() {
         _products = provider.products;

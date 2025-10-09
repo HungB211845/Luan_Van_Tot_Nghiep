@@ -13,6 +13,7 @@ import '../services/product_service.dart';
 import '../../../shared/models/paginated_result.dart';
 import '../../../shared/services/base_service.dart';
 import '../../../shared/providers/memory_managed_provider.dart';
+import '../../../services/cache_manager.dart';
 import '../../../services/cached_product_service.dart';
 import '../../../core/config/cache_config.dart';
 
@@ -64,6 +65,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // Banned Substances
   List<BannedSubstance> _bannedSubstances = [];
 
+  // Price sync control flag to ensure one-time sync only
+  bool _hasPerformedInitialPriceSync = false;
+  
   // Shopping Cart (for POS)
   List<CartItem> _cartItems = [];
   double _cartTotal = 0.0;
@@ -84,10 +88,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // GETTERS
   // =====================================================
 
-  List<Product> get products =>
-      _filteredProducts.isEmpty && _searchQuery.isEmpty
-      ? _products
-      : _filteredProducts;
+  List<Product> get products {
+    // 🔥 UX FIX: Only show search results for meaningful queries (>= 2 chars)
+    if (_searchQuery.isNotEmpty && _searchQuery.length >= 2) {
+      return _filteredProducts;
+    }
+    // For queries < 2 chars or no query, show the main paginated list
+    return _paginatedProducts?.items ?? _products;
+  }
 
   Product? get selectedProduct => _selectedProduct;
   ProductCategory? get selectedCategory => _selectedCategory;
@@ -151,7 +159,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     int pageSize = 20,
     String? sortBy,
     bool ascending = true,
+    bool useCache = true, // 🔥 CRITICAL FIX: Default to true to prevent infinite loops
   }) async {
+    // 🔥 CRITICAL: Prevent overlapping calls
+    if (_status == ProductStatus.loading) {
+      print('⚠️ Already loading products, skipping...');
+      return;
+    }
+
     _setStatus(ProductStatus.loading);
     try {
       _currentPaginationParams = PaginationParams(
@@ -161,22 +176,22 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         ascending: ascending,
       );
 
-      _paginatedProducts = await _productService.getProductsPaginated(
-        params: _currentPaginationParams,
+      // 🎯 FIXED: Always use cache by default to prevent DB hammering
+      _paginatedProducts = await _cachedService.getProductsPaginated(
         category: category,
+        page: 1,
+        limit: pageSize,
+        sortBy: sortBy ?? 'name',
+        ascending: ascending,
+        useCache: useCache, // Use the parameter value
       );
 
       // Update legacy _products list for backward compatibility
       _products = _paginatedProducts!.items;
       _selectedCategory = category;
 
-      // Update stock and price maps
-      for (final product in _products) {
-        _stockMap[product.id] = product.availableStock ?? 0;
-
-        // Load price directly from product.currentSellingPrice (already synced by migration)
-        _currentPrices[product.id] = product.currentSellingPrice;
-      }
+      // 🔥 CRITICAL: Perform ONE-TIME price sync if products have 0 price
+      await _performOneTimePriceSyncIfNeeded();
 
       // Clear old search state
       _filteredProducts = [];
@@ -199,9 +214,15 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
     try {
       final nextParams = _currentPaginationParams.nextPage();
-      final nextPage = await _productService.getProductsPaginated(
-        params: nextParams,
+      
+      // 🎯 FIXED: Use cached service for pagination
+      final nextPage = await _cachedService.getProductsPaginated(
         category: _selectedCategory,
+        page: nextParams.page,
+        limit: nextParams.pageSize,
+        sortBy: nextParams.sortBy ?? 'name',
+        ascending: nextParams.ascending,
+        useCache: true,
       );
 
       // Merge results
@@ -211,17 +232,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       // Update legacy _products list
       _products = _paginatedProducts!.items;
 
-      // Update stock and price maps for new products
+      // 🔥 NO AUTO PRICE SYNC - use existing prices from database
       for (final product in nextPage.items) {
         _stockMap[product.id] = product.availableStock ?? 0;
-
-        // Load price directly from product.currentSellingPrice (already synced by migration)
-        // FIXED: Auto-sync from history if current price is 0
-        double finalPrice = product.currentSellingPrice;
-        if (finalPrice == 0) {
-          finalPrice = await _syncPriceFromHistory(product.id);
-        }
-        _currentPrices[product.id] = finalPrice;
+        _currentPrices[product.id] = product.currentSellingPrice;
       }
 
       _isLoadingMore = false;
@@ -243,39 +257,38 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     int pageSize = 20,
     String? sortBy,
     bool ascending = true,
+    bool useCache = true,
   }) async {
     _searchQuery = query.trim();
 
+    // 🔥 ARCHITECTURAL FIX: Clear search properly without touching _paginatedProducts
     if (_searchQuery.isEmpty) {
-      await loadProductsPaginated(
-        category: category,
-        pageSize: pageSize,
-        sortBy: sortBy,
-        ascending: ascending,
-      );
+      // Just clear the search results, NEVER touch _paginatedProducts
+      _filteredProducts = [];
+      notifyListeners();
+      return;
+    }
+
+    // 🔥 UX FIX: Don't search for queries < 2 chars, but set the query for UI state
+    if (_searchQuery.length < 2) {
+      // Clear search results but keep the query for UI state
+      _filteredProducts = [];
+      notifyListeners();
       return;
     }
 
     _setStatus(ProductStatus.loading);
     try {
-      _currentPaginationParams = PaginationParams(
-        page: 1,
-        pageSize: pageSize,
-        sortBy: sortBy,
-        ascending: ascending,
-      );
-
-      _paginatedProducts = await _productService.searchProductsPaginated(
-        query: _searchQuery,
-        params: _currentPaginationParams,
+      // 🎯 FIXED: Use cached service for search
+      final searchResults = await _cachedService.searchProducts(
+        _searchQuery,
+        useCache: useCache,
         category: category,
-        minPrice: minPrice,
-        maxPrice: maxPrice,
-        inStock: inStock,
       );
 
-      // Update filtered products for backward compatibility
-      _filteredProducts = _paginatedProducts!.items;
+      // 🚨 CRITICAL FIX: NEVER overwrite _paginatedProducts during search
+      // Only update _filteredProducts - this maintains state separation
+      _filteredProducts = searchResults;
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -299,25 +312,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     notifyListeners();
 
     try {
-      final nextParams = _currentPaginationParams.nextPage();
-      final nextPage = await _productService.searchProductsPaginated(
-        query: query,
-        params: nextParams,
-        category: category,
-        minPrice: minPrice,
-        maxPrice: maxPrice,
-        inStock: inStock,
-      );
-
-      // Merge results
-      _paginatedProducts = _paginatedProducts!.merge(nextPage);
-      _currentPaginationParams = nextParams;
-
-      // Update filtered products
-      _filteredProducts = _paginatedProducts!.items;
-
+      // 🎯 FIXED: For search results, we don't need pagination since CachedProductService
+      // returns all results at once. Just mark as complete.
       _isLoadingMore = false;
-      _clearError();
       notifyListeners();
     } catch (e) {
       _isLoadingMore = false;
@@ -338,16 +335,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       _products = await _productService.getProducts(category: category);
       _selectedCategory = category;
 
-      // 2. Nạp dữ liệu vào _stockMap và _currentPrices từ danh sách vừa lấy
-      for (final product in _products) {
-        _stockMap[product.id] = product.availableStock ?? 0;
-        
-        double finalPrice = product.currentSellingPrice;
-        if (finalPrice == 0) {
-          finalPrice = await _syncPriceFromHistory(product.id);
-        }
-        _currentPrices[product.id] = finalPrice;
-      }
+      // 2. ONE-TIME price sync when loading products
+      await _performOneTimePriceSyncIfNeeded();
 
       // 3. Xóa bộ lọc cũ (nếu có)
       _filteredProducts = [];
@@ -399,14 +388,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       _setStatus(ProductStatus.success);
       _clearError();
     } catch (e) {
-      // Graceful degradation
-      if (useCache) {
-        if (kDebugMode) {
-          print('Cache search failed, falling back to direct search: $e');
-        }
-        return searchProducts(query, useCache: false);
-      }
-      
+      // 🚨 CRITICAL FIX: Don't fallback to non-store-filtered old service!
+      // This was causing cross-store data leakage
+      print('🚨 ERROR in searchProducts: $e');
       _setError(e.toString());
       CacheMetrics.recordMiss();
     }
@@ -416,6 +400,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   void clearSearch() {
     _searchQuery = '';
     _filteredProducts = [];
+    // 🔥 CRITICAL FIX: Don't reset paginated products to avoid triggering reload
+    // Just clear search state and let UI show existing products
     notifyListeners();
   }
 
@@ -432,19 +418,35 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       return;
     }
 
+    // 🔥 UX FIX: Don't search for queries < 2 chars to match other search methods
+    if (query.trim().length < 2) {
+      _posSearchResults = [];
+      notifyListeners();
+      return;
+    }
+
     // Performance logging
     final stopwatch = Stopwatch()..start();
     
     try {
       if (useCache && CacheConfig.enableSearchCache) {
-        _posSearchResults = await _cachedService.searchProducts(
+        // 🎯 FIXED: Use cached service with proper cache invalidation
+        final results = await _cachedService.searchProducts(
           query.trim(),
           useCache: true,
         );
+        
+        // 🚨 CRITICAL: Filter out inactive products and products with 0 stock for POS
+        _posSearchResults = results.where((product) => 
+          product.isActive && 
+          product.availableStock != null && 
+          product.availableStock! > 0
+        ).toList();
+        
         if (CacheConfig.enablePerformanceLogging) {
           stopwatch.stop();
           final ms = stopwatch.elapsedMilliseconds;
-          print('🎯 Cached POS search took: ${ms}ms');
+          print('🎯 Cached POS search took: ${ms}ms, found ${_posSearchResults.length} active products');
           CacheMetrics.recordHit();
           CacheMetrics.recordOperationTime('pos_search', ms);
         }
@@ -461,16 +463,11 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       
       notifyListeners();
     } catch (e) {
-      // Graceful degradation - fallback to non-cached
-      if (useCache) {
-        if (kDebugMode) {
-          print('Cache search failed, falling back to direct search: $e');
-        }
-        return quickSearchForPOS(query, useCache: false);
-      }
-      
+      // 🚨 CRITICAL FIX: Don't fallback to non-store-filtered old service!
+      // This was causing cross-store data leakage
       _posSearchResults = [];
       _setError('Lỗi tìm kiếm: ${e.toString()}');
+      print('🚨 ERROR in quickSearchForPOS: $e');
       CacheMetrics.recordMiss();
     }
   }
@@ -493,18 +490,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
             .toList();
       }
 
-      // Update stock and price maps
-      for (final product in _products) {
-        _stockMap[product.id] = product.availableStock ?? 0;
-
-        // Load price directly from product.currentSellingPrice (already synced by migration)
-        // FIXED: Auto-sync from history if current price is 0
-        double finalPrice = product.currentSellingPrice;
-        if (finalPrice == 0) {
-          finalPrice = await _syncPriceFromHistory(product.id);
-        }
-        _currentPrices[product.id] = finalPrice;
-      }
+      // ONE-TIME price sync for products by company
+      await _performOneTimePriceSyncIfNeeded();
 
       // Clear old search state
       _filteredProducts = [];
@@ -1142,9 +1129,18 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // TRANSACTION DETAILS
   // =====================================================
 
+  // Transaction loading state (separate from product loading)
+  bool _isLoadingTransaction = false;
+  bool get isLoadingTransaction => _isLoadingTransaction;
+
   Future<void> loadTransactionDetails(String transactionId) async {
-    _setStatus(ProductStatus.loading);
+    // 🔥 CRITICAL FIX: Use separate loading state for transactions
+    _isLoadingTransaction = true;
+    notifyListeners();
+    
     try {
+      print('📋 Loading transaction details for ID: $transactionId');
+      
       // Bước A: Lấy dữ liệu thô từ Service như cũ
       _activeTransaction = await _transactionService.getTransactionById(
         transactionId,
@@ -1190,8 +1186,13 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
       // Bước C: Cập nhật state với dữ liệu đã được làm giàu
       _activeTransactionItems = enrichedItems;
-      _setStatus(ProductStatus.success);
+      _isLoadingTransaction = false;
+      
+      print('✅ Transaction details loaded successfully');
+      notifyListeners();
     } catch (e) {
+      print('❌ Error loading transaction details: $e');
+      _isLoadingTransaction = false;
       _setError(e.toString());
     }
   }
@@ -1201,7 +1202,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // =====================================================
 
   /// Load dashboard statistics (direct load only - cache disabled)
-  Future<void> loadDashboardStats({bool useCache = false}) async {
+  Future<void> loadDashboardStats({bool useCache = true}) async {
     final stopwatch = Stopwatch()..start();
     
     try {
@@ -1233,7 +1234,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         if (kDebugMode) {
           print('Cache stats failed, falling back to direct load: $e');
         }
-        return loadDashboardStats(useCache: false);
+        return loadDashboardStats(useCache: true);
       }
       
       _setError(e.toString());
@@ -1299,6 +1300,32 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   }
 
   // =====================================================
+  // CACHE MANAGEMENT
+  // =====================================================
+  
+  /// Invalidate product cache to force fresh data
+  Future<void> invalidateCache() async {
+    await _cachedService.invalidateProductCache();
+    await _cachedService.invalidateSearchCache();
+    await _cachedService.invalidateDashboardCache();
+  }
+
+  /// Force refresh dashboard stats with cache support
+  Future<void> refreshDashboardStats({bool useCache = true}) async {
+    try {
+      _dashboardStats = await _cachedService.getDashboardStats(useCache: useCache);
+      notifyListeners();
+    } catch (e) {
+      _setError('Lỗi tải thống kê: ${e.toString()}');
+    }
+  }
+
+  /// Get cache performance metrics
+  Map<String, dynamic> getCacheMetrics() {
+    return CacheManager().getStats();
+  }
+
+  // =====================================================
   // PAGINATION UTILITIES
   // =====================================================
 
@@ -1351,20 +1378,148 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     notifyListeners();
   }
 
-  // =====================================================
-  // REFRESH & RELOAD
-  // =====================================================
+  /// ONE-TIME price sync when user enters the app (no cache invalidation)
+  Future<void> _performOneTimePriceSyncIfNeeded() async {
+    // 🔥 CRITICAL: Only sync once per session to prevent loops
+    if (_hasPerformedInitialPriceSync) {
+      print('✅ Initial price sync already performed, skipping...');
+      // Still need to update maps for all products
+      for (final product in _products) {
+        _stockMap[product.id] = product.availableStock ?? 0;
+        _currentPrices[product.id] = product.currentSellingPrice;
+      }
+      return;
+    }
+    
+    try {
+      final productsWithZeroPrice = _products.where((p) => p.currentSellingPrice == 0).toList();
+      
+      if (productsWithZeroPrice.isEmpty) {
+        print('✅ All products have valid prices, no sync needed');
+        // Update stock and price maps for all products
+        for (final product in _products) {
+          _stockMap[product.id] = product.availableStock ?? 0;
+          _currentPrices[product.id] = product.currentSellingPrice;
+          print('💰 Using existing price for ${product.name}: ${product.currentSellingPrice}');
+        }
+      } else {
+        print('🔄 ONE-TIME SYNC: Found ${productsWithZeroPrice.length} products with 0 price, syncing...');
+        
+        bool hasSyncedAnyPrice = false;
+        for (final product in _products) {
+          _stockMap[product.id] = product.availableStock ?? 0;
+          
+          if (product.currentSellingPrice == 0) {
+            // Try to sync from price history WITHOUT cache invalidation
+            final syncedPrice = await _syncPriceFromHistoryWithoutInvalidation(product.id);
+            _currentPrices[product.id] = syncedPrice > 0 ? syncedPrice : 0.0;
+            if (syncedPrice > 0) {
+              hasSyncedAnyPrice = true;
+            }
+            print('🔄 Synced ${product.name}: ${_currentPrices[product.id]}');
+          } else {
+            _currentPrices[product.id] = product.currentSellingPrice;
+            print('💰 Using existing price for ${product.name}: ${product.currentSellingPrice}');
+          }
+        }
+        
+        // 🔥 CRITICAL FIX: If we synced any prices, force reload to get updated DB view
+        if (hasSyncedAnyPrice) {
+          print('🔄 Prices synced, reloading products to get updated DB view...');
+          // Force reload products to get updated prices from database view
+          _products = await _productService.getProducts(category: _selectedCategory);
+          // Update maps with fresh data
+          for (final product in _products) {
+            _stockMap[product.id] = product.availableStock ?? 0;
+            _currentPrices[product.id] = product.currentSellingPrice;
+            print('🔄 Refreshed ${product.name}: ${product.currentSellingPrice}');
+          }
+        }
+        
+        print('✅ ONE-TIME SYNC completed');
+      }
+      
+      // Mark as completed to prevent future syncs
+      _hasPerformedInitialPriceSync = true;
+    } catch (e) {
+      print('⚠️ ONE-TIME SYNC failed: $e');
+      // Fallback: just use existing prices
+      for (final product in _products) {
+        _stockMap[product.id] = product.availableStock ?? 0;
+        _currentPrices[product.id] = product.currentSellingPrice;
+      }
+      // Still mark as completed to prevent retries
+      _hasPerformedInitialPriceSync = true;
+    }
+  }
+
+  /// Sync price from history WITHOUT cache invalidation (silent sync)
+  Future<double> _syncPriceFromHistoryWithoutInvalidation(String productId) async {
+    try {
+      final history = await _productService.getPriceHistory(
+        productId,
+        limit: 1,
+      );
+      if (history.isNotEmpty) {
+        final latestPrice = (history.first['new_price'] as num).toDouble();
+        if (latestPrice > 0) {
+          // Update database current_selling_price with latest from history
+          await _productService.updateCurrentSellingPrice(
+            productId,
+            latestPrice,
+            reason: 'One-time sync on app load',
+          );
+          
+          // 🔥 CRITICAL FIX: Update selected product if it's the same
+          if (_selectedProduct?.id == productId) {
+            _selectedProduct = _selectedProduct!.copyWith(
+              currentSellingPrice: latestPrice,
+            );
+          }
+          
+          // Update product in memory list
+          final productIndex = _products.indexWhere((p) => p.id == productId);
+          if (productIndex != -1) {
+            _products[productIndex] = _products[productIndex].copyWith(
+              currentSellingPrice: latestPrice,
+            );
+          }
+          
+          print('🔄 Silent price sync: $productId = $latestPrice');
+          return latestPrice;
+        }
+      }
+      return 0.0;
+    } catch (e) {
+      print('⚠️ Silent price sync failed for $productId: $e');
+      return 0.0;
+    }
+  }
 
   Future<void> refresh() async {
-    // Use paginated method if pagination state exists, otherwise use legacy method
-    if (_paginatedProducts != null) {
-      await resetProductsPagination(category: _selectedCategory);
-    } else {
-      await loadProducts(category: _selectedCategory);
+    // 🚨 EMERGENCY FIX: Disable price sync in normal refresh
+    // Just reload data without price sync to prevent infinite loops
+    try {
+      _setStatus(ProductStatus.loading);
+      
+      // Clear cache to force fresh data load
+      await _cachedService.invalidateProductCache();
+      await _cachedService.invalidateSearchCache();
+      
+      // Use paginated method if pagination state exists, otherwise use legacy method
+      if (_paginatedProducts != null) {
+        await resetProductsPagination(category: _selectedCategory);
+      } else {
+        await loadProducts(category: _selectedCategory);
+      }
+      
+      // Load dashboard stats without price sync
+      await loadDashboardStats();
+      
+      _setStatus(ProductStatus.success);
+    } catch (e) {
+      _setError('Refresh failed: $e');
     }
-    // TEMPORARY FIX: Skip loadAlerts to avoid view errors
-    // await loadAlerts();
-    await loadDashboardStats();
   }
 
   Future<void> refreshProduct(String productId) async {
@@ -1497,8 +1652,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
-  /// Sync price from history if current selling price is 0
-  Future<double> _syncPriceFromHistory(String productId) async {
+  /// Sync price from history ONLY when user explicitly requests it (manual action)
+  Future<double> syncPriceFromHistoryOnUserAction(String productId) async {
     try {
       final history = await _productService.getPriceHistory(
         productId,
@@ -1511,15 +1666,80 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
           await _productService.updateCurrentSellingPrice(
             productId,
             latestPrice,
-            reason: 'Auto-sync from price history',
+            reason: 'User-requested sync from price history',
           );
+          
+          // Update local cache
+          _currentPrices[productId] = latestPrice;
+          
+          // Update product in memory if exists
+          final productIndex = _products.indexWhere((p) => p.id == productId);
+          if (productIndex != -1) {
+            _products[productIndex] = _products[productIndex].copyWith(
+              currentSellingPrice: latestPrice,
+            );
+          }
+          
+          // Update selected product if it's the same
+          if (_selectedProduct?.id == productId) {
+            _selectedProduct = _selectedProduct!.copyWith(
+              currentSellingPrice: latestPrice,
+            );
+          }
+          
+          // 🔥 CRITICAL: Invalidate cache ONLY for user-requested sync
+          await _cachedService.invalidateProductCache();
+          
+          print('🔄 User-requested price sync: $productId = $latestPrice');
+          notifyListeners();
           return latestPrice;
         }
       }
       return 0.0;
     } catch (e) {
-      // Silent fail - return 0 if sync fails
+      print('⚠️ User-requested price sync failed for $productId: $e');
       return 0.0;
+    }
+  }
+
+  /// Manual refresh with price sync (pull-to-refresh action)
+  Future<void> refreshWithPriceSync() async {
+    try {
+      _setStatus(ProductStatus.loading);
+      
+      // 🔥 CRITICAL: Reset sync flag to allow manual price sync
+      _hasPerformedInitialPriceSync = false;
+      
+      // Clear cache to force fresh data load
+      await _cachedService.invalidateProductCache();
+      await _cachedService.invalidateSearchCache();
+      
+      // Reload products first
+      if (_paginatedProducts != null) {
+        await resetProductsPagination(category: _selectedCategory);
+      } else {
+        await loadProducts(category: _selectedCategory);
+      }
+      
+      // Sync prices for products with 0 price (user explicit action)
+      final productsToSync = _products.where((p) => p.currentSellingPrice == 0).toList();
+      if (productsToSync.isNotEmpty) {
+        print('🔄 User refresh: Syncing ${productsToSync.length} products with 0 price');
+        
+        for (final product in productsToSync) {
+          final syncedPrice = await syncPriceFromHistoryOnUserAction(product.id);
+          if (syncedPrice > 0) {
+            print('✅ Synced ${product.name}: $syncedPrice');
+          }
+        }
+      }
+      
+      // Load dashboard stats
+      await loadDashboardStats();
+      
+      _setStatus(ProductStatus.success);
+    } catch (e) {
+      _setError('Refresh with price sync failed: $e');
     }
   }
 
@@ -1679,7 +1899,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   Future<void> refreshAllCache() async {
     await invalidateSearchCache();
     // Dashboard cache disabled - just reload directly
-    await loadDashboardStats(useCache: false);
+    await loadDashboardStats(useCache: true);
     
     if (CacheConfig.enableCacheLogging) {
       print('🔄 Search cache refreshed (dashboard direct load)');
@@ -1755,7 +1975,7 @@ class ProductListViewModel {
 
   Future<void> initialize() async {
     if (productProvider.products.isEmpty) {
-      await productProvider.loadProducts();
+      await productProvider.loadProductsPaginated(useCache: true);
     }
     await productProvider.loadAlerts();
   }

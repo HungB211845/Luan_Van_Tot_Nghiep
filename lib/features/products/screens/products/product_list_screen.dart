@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -83,26 +84,49 @@ class _ProductListScreenState extends State<ProductListScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<ProductProvider>();
       if (provider.status == ProductStatus.idle) {
-        // Use cache-enabled version for faster initial load
-        provider.loadProducts();
+        // 🎯 FIXED: Use cached paginated version for faster initial load
+        provider.loadProductsPaginated(useCache: true);
       }
     });
-    _searchController.addListener(() {
-      final query = _searchController.text;
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  // 🎯 FIXED: Debounced search handler to prevent excessive API calls
+  Timer? _searchDebounce;
+  
+  void _onSearchChanged() {
+    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      final query = _searchController.text.trim();
       final provider = context.read<ProductProvider>();
       
       if (query.isEmpty) {
-        // Clear search results and show all products
-        provider.clearSearch();
+        // 🔥 CRITICAL FIX: Only clear search UI state, don't call provider
+        // This prevents the "sort/filter reset" behavior user complained about
+        provider.clearSearch(); // Ensure provider state is cleared
+        setState(() {
+          // Update UI state to refresh empty state message
+        });
+      } else if (query.length >= 2) {
+        // 🔥 UX FIX: Only search when query has at least 2 characters
+        // This prevents "không có sản phẩm" flash when typing first character
+        provider.searchProductsPaginated(query: query, useCache: true);
+        setState(() {
+          // Update UI to show search state
+        });
       } else {
-        // Use cache-enabled search for better performance
-        provider.searchProducts(query, useCache: true);
+        // For 1-character queries, show all products (no search)
+        setState(() {
+          // Update UI to show that we're not in search mode
+        });
       }
     });
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -285,13 +309,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
             tooltip: 'Xóa',
           )
         else ...[
-          // Debug cache info in development
-          if (kDebugMode && CacheConfig.enableCacheLogging)
-            IconButton(
-              icon: const Icon(Icons.speed, color: Colors.white),
-              onPressed: _showCacheStats,
-              tooltip: 'Cache Stats',
-            ),
+          // 🔥 REMOVED: Performance button causing confusion and errors
+          // Debug cache stats removed to avoid null safety issues
           PopupMenuButton<dynamic>(
             icon: const Icon(CupertinoIcons.line_horizontal_3_decrease, color: Colors.white),
             tooltip: 'Lọc và Sắp xếp',
@@ -388,55 +407,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
               ),
             )
           else ...[
-            PopupMenuButton<dynamic>(
-              icon: const Icon(CupertinoIcons.line_horizontal_3_decrease),
-              tooltip: 'Lọc và Sắp xếp',
-              onSelected: (value) {
-                if (value is ProductSortOption) {
-                  _applySortOption(value);
-                } else if (value is StockFilterOption) {
-                  setState(() => _stockFilter = value);
-                }
-              },
-              itemBuilder: (BuildContext context) => <PopupMenuEntry<dynamic>>[
-                PopupMenuItem(
-                  enabled: false,
-                  child: Text(
-                    'SẮP XẾP THEO',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ),
-                ...ProductSortOption.values.map((option) => PopupMenuItem<ProductSortOption>(
-                  value: option,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(option.displayName),
-                      if (_sortOption == option) const Icon(Icons.check, color: Colors.green, size: 20),
-                    ],
-                  ),
-                )),
-                const PopupMenuDivider(height: 1),
-                PopupMenuItem(
-                  enabled: false,
-                  child: Text(
-                    'LỌC THEO TRẠNG THÁI',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ),
-                ...StockFilterOption.values.map((option) => PopupMenuItem<StockFilterOption>(
-                  value: option,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(option.displayName),
-                      if (_stockFilter == option) const Icon(Icons.check, color: Colors.green, size: 20),
-                    ],
-                  ),
-                )),
-              ],
-            ),
-            const SizedBox(width: 8),
+            // 🔥 REMOVED: Duplicate PopupMenuButton causing search conflicts
+            // This was identical to the AppBar PopupMenuButton and caused conflicts
+            // Keep only the AppBar version for consistency
             ElevatedButton.icon(
               onPressed: _showAddProductDialog,
               icon: const Icon(Icons.add),
@@ -479,11 +452,15 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   List<Product> _filterAndSortProducts(List<Product> products, ProductProvider provider) {
+    // 🔥 CRITICAL FIX: Use consistent search logic with POS Screen
+    final searchQuery = _searchController.text.trim();
+    final isSearching = searchQuery.isNotEmpty && searchQuery.length >= 2;
+    
     var filteredList = List<Product>.from(products);
 
     // ⚠️ CHỈ APPLY STOCK FILTER KHI KHÔNG ĐANG SEARCH
     // Khi search, products đã được filter bởi search query rồi
-    if (_stockFilter != StockFilterOption.all && provider.searchQuery.isEmpty) {
+    if (_stockFilter != StockFilterOption.all && !isSearching) {
       filteredList = filteredList.where((product) {
         final stock = provider.getProductStock(product.id);
         switch (_stockFilter) {
@@ -583,7 +560,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   void _updateCategoryFilter(ProductCategory? category) {
     setState(() => _selectedCategory = category);
     // Cache will be automatically used if available
-    context.read<ProductProvider>().loadProducts(category: category);
+    context.read<ProductProvider>().loadProductsPaginated(category: category, useCache: true);
   }
 
   Widget _buildProductList({required bool isMasterDetail}) {
@@ -593,10 +570,52 @@ class _ProductListScreenState extends State<ProductListScreen> {
           return const Center(child: LoadingWidget());
         }
         
+        // 🔥 CRITICAL FIX: ProductProvider.products already handles search vs all products
+        // It automatically returns search results when searching, all products when not
         final filteredAndSortedProducts = _filterAndSortProducts(provider.products, provider);
 
         if (filteredAndSortedProducts.isEmpty) {
-          return const Center(child: Text('Không có sản phẩm nào khớp với bộ lọc.'));
+          final isSearching = _searchController.text.trim().isNotEmpty && _searchController.text.trim().length >= 2;
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isSearching ? Icons.search_off : Icons.inventory_2_outlined,
+                  size: 80,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  isSearching 
+                      ? 'Không tìm thấy sản phẩm nào\nvới từ khóa "${_searchController.text}"'
+                      : 'Không có sản phẩm nào khớp với bộ lọc.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (isSearching) ...[
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      _searchController.clear();
+                      // Clear search will automatically trigger _onSearchChanged via listener
+                    },
+                    icon: const Icon(Icons.clear),
+                    label: const Text('Xóa tìm kiếm'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
         }
 
         return CustomScrollView(
@@ -768,268 +787,5 @@ class _ProductListScreenState extends State<ProductListScreen> {
     );
   }
 
-  /// Show enhanced cache performance statistics and run benchmarks
-  void _showCacheStats() {
-    final provider = context.read<ProductProvider>();
-    final stats = provider.getCacheStats();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.speed, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('Cache Performance Dashboard'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Current Performance Stats
-              _buildStatsSection('Current Performance', [
-                'Hit Rate: ${(stats['cache_performance']['hit_rate'] * 100).toStringAsFixed(1)}%',
-                'Total Operations: ${stats['cache_performance']['total_operations']}',
-                'Cache Hits: ${stats['cache_performance']['total_hits']}',
-                'Cache Misses: ${stats['cache_performance']['total_misses']}',
-              ]),
-              
-              const SizedBox(height: 16),
-              
-              // Search Performance
-              if (stats['cache_performance']['search_performance']['count'] > 0)
-                _buildStatsSection('Search Performance', [
-                  'Average: ${stats['cache_performance']['search_performance']['avg']}ms',
-                  'Recent: ${stats['cache_performance']['search_performance']['recent_avg']}ms',
-                  'Range: ${stats['cache_performance']['search_performance']['min']}-${stats['cache_performance']['search_performance']['max']}ms',
-                  'Samples: ${stats['cache_performance']['search_performance']['count']}',
-                ]),
-              
-              const SizedBox(height: 16),
-              
-              // Dashboard Performance  
-              if (stats['cache_performance']['dashboard_performance']['count'] > 0)
-                _buildStatsSection('Dashboard Performance', [
-                  'Average: ${stats['cache_performance']['dashboard_performance']['avg']}ms',
-                  'Recent: ${stats['cache_performance']['dashboard_performance']['recent_avg']}ms',
-                  'Samples: ${stats['cache_performance']['dashboard_performance']['count']}',
-                ]),
-              
-              const SizedBox(height: 16),
-              
-              // Cache Configuration
-              _buildStatsSection('Configuration', [
-                'Search Cache: ${stats['cache_config']['search_enabled'] ? 'ON' : 'OFF'}',
-                'Stats Cache: ${stats['cache_config']['stats_enabled'] ? 'ON' : 'OFF'}',
-                'Debug Logging: ${stats['cache_config']['logging_enabled'] ? 'ON' : 'OFF'}',
-              ]),
-              
-              const SizedBox(height: 16),
-              
-              // Memory Usage
-              _buildStatsSection('Memory Usage', [
-                'Total Items: ${stats['provider_memory']['total_items']}',
-                'Auto Cleanup: ${stats['provider_memory']['memory_managed'] ? 'Active' : 'Inactive'}',
-              ]),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _runPerformanceBenchmark();
-            },
-            child: const Text('Run Benchmark'),
-          ),
-          TextButton(
-            onPressed: () {
-              provider.refreshAllCache();
-              CacheMetrics.reset();
-              Navigator.pop(context);
-            },
-            child: const Text('Reset Cache'),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildStatsSection(String title, List<String> stats) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        ...stats.map((stat) => Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 4),
-          child: Text(stat, style: const TextStyle(fontFamily: 'monospace')),
-        )),
-      ],
-    );
-  }
-  
-  /// Run comprehensive performance benchmarks
-  Future<void> _runPerformanceBenchmark() async {
-    final provider = context.read<ProductProvider>();
-    
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        title: Text('Running Performance Benchmark...'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Testing cache performance\nThis may take a few moments'),
-          ],
-        ),
-      ),
-    );
-    
-    try {
-      // Run comprehensive benchmarks
-      final results = await PerformanceBenchmark.runBenchmarks(provider);
-      
-      // Also run workflow simulation
-      final workflowResults = await PerformanceBenchmark.simulateUserWorkflow(provider);
-      
-      // Close loading dialog
-      Navigator.pop(context);
-      
-      // Show results
-      _showBenchmarkResults(results, workflowResults);
-      
-    } catch (e) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Benchmark failed: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-  
-  /// Show detailed benchmark results
-  void _showBenchmarkResults(Map<String, dynamic> results, Map<String, dynamic> workflow) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.analytics, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Performance Benchmark Results'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Search Benchmark
-              if (results['search_benchmark'] != null)
-                _buildBenchmarkSection(
-                  '🔍 Search Performance',
-                  results['search_benchmark'] as Map<String, dynamic>,
-                ),
-              
-              // Dashboard Benchmark
-              if (results['dashboard_benchmark'] != null)
-                _buildBenchmarkSection(
-                  '📊 Dashboard Performance',
-                  results['dashboard_benchmark'] as Map<String, dynamic>,
-                ),
-              
-              // Workflow Simulation
-              _buildWorkflowSection('👤 User Workflow', workflow),
-              
-              // Overall Analysis
-              _buildAnalysisSection('📈 Analysis', results['cache_analysis'] as Map<String, dynamic>),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Show full performance report in console
-              if (kDebugMode) {
-                print(CacheMetrics.generatePerformanceReport());
-              }
-            },
-            child: const Text('View Report'),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildBenchmarkSection(String title, Map<String, dynamic> data) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text('Cached: ${data['cached_avg']}ms average'),
-        Text('Direct: ${data['direct_avg']}ms average'),
-        Text('Improvement: ${data['improvement_percent']}%', 
-             style: TextStyle(
-               color: (data['improvement_percent'] as int) > 0 ? Colors.green : Colors.red,
-               fontWeight: FontWeight.bold,
-             )),
-        Text('Tests: ${data['queries_tested'] ?? data['loads_tested']}'),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-  
-  Widget _buildWorkflowSection(String title, Map<String, dynamic> data) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text('Total Time: ${data['total_time']}ms'),
-        Text('Rating: ${data['workflow_rating']}', 
-             style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        const Text('Breakdown:', style: TextStyle(fontWeight: FontWeight.w500)),
-        ...((data['breakdown'] as Map<String, int>).entries.map((entry) =>
-            Text('  ${entry.key}: ${entry.value}ms'))),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-  
-  Widget _buildAnalysisSection(String title, Map<String, dynamic> data) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text('Hit Rate: ${(data['hit_rate'] * 100).toStringAsFixed(1)}%'),
-        Text('Effectiveness: ${data['is_effective'] ? 'YES' : 'NO'}'),
-        Text('Recommendation:', style: const TextStyle(fontWeight: FontWeight.w500)),
-        Text('  ${data['recommendation']}'),
-      ],
-    );
-  }
+  // 🔥 REMOVED: Unused performance methods since performance button was removed
 }
