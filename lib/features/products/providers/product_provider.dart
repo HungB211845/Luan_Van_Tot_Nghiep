@@ -1023,8 +1023,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         debtDueDate: debtDueDate,
       );
 
+      // 🔥 FIX: Store sold product IDs before clearing cart
+      final soldProductIds = _cartItems.map((item) => item.productId).toSet();
+
       // Clear cart after successful transaction
       clearCart();
+
+      // 🔥 FIX: Refresh stock cache after successful sale
+      await _refreshStockAfterTransaction(soldProductIds);
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -1077,8 +1083,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         surchargeAmount: surchargeAmount, // Pass surcharge amount
       );
 
+      // 🔥 FIX: Store sold product IDs before clearing cart
+      final soldProductIds = _cartItems.map((item) => item.productId).toSet();
+
       // Clear cart after successful transaction
       clearCart();
+
+      // 🔥 FIX: Refresh stock cache after successful credit sale
+      await _refreshStockAfterTransaction(soldProductIds);
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -1087,6 +1099,49 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     } catch (e) {
       _setError(e.toString());
       return null;
+    }
+  }
+
+  /// Refresh stock cache after successful transaction
+  /// This ensures Product screens show updated stock immediately
+  Future<void> _refreshStockAfterTransaction(Set<String> soldProductIds) async {
+    try {
+      print('🔄 Refreshing stock cache after transaction...');
+      
+      // 🚀 OPTIMIZED: Only refresh stock for products that were sold
+      // This is more efficient than refreshing all cached products
+      for (final productId in soldProductIds) {
+        try {
+          final updatedStock = await _productService.getAvailableStock(productId);
+          _stockMap[productId] = updatedStock;
+          
+          // Also update the stock in product objects if they exist
+          final productIndex = _products.indexWhere((p) => p.id == productId);
+          if (productIndex != -1) {
+            final productName = _products[productIndex].name;
+            _products[productIndex] = _products[productIndex].copyWith(
+              availableStock: updatedStock,
+            );
+            print('📦 Updated stock for $productName: $updatedStock');
+          }
+          
+          // Update selected product if it matches
+          if (_selectedProduct?.id == productId) {
+            _selectedProduct = _selectedProduct!.copyWith(
+              availableStock: updatedStock,
+            );
+          }
+        } catch (e) {
+          print('Warning: Failed to refresh stock for product $productId: $e');
+          // Continue with other products even if one fails
+        }
+      }
+      
+      print('✅ Stock cache refreshed for ${soldProductIds.length} sold products');
+      notifyListeners(); // Update UI with new stock values
+    } catch (e) {
+      print('⚠️ Error refreshing stock after transaction: $e');
+      // Don't throw error since transaction was successful
     }
   }
 
