@@ -511,9 +511,7 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
 
           const SizedBox(height: 24),
 
-          // Section 2: Cảnh báo Hành động
-          Text('Cảnh Báo & Hành Động', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
+          // Section 2: Cảnh báo Hành động (ExpansionTile with self-titled header)
           _buildInventoryAlerts(analytics),
 
           const SizedBox(height: 24),
@@ -570,59 +568,140 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     );
   }
 
-  /// Section 2: Widget "Cảnh báo Hành động" - 3 actionable alerts
+  /// Section 2: Widget "Cảnh báo Hành động" - 3 actionable alerts (ExpansionTile)
   Widget _buildInventoryAlerts(InventoryAnalytics analytics) {
-    return Column(
-      children: [
-        _buildAlertCard(
-          title: 'Tồn Kho Thấp',
-          count: analytics.lowStockItems,
-          icon: Icons.inventory_2_outlined,
-          color: analytics.lowStockItems > 0 ? Colors.orange : Colors.grey.shade400,
-          subtitle: analytics.lowStockItems == 0 ? 'Tất cả sản phẩm đầy đủ' : null,
-          onTap: analytics.lowStockItems > 0
-              ? () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LowStockReportScreen()),
-                  );
-                }
-              : null,
+    final totalAlerts = _getTotalAlerts(analytics);
+    final hasAlerts = totalAlerts > 0;
+
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: (hasAlerts ? Colors.orange : Colors.grey.shade400).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Stack(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: hasAlerts ? Colors.orange : Colors.grey.shade400,
+                  size: 20,
+                ),
+                if (hasAlerts)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                      child: Text(
+                        '$totalAlerts',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          title: const Text(
+            'Cảnh Báo & Hành Động',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            hasAlerts ? '$totalAlerts cảnh báo cần xử lý' : 'Không có cảnh báo',
+            style: TextStyle(
+              fontSize: 12,
+              color: hasAlerts ? Colors.orange.shade700 : Colors.green.shade700,
+              fontWeight: hasAlerts ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Column(
+                children: [
+                  _buildAlertCard(
+                    title: 'Tồn Kho Thấp',
+                    count: analytics.lowStockItems,
+                    icon: Icons.inventory_2_outlined,
+                    color: analytics.lowStockItems > 0 ? Colors.orange : Colors.grey.shade400,
+                    subtitle: analytics.lowStockItems == 0 ? 'Tất cả sản phẩm đầy đủ' : null,
+                    onTap: analytics.lowStockItems > 0
+                        ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const LowStockReportScreen()),
+                            );
+                          }
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildAlertCard(
+                    title: 'Sắp Hết Hạn',
+                    count: analytics.expiringSoonItems,
+                    icon: Icons.warning_amber_rounded,
+                    color: analytics.expiringSoonItems > 0 ? Colors.red : Colors.grey.shade400,
+                    subtitle: analytics.expiringSoonItems == 0 ? 'Không có hàng sắp hết hạn' : null,
+                    onTap: analytics.expiringSoonItems > 0
+                        ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const ExpiryReportScreen()),
+                            );
+                          }
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildAlertCard(
+                    title: 'Hàng Ế',
+                    count: analytics.slowMovingItems,
+                    icon: Icons.pause_circle_outline,
+                    color: analytics.slowMovingItems > 0 ? Colors.grey.shade700 : Colors.grey.shade400,
+                    subtitle: analytics.slowMovingItems == 0 ? 'Hàng hóa luân chuyển tốt' : null,
+                    onTap: analytics.slowMovingItems > 0
+                        ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const SlowMovingReportScreen()),
+                            );
+                          }
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        _buildAlertCard(
-          title: 'Sắp Hết Hạn',
-          count: analytics.expiringSoonItems,
-          icon: Icons.warning_amber_rounded,
-          color: analytics.expiringSoonItems > 0 ? Colors.red : Colors.grey.shade400,
-          subtitle: analytics.expiringSoonItems == 0 ? 'Không có hàng sắp hết hạn' : null,
-          onTap: analytics.expiringSoonItems > 0
-              ? () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ExpiryReportScreen()),
-                  );
-                }
-              : null,
-        ),
-        const SizedBox(height: 8),
-        _buildAlertCard(
-          title: 'Hàng Ế',
-          count: analytics.slowMovingItems,
-          icon: Icons.pause_circle_outline,
-          color: analytics.slowMovingItems > 0 ? Colors.grey.shade700 : Colors.grey.shade400,
-          subtitle: analytics.slowMovingItems == 0 ? 'Hàng hóa luân chuyển tốt' : null,
-          onTap: analytics.slowMovingItems > 0
-              ? () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SlowMovingReportScreen()),
-                  );
-                }
-              : null,
-        ),
-      ],
+      ),
     );
+  }
+
+  /// Helper to calculate total alerts count
+  int _getTotalAlerts(InventoryAnalytics analytics) {
+    return analytics.lowStockItems +
+           analytics.expiringSoonItems +
+           analytics.slowMovingItems;
   }
 
   Widget _buildAlertCard({
