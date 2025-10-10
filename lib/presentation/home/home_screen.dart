@@ -267,7 +267,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildRevenueChartWidget() {
     return Consumer<ReportProvider>(
       builder: (context, reportProvider, child) {
-        if (reportProvider.isLoading) {
+        // 🔥 FIX: Show skeleton while loading OR if no data loaded yet
+        if (reportProvider.isLoading || reportProvider.revenueTrend.isEmpty) {
           return Container(
             height: 300,
             decoration: BoxDecoration(
