@@ -9,8 +9,12 @@ class KeyMetricsWidget extends StatelessWidget {
   final double averageCostPrice;
   final double grossProfitPercentage;
   final bool isEditMode;
+  final bool isMetricsLoading; // 🚀 NEW: Loading state for metrics
   final TextEditingController? priceController;
   final VoidCallback? onPriceTap;
+  final VoidCallback? onEnterEditMode;
+  final VoidCallback? onExitEditMode;
+  final VoidCallback? onSavePrice;
 
   const KeyMetricsWidget({
     Key? key,
@@ -19,8 +23,12 @@ class KeyMetricsWidget extends StatelessWidget {
     required this.averageCostPrice,
     required this.grossProfitPercentage,
     this.isEditMode = false,
+    this.isMetricsLoading = false, // 🚀 NEW: Default to not loading
     this.priceController,
     this.onPriceTap,
+    this.onEnterEditMode,
+    this.onExitEditMode,
+    this.onSavePrice,
   }) : super(key: key);
 
   @override
@@ -66,22 +74,24 @@ class KeyMetricsWidget extends StatelessWidget {
                     Expanded(
                       child: _buildMetricCard(
                         'Giá Vốn TB',
-                        AppFormatter.formatCompactCurrency(averageCostPrice),
-                        '',
+                        isMetricsLoading ? '...' : AppFormatter.formatCompactCurrency(averageCostPrice),
+                        isMetricsLoading ? '' : '',
                         Icons.receipt,
                         Colors.grey[300]!, // Neutral background
                         Colors.grey[800]!, // Dark text
+                        isLoading: isMetricsLoading,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildMetricCard(
                         'Lợi Nhuận Gộp',
-                        '${grossProfitPercentage.toStringAsFixed(1)}',
-                        '%',
+                        isMetricsLoading ? '...' : '${grossProfitPercentage.toStringAsFixed(1)}',
+                        isMetricsLoading ? '' : '%',
                         Icons.trending_up,
                         _getProfitColor(grossProfitPercentage).withOpacity(0.1), // Colored background based on value
                         _getProfitColor(grossProfitPercentage), // Colored text based on value
+                        isLoading: isMetricsLoading,
                       ),
                     ),
                   ],
@@ -100,8 +110,9 @@ class KeyMetricsWidget extends StatelessWidget {
     String unit,
     IconData icon,
     Color backgroundColor,
-    Color textColor,
-  ) {
+    Color textColor, {
+    bool isLoading = false, // 🚀 ADD: Named parameter for loading state
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -131,33 +142,56 @@ class KeyMetricsWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  value,
+          if (isLoading)
+            Row(
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '...',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (unit.isNotEmpty) ...[
-                const SizedBox(width: 4),
-                Text(
-                  unit,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+                    color: textColor.withOpacity(0.7),
                   ),
                 ),
               ],
-            ],
-          ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (unit.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    unit,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
         ],
       ),
     );

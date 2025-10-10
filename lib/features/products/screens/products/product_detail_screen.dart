@@ -25,7 +25,12 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
-  bool _isLoading = true;
+  // 🚀 PROGRESSIVE LOADING: Separate loading states for different sections
+  bool _isInitialLoading = false; // Only for essential data
+  bool _isMetricsLoading = true;  // For cost price, profit percentage
+  bool _isBatchesLoading = true;  // For batches data
+  bool _isPriceHistoryLoading = true; // For price history
+  
   bool _isEditMode = false;
   double _totalStock = 0;
   double _averageCostPrice = 0;
@@ -39,8 +44,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   void initState() {
     super.initState();
+    // 🚀 INSTANT DISPLAY: Show UI immediately with available data
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDashboardData();
+      _loadProgressively();
     });
   }
 
@@ -50,43 +56,107 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _loadDashboardData() async {
+  /// 🚀 PROGRESSIVE LOADING: Load different sections with different priorities
+  Future<void> _loadProgressively() async {
     final provider = context.read<ProductProvider>();
     final product = provider.selectedProduct;
     if (product == null) return;
 
-    setState(() => _isLoading = true);
+    // 🎯 PHASE 1: Load basic stock data immediately (fastest)
+    _loadBasicData();
+
+    // 🎯 PHASE 2: Load expensive metrics in parallel (background)
+    _loadMetricsInBackground();
+
+    // 🎯 PHASE 3: Load batches data (can be lazy loaded)
+    _loadBatchesInBackground();
+
+    // 🎯 PHASE 4: Load price history (least priority, can be on-demand)
+    _loadPriceHistoryInBackground();
+  }
+
+  /// Load immediately available data (no API calls)
+  void _loadBasicData() {
+    final provider = context.read<ProductProvider>();
+    final product = provider.selectedProduct;
+    if (product == null) return;
+
+    // Get stock from cache (already loaded in ProductProvider)
+    _totalStock = provider.getProductStock(product.id).toDouble();
+    
+    // UI can display immediately with basic product info
+    if (mounted) setState(() {});
+  }
+
+  /// Load expensive metrics in background
+  Future<void> _loadMetricsInBackground() async {
+    final provider = context.read<ProductProvider>();
+    final product = provider.selectedProduct;
+    if (product == null) return;
+
+    try {
+      // 🚀 Parallel loading of metrics only
+      final results = await Future.wait([
+        provider.calculateAverageCostPrice(product.id),
+        provider.calculateGrossProfitPercentage(product.id),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _averageCostPrice = results[0] as double;
+          _grossProfitPercentage = results[1] as double;
+          _isMetricsLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isMetricsLoading = false);
+      }
+    }
+  }
+
+  /// Load batches data in background
+  Future<void> _loadBatchesInBackground() async {
+    final provider = context.read<ProductProvider>();
+    final product = provider.selectedProduct;
+    if (product == null) return;
 
     try {
       await provider.loadProductBatches(product.id);
-
-      _totalStock = provider.getProductStock(product.id).toDouble();
-
-      // Load dashboard metrics
-      _averageCostPrice = await provider.calculateAverageCostPrice(product.id);
-      _grossProfitPercentage = await provider.calculateGrossProfitPercentage(product.id);
-
-      // Load price history from service
-      _priceHistory = await provider.getPriceHistory(product.id);
-
-      // 🔄 DISABLED: Auto price sync to prevent infinite loops
-      // Use manual sync instead: provider.syncProductPriceFromHistory(product.id)
-      // await _syncPriceFromHistoryIfNeeded(provider, product);
-
+      if (mounted) {
+        setState(() {
+          _totalStock = provider.getProductStock(product.id).toDouble();
+          _isBatchesLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi tải dữ liệu dashboard: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isBatchesLoading = false);
       }
     }
+  }
+
+  /// Load price history in background (lowest priority)
+  Future<void> _loadPriceHistoryInBackground() async {
+    final provider = context.read<ProductProvider>();
+    final product = provider.selectedProduct;
+    if (product == null) return;
+
+    try {
+      _priceHistory = await provider.getPriceHistory(product.id);
+      if (mounted) {
+        setState(() => _isPriceHistoryLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isPriceHistoryLoading = false);
+      }
+    }
+  }
+
+  /// Legacy method for full reload (used in refresh)
+  Future<void> _loadDashboardData() async {
+    await _loadProgressively();
   }
 
   Future<void> _syncPriceFromHistoryIfNeeded(ProductProvider provider, Product product) async {
@@ -317,7 +387,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ),
         children: [
-          if (_priceHistory.isEmpty)
+          if (_isPriceHistoryLoading) // 🚀 PROGRESSIVE LOADING: Show loading state
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 8),
+                    Text(
+                      'Đang tải lịch sử giá...',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_priceHistory.isEmpty)
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
@@ -555,12 +641,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           : _buildMobileNotFound();
     }
 
-    if (_isLoading) {
-      return useDesktopLayout 
-          ? _buildDesktopLoading(product) 
-          : _buildMobileLoading(product);
-    }
-
+    // 🚀 PROGRESSIVE LOADING: Always show content immediately
     return useDesktopLayout 
         ? _buildDesktopLayout(product) 
         : _buildMobileLayout(product);
@@ -688,8 +769,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           averageCostPrice: _averageCostPrice,
                           grossProfitPercentage: _grossProfitPercentage,
                           isEditMode: _isEditMode,
+                          isMetricsLoading: _isMetricsLoading, // 🚀 ADD: Loading state
                           priceController: _priceController,
                           onPriceTap: _enterEditMode,
+                          onEnterEditMode: _enterEditMode,
+                          onExitEditMode: _exitEditMode,
+                          onSavePrice: _savePrice,
                         ),
                         
                         const SizedBox(height: 24),
@@ -814,8 +899,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           averageCostPrice: _averageCostPrice,
           grossProfitPercentage: _grossProfitPercentage,
           isEditMode: _isEditMode,
+          isMetricsLoading: _isMetricsLoading, // 🚀 ADD: Loading state
           priceController: _priceController,
           onPriceTap: _enterEditMode,
+          onEnterEditMode: _enterEditMode,
+          onExitEditMode: _exitEditMode,
+          onSavePrice: _savePrice,
         ),
         const SizedBox(height: 16),
         QuickActionsWidget(
