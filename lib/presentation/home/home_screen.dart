@@ -11,7 +11,8 @@ import '../../features/pos/providers/transaction_provider.dart';
 import '../../shared/utils/formatter.dart';
 import '../../shared/utils/datetime_helpers.dart';
 import 'providers/quick_access_provider.dart';
-import 'providers/dashboard_provider.dart';
+import '../../features/reports/providers/report_provider.dart';
+import '../../features/reports/models/daily_revenue.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,13 +26,16 @@ class _HomeScreenState extends State<HomeScreen> {
   PageController? _quickAccessPageController;
   int _currentQuickAccessPage = 0;
 
+  // Local state for revenue chart day selection
+  int? _selectedDayIndex;
+
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize PageController for carousel
     _quickAccessPageController = PageController();
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final productProvider = context.read<ProductProvider>();
       productProvider.loadDashboardStats();
@@ -39,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<DebtProvider>().loadAllDebts();
       context.read<TransactionProvider>().loadTransactions(limit: 5);
       context.read<QuickAccessProvider>().loadConfiguration();
-      context.read<DashboardProvider>().fetchRevenueData();
+      context.read<ReportProvider>().loadDashboardData();
     });
   }
 
@@ -56,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
       productProvider.loadAlerts(),
       context.read<DebtProvider>().loadAllDebts(),
       context.read<TransactionProvider>().loadTransactions(limit: 5),
-      context.read<DashboardProvider>().fetchRevenueData(),
+      context.read<ReportProvider>().loadDashboardData(),
     ]);
   }
 
@@ -208,31 +212,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 👋 Dynamic Greeting Widget
   Widget _buildGreetingWidget() {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, child) {
-        final fullName = auth.currentUser?.fullName ?? '';
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${getGreetingMessage()},',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w400,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            Text(
-              fullName,
-              style: const TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1D1D1F),
-              ),
-            ),
-          ],
-        );
-      },
+    return Text(
+      getGreetingMessage(),
+      style: const TextStyle(
+        fontSize: 34,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF1D1D1F),
+      ),
     );
   }
 
@@ -280,9 +266,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 📊 Interactive Revenue Chart Widget
   Widget _buildRevenueChartWidget() {
-    return Consumer<DashboardProvider>(
-      builder: (context, dashboard, child) {
-        if (dashboard.isLoading) {
+    return Consumer<ReportProvider>(
+      builder: (context, reportProvider, child) {
+        if (reportProvider.isLoading) {
           return Container(
             height: 300,
             decoration: BoxDecoration(
@@ -293,240 +279,241 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        final weeklyData = dashboard.weeklyData;
+        // Map RevenueTrendPoint to DailyRevenue format for chart compatibility
+        final revenueTrend = reportProvider.revenueTrend;
+        final weeklyData = revenueTrend.map((point) {
+          return DailyRevenue(
+            date: point.reportDate,
+            revenue: point.currentPeriodRevenue,
+            transactionCount: 0, // Transaction count not available from RPC
+          );
+        }).toList();
+
         final maxRevenue = weeklyData.isEmpty
             ? 100000.0
             : weeklyData.map((d) => d.revenue).reduce((a, b) => a > b ? a : b) *
                   1.2;
 
-        return GestureDetector(
-          // Swipe to navigate weeks
-          onHorizontalDragEnd: (details) {
-            if (details.primaryVelocity! > 0) {
-              // Swipe right -> previous week
-              dashboard.showPreviousWeek();
-            } else if (details.primaryVelocity! < 0) {
-              // Swipe left -> next week
-              dashboard.showNextWeek();
-            }
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header: Tap to view Reports
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(
-                      context,
-                      rootNavigator: true,
-                    ).pushNamed(RouteNames.reports);
-                  },
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Doanh thu 7 ngày',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      Icon(
-                        CupertinoIcons.chevron_right,
-                        color: Colors.grey.shade400,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+        final totalRevenue = weeklyData.fold<double>(
+          0.0,
+          (sum, day) => sum + day.revenue,
+        );
 
-                // Interactive Bar Chart
-                SizedBox(
-                  height: 180,
-                  child: BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: maxRevenue,
-                      barTouchData: BarTouchData(
-                        enabled: true,
-                        touchCallback: (event, response) {
-                          if (event.isInterestedForInteractions &&
-                              response != null &&
-                              response.spot != null) {
-                            dashboard.selectDay(
-                              response.spot!.touchedBarGroupIndex,
-                            );
-                          }
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header: Tap to view Reports
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).pushNamed(RouteNames.reports);
+                },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Doanh thu 7 ngày',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Icon(
+                      CupertinoIcons.chevron_right,
+                      color: Colors.grey.shade400,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Interactive Bar Chart
+              SizedBox(
+                height: 180,
+                child: BarChart(
+                  BarChartData(
+                    alignment: BarChartAlignment.spaceAround,
+                    maxY: maxRevenue,
+                    barTouchData: BarTouchData(
+                      enabled: true,
+                      touchCallback: (event, response) {
+                        if (event.isInterestedForInteractions &&
+                            response != null &&
+                            response.spot != null) {
+                          setState(() {
+                            _selectedDayIndex =
+                                response.spot!.touchedBarGroupIndex;
+                          });
+                        }
+                      },
+                      touchTooltipData: BarTouchTooltipData(
+                        getTooltipColor: (group) => Colors.black87,
+                        tooltipBorder: const BorderSide(
+                          color: Colors.transparent,
+                        ),
+                        tooltipPadding: const EdgeInsets.all(8),
+                        tooltipMargin: 8,
+                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                          if (groupIndex >= weeklyData.length) return null;
+                          final data = weeklyData[groupIndex];
+                          return BarTooltipItem(
+                            '${data.fullWeekdayName}\n${AppFormatter.formatCurrency(data.revenue)}',
+                            const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          );
                         },
-                        touchTooltipData: BarTouchTooltipData(
-                          getTooltipColor: (group) => Colors.black87,
-                          tooltipBorder: const BorderSide(
-                            color: Colors.transparent,
-                          ),
-                          tooltipPadding: const EdgeInsets.all(8),
-                          tooltipMargin: 8,
-                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                            if (groupIndex >= weeklyData.length) return null;
-                            final data = weeklyData[groupIndex];
-                            return BarTooltipItem(
-                              '${data.fullWeekdayName}\n${AppFormatter.formatCurrency(data.revenue)}',
-                              const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    titlesData: FlTitlesData(
+                      show: true,
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            if (index >= weeklyData.length) {
+                              return const SizedBox();
+                            }
+                            return Text(
+                              weeklyData[index].weekdayLabel,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
                                 fontSize: 12,
+                                fontWeight: _selectedDayIndex == index
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             );
                           },
                         ),
                       ),
-                      titlesData: FlTitlesData(
-                        show: true,
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              final index = value.toInt();
-                              if (index >= weeklyData.length)
-                                return const SizedBox();
-                              return Text(
-                                weeklyData[index].weekdayLabel,
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      topTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                    ),
+                    gridData: FlGridData(show: false),
+                    borderData: FlBorderData(show: false),
+                    barGroups: weeklyData
+                        .asMap()
+                        .entries
+                        .map(
+                          (entry) => _buildBarGroup(
+                            entry.key,
+                            entry.value.revenue,
+                            isSelected: _selectedDayIndex == entry.key,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Tooltip: Tap to view transaction details
+              if (_selectedDayIndex != null &&
+                  _selectedDayIndex! < weeklyData.length)
+                GestureDetector(
+                  onTap: () {
+                    // Navigate to transaction list filtered by date
+                    Navigator.of(context, rootNavigator: true).pushNamed(
+                      RouteNames.transactionList,
+                      arguments: weeklyData[_selectedDayIndex!].date,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                weeklyData[_selectedDayIndex!].fullWeekdayName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Text(
+                                AppFormatter.formatCurrency(weeklyData[_selectedDayIndex!].revenue),
                                 style: TextStyle(
                                   color: Colors.grey.shade600,
                                   fontSize: 12,
-                                  fontWeight:
-                                      dashboard.selectedDayIndex == index
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
                                 ),
-                              );
-                            },
+                              ),
+                            ],
                           ),
                         ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
+                        const Icon(
+                          CupertinoIcons.chevron_right,
+                          color: Colors.green,
+                          size: 20,
                         ),
-                        topTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        rightTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                      ),
-                      gridData: FlGridData(show: false),
-                      borderData: FlBorderData(show: false),
-                      barGroups: weeklyData
-                          .asMap()
-                          .entries
-                          .map(
-                            (entry) => _buildBarGroup(
-                              entry.key,
-                              entry.value.revenue,
-                              isSelected:
-                                  dashboard.selectedDayIndex == entry.key,
-                            ),
-                          )
-                          .toList(),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
 
-                // Tooltip: Tap to view transaction details
-                if (dashboard.selectedDayIndex != null &&
-                    dashboard.selectedDayData != null)
-                  GestureDetector(
-                    onTap: () {
-                      // Navigate to transaction list filtered by date
-                      Navigator.of(context, rootNavigator: true).pushNamed(
-                        RouteNames.transactionList,
-                        arguments: dashboard.selectedDayData!.date,
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  dashboard.selectedDayData!.fullWeekdayName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  '${dashboard.selectedDayData!.transactionCount} giao dịch',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            CupertinoIcons.chevron_right,
-                            color: Colors.green,
-                            size: 20,
-                          ),
-                        ],
+              if (_selectedDayIndex != null) const SizedBox(height: 16),
+
+              // Summary: Tap to view Reports
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).pushNamed(RouteNames.reports);
+                },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Tổng tuần này',
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                    Text(
+                      AppFormatter.formatCurrency(totalRevenue),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
                     ),
-                  ),
-
-                if (dashboard.selectedDayIndex != null)
-                  const SizedBox(height: 16),
-
-                // Summary: Tap to view Reports
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(
-                      context,
-                      rootNavigator: true,
-                    ).pushNamed(RouteNames.reports);
-                  },
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Tổng tuần này',
-                        style: TextStyle(color: Colors.grey, fontSize: 14),
-                      ),
-                      Text(
-                        AppFormatter.formatCurrency(dashboard.weekTotalRevenue),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },

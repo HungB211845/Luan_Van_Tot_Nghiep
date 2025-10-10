@@ -13,6 +13,7 @@ import '../../features/auth/providers/session_provider.dart';
 import '../../features/debt/providers/debt_provider.dart';
 import '../../presentation/home/providers/quick_access_provider.dart';
 import '../../presentation/home/providers/dashboard_provider.dart';
+import '../../features/reports/providers/report_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../../services/cache_manager.dart';
 
@@ -39,6 +40,7 @@ class AppProviders {
     ChangeNotifierProvider(create: (_) => DebtProvider()),
     ChangeNotifierProvider(create: (_) => QuickAccessProvider()),
     ChangeNotifierProvider(create: (_) => DashboardProvider()),
+    ChangeNotifierProvider(create: (_) => ReportProvider()),
     ChangeNotifierProvider(create: (_) => NavigationProvider()),
     // Dễ dàng thêm providers mới ở đây
   ];

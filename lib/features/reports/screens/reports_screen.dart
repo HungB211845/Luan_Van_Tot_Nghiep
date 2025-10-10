@@ -1,10 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:provider/provider.dart';
-import 'package:agricultural_pos/features/products/screens/reports/expiry_report_screen.dart';
-import '../../../presentation/home/services/report_service.dart';
-import '../../../presentation/home/models/daily_revenue.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+
+import '../providers/report_provider.dart';
 import '../../../shared/utils/formatter.dart';
 import '../../../shared/widgets/loading_widget.dart';
+import 'package:agricultural_pos/features/products/screens/reports/expiry_report_screen.dart';
+
+// Custom iOS-style spring physics for PageView
+class IOSSpringScrollPhysics extends ScrollPhysics {
+  const IOSSpringScrollPhysics({super.parent});
+
+  @override
+  IOSSpringScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return IOSSpringScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  SpringDescription get spring => const SpringDescription(
+    mass: 0.5,
+    stiffness: 100.0,
+    damping: 15.0, // iOS-like damping
+  );
+}
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({Key? key}) : super(key: key);
@@ -15,609 +35,465 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateMixin {
   late TabController _tabController;
-  final ReportService _reportService = ReportService();
-
-  bool _isLoading = false;
-  Map<String, dynamic>? _monthlyData;
-  Map<String, dynamic>? _quarterlyData;
-  List<Map<String, dynamic>>? _topProducts;
-  Map<String, dynamic>? _inventoryData;
-  List<DailyRevenue>? _weeklyRevenue;
-
-  DateTime _selectedMonth = DateTime.now();
-  int _selectedQuarter = ((DateTime.now().month - 1) ~/ 3) + 1;
-  int _selectedYear = DateTime.now().year;
+  late PageController _pageController;
+  bool _isPageChanging = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _loadInitialData();
+    _tabController = TabController(length: 3, vsync: this);
+    _pageController = PageController(initialPage: 1); // Start at middle page
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ReportProvider>().loadDashboardData();
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _pageController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadInitialData() async {
-    setState(() => _isLoading = true);
-    try {
-      await Future.wait([
-        _loadMonthlyData(),
-        _loadQuarterlyData(),
-        _loadTopProducts(),
-        _loadInventoryData(),
-        _loadWeeklyRevenue(),
-      ]);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi tải dữ liệu: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _loadMonthlyData() async {
-    final data = await _reportService.getMonthlyRevenue(_selectedYear, _selectedMonth.month);
-    if (mounted) {
-      setState(() => _monthlyData = data);
-    }
-  }
-
-  Future<void> _loadQuarterlyData() async {
-    final data = await _reportService.getQuarterlyRevenue(_selectedYear, _selectedQuarter);
-    if (mounted) {
-      setState(() => _quarterlyData = data);
-    }
-  }
-
-  Future<void> _loadTopProducts() async {
-    final startDate = DateTime.now().subtract(const Duration(days: 30));
-    final data = await _reportService.getTopSellingProducts(
-      startDate: startDate,
-      endDate: DateTime.now(),
-      limit: 10,
-    );
-    if (mounted) {
-      setState(() => _topProducts = data);
-    }
-  }
-
-  Future<void> _loadInventoryData() async {
-    final data = await _reportService.getInventoryAnalytics();
-    if (mounted) {
-      setState(() => _inventoryData = data);
-    }
-  }
-
-  Future<void> _loadWeeklyRevenue() async {
-    final startDate = DateTime.now().subtract(const Duration(days: 6));
-    final data = await _reportService.getRevenueForWeek(startDate);
-    if (mounted) {
-      setState(() => _weeklyRevenue = data);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Báo Cáo Kinh Doanh'),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
-          tabs: const [
-            Tab(icon: Icon(Icons.trending_up), text: 'Doanh Thu'),
-            Tab(icon: Icon(Icons.inventory), text: 'Tồn Kho'),
-            Tab(icon: Icon(Icons.star), text: 'Sản Phẩm'),
-            Tab(icon: Icon(Icons.report), text: 'Khác'),
+    return Consumer<ReportProvider>(
+      builder: (context, provider, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Báo Cáo Kinh Doanh'),
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            bottom: TabBar(
+              controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: Colors.white,
+              tabs: const [
+                Tab(icon: Icon(Icons.trending_up), text: 'Doanh Thu'),
+                Tab(icon: Icon(Icons.inventory), text: 'Tồn Kho'),
+                Tab(icon: Icon(Icons.star), text: 'Sản Phẩm'),
+              ],
+            ),
+          ),
+          body: provider.isLoading
+              ? const Center(child: LoadingWidget())
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildRevenueTab(provider),
+                    _buildInventoryTab(provider),
+                    _buildProductsTab(provider),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // TAB 1: REVENUE DASHBOARD (NEW REFACRED DESIGN)
+  // ===========================================================================
+  Widget _buildRevenueTab(ReportProvider provider) {
+    return RefreshIndicator(
+      onRefresh: () => provider.loadDashboardData(),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildTrendAnalysisCard(provider),
+          const SizedBox(height: 24),
+          _buildRankings(provider),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrendAnalysisCard(ReportProvider provider) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildMetrics(provider),
+            const SizedBox(height: 24),
+            _buildInteractiveChart(provider),
+            const SizedBox(height: 16),
+            _buildTimeRangeSelector(provider),
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: LoadingWidget())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildRevenueTab(),
-                _buildInventoryTab(),
-                _buildProductsTab(),
-                _buildOtherReportsTab(),
-              ],
-            ),
     );
   }
 
-  Widget _buildRevenueTab() {
-    return RefreshIndicator(
-      onRefresh: () async {
-        await _loadMonthlyData();
-        await _loadQuarterlyData();
-        await _loadWeeklyRevenue();
-      },
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildWeeklyRevenueCard(),
-          const SizedBox(height: 16),
-          _buildMonthlyRevenueCard(),
-          const SizedBox(height: 16),
-          _buildQuarterlyRevenueCard(),
-        ],
-      ),
-    );
-  }
+  Widget _buildMetrics(ReportProvider provider) {
+    final summary = provider.revenueSummary;
+    final percentageChange = summary?['revenue_change_percentage'] as num?;
 
-  Widget _buildInventoryTab() {
-    return RefreshIndicator(
-      onRefresh: _loadInventoryData,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildInventoryOverviewCard(),
-          const SizedBox(height: 16),
-          _buildInventoryAlertsCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductsTab() {
-    return RefreshIndicator(
-      onRefresh: _loadTopProducts,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildTopProductsCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOtherReportsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildReportLinkCard(
-          'Báo Cáo Hàng Sắp Hết Hạn',
-          'Kiểm tra sản phẩm cần xử lý gấp',
-          Icons.warning_amber,
-          Colors.orange,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ExpiryReportScreen()),
-          ),
+        const Text('TỔNG DOANH THU', style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Text(
+                AppFormatter.formatCompactCurrency(summary?['current_total_revenue'] ?? 0),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (percentageChange != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0, bottom: 2.0),
+                child: Row(
+                  children: [
+                    Icon(
+                      percentageChange >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                      color: percentageChange >= 0 ? Colors.green : Colors.red,
+                      size: 16,
+                    ),
+                    Text(
+                      '${percentageChange.abs().toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color: percentageChange >= 0 ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ),
-        const SizedBox(height: 12),
-        _buildReportLinkCard(
-          'Xuất Dữ Liệu Thuế',
-          'Chuẩn bị báo cáo thuế cho cơ quan thuế',
-          Icons.receipt_long,
-          Colors.blue,
-          () => _showTaxExportDialog(),
-        ),
-        const SizedBox(height: 12),
-        _buildReportLinkCard(
-          'Phân Tích Xu Hướng',
-          'Biểu đồ xu hướng bán hàng theo thời gian',
-          Icons.trending_up,
-          Colors.green,
-          () => _showComingSoonDialog('Phân tích xu hướng'),
+        const SizedBox(height: 8),
+        Text(
+          '${summary?['current_total_transactions'] ?? 0} giao dịch',
+          style: const TextStyle(fontSize: 14, color: Colors.grey),
         ),
       ],
     );
   }
 
-  Widget _buildWeeklyRevenueCard() {
-    if (_weeklyRevenue == null) return const SizedBox.shrink();
-
-    final totalRevenue = _weeklyRevenue!.fold<double>(0, (sum, day) => sum + day.revenue);
-    final totalTransactions = _weeklyRevenue!.fold<int>(0, (sum, day) => sum + day.transactionCount);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.date_range, color: Colors.green[600]),
-                const SizedBox(width: 8),
-                Text(
-                  '7 Ngày Qua',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricItem(
-                    'Tổng Doanh Thu',
-                    AppFormatter.formatCurrency(totalRevenue),
-                    Icons.monetization_on,
-                    Colors.green[600]!,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildMetricItem(
-                    'Giao Dịch',
-                    '$totalTransactions',
-                    Icons.receipt,
-                    Colors.blue[600]!,
-                  ),
-                ),
-              ],
-            ),
-          ],
+  Widget _buildTimeRangeSelector(ReportProvider provider) {
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<DateRangePreset>(
+        segments: const [
+          ButtonSegment(value: DateRangePreset.thisWeek, label: Text('Tuần')),
+          ButtonSegment(value: DateRangePreset.thisMonth, label: Text('Tháng')),
+          ButtonSegment(value: DateRangePreset.thisYear, label: Text('Năm')),
+        ],
+        selected: {provider.selectedPreset},
+        onSelectionChanged: (newSelection) {
+          provider.setDateRange(newSelection.first);
+        },
+        style: SegmentedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          selectedBackgroundColor: Colors.lightGreen,
+          selectedForegroundColor: Colors.white,
         ),
       ),
     );
   }
 
-  Widget _buildMonthlyRevenueCard() {
-    if (_monthlyData == null) return const SizedBox.shrink();
+  Widget _buildInteractiveChart(ReportProvider provider) {
+    // Check if actually viewing PAST period (not current/future)
+    final isViewingPast = _isActuallyViewingPast(provider);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.calendar_month, color: Colors.green[600]),
-                const SizedBox(width: 8),
-                Text(
-                  'Tháng ${_monthlyData!['month']}/${_monthlyData!['year']}',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.date_range),
-                  onPressed: _showMonthPicker,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Doanh Thu',
-                        AppFormatter.formatCurrency(_monthlyData!['total_revenue'] ?? 0),
-                        Icons.monetization_on,
-                        Colors.green[600]!,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Thuế (1.5%)',
-                        AppFormatter.formatCurrency(_monthlyData!['tax_amount'] ?? 0),
-                        Icons.receipt_long,
-                        Colors.orange[600]!,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Thu Tiền Mặt',
-                        AppFormatter.formatCurrency(_monthlyData!['cash_revenue'] ?? 0),
-                        Icons.payments,
-                        Colors.blue[600]!,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Thu Nợ',
-                        AppFormatter.formatCurrency(_monthlyData!['debt_revenue'] ?? 0),
-                        Icons.credit_card,
-                        Colors.red[600]!,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuarterlyRevenueCard() {
-    if (_quarterlyData == null) return const SizedBox.shrink();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.calendar_view_month, color: Colors.green[600]),
-                const SizedBox(width: 8),
-                Text(
-                  'Quý ${_quarterlyData!['quarter']}/${_quarterlyData!['year']}',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.date_range),
-                  onPressed: _showQuarterPicker,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricItem(
-                    'Doanh Thu',
-                    AppFormatter.formatCurrency(_quarterlyData!['total_revenue'] ?? 0),
-                    Icons.monetization_on,
-                    Colors.green[600]!,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildMetricItem(
-                    'Lợi Nhuận Sau Thuế',
-                    AppFormatter.formatCurrency(_quarterlyData!['net_revenue'] ?? 0),
-                    Icons.trending_up,
-                    Colors.purple[600]!,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInventoryOverviewCard() {
-    if (_inventoryData == null) return const SizedBox.shrink();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.inventory, color: Colors.green[600]),
-                const SizedBox(width: 8),
-                Text(
-                  'Tổng Quan Tồn Kho',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Giá Trị Tồn Kho',
-                        AppFormatter.formatCurrency(_inventoryData!['total_inventory_value'] ?? 0),
-                        Icons.monetization_on,
-                        Colors.green[600]!,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Giá Trị Bán',
-                        AppFormatter.formatCurrency(_inventoryData!['total_selling_value'] ?? 0),
-                        Icons.sell,
-                        Colors.blue[600]!,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Lợi Nhuận Dự Kiến',
-                        AppFormatter.formatCurrency(_inventoryData!['potential_profit'] ?? 0),
-                        Icons.trending_up,
-                        Colors.purple[600]!,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricItem(
-                        'Tỷ Suất LN',
-                        '${(_inventoryData!['profit_margin'] ?? 0).toStringAsFixed(1)}%',
-                        Icons.percent,
-                        Colors.orange[600]!,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInventoryAlertsCard() {
-    if (_inventoryData == null) return const SizedBox.shrink();
-
-    final lowStock = _inventoryData!['low_stock_items'] ?? 0;
-    final expiringSoon = _inventoryData!['expiring_soon_items'] ?? 0;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.warning, color: Colors.orange[600]),
-                const SizedBox(width: 8),
-                Text(
-                  'Cảnh Báo Tồn Kho',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricItem(
-                    'Sắp Hết Hàng',
-                    '$lowStock',
-                    Icons.inventory_2,
-                    Colors.orange[600]!,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildMetricItem(
-                    'Sắp Hết Hạn',
-                    '$expiringSoon',
-                    Icons.schedule,
-                    Colors.red[600]!,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopProductsCard() {
-    if (_topProducts == null || _topProducts!.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+    return Column(
+      children: [
+        SizedBox(
+          height: 200,
+          child: Stack(
             children: [
-              Icon(Icons.star_border, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                'Chưa có dữ liệu bán hàng',
-                style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              // PageView with 3 pages (Previous/Current/Next)
+              PageView.builder(
+                controller: _pageController,
+                physics: isViewingPast
+                  ? const IOSSpringScrollPhysics() // iOS spring animation when viewing past
+                  : const NeverScrollableScrollPhysics(), // Block swipe when at current
+                onPageChanged: (index) async {
+                  if (_isPageChanging) return;
+                  _isPageChanging = true;
+
+                  if (index == 0) {
+                    // Swiped left to previous period
+                    await provider.selectPreviousPeriod();
+                  } else if (index == 2) {
+                    // Swiped right to next period (only possible when isViewingPast)
+                    await provider.selectNextPeriod();
+                  }
+
+                  // Reset to middle page
+                  if (mounted) {
+                    await _pageController.animateToPage(
+                      1,
+                      duration: const Duration(milliseconds: 1),
+                      curve: Curves.linear,
+                    );
+                  }
+                  _isPageChanging = false;
+                },
+                itemCount: 3,
+                itemBuilder: (context, index) => _buildChartPage(provider),
+              ),
+
+              // Left Arrow (Previous Period)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: IconButton(
+                    onPressed: (provider.isLoading || _isPageChanging) ? null : () async {
+                      _isPageChanging = true;
+                      await provider.selectPreviousPeriod();
+                      _isPageChanging = false;
+                    },
+                    icon: const Icon(Icons.chevron_left),
+                    color: Colors.grey.shade400,
+                    iconSize: 28,
+                  ),
+                ),
+              ),
+
+              // Right Arrow (Next Period) - Disabled if at current period
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: IconButton(
+                    onPressed: (provider.isLoading || !isViewingPast || _isPageChanging)
+                      ? null
+                      : () async {
+                          _isPageChanging = true;
+                          await provider.selectNextPeriod();
+                          _isPageChanging = false;
+                        },
+                    icon: const Icon(Icons.chevron_right),
+                    color: isViewingPast ? Colors.grey.shade400 : Colors.grey.shade300,
+                    iconSize: 28,
+                    disabledColor: Colors.grey.shade300,
+                  ),
+                ),
               ),
             ],
           ),
         ),
-      );
+
+        // "Back to Current" button (only show when viewing past)
+        if (isViewingPast)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: TextButton.icon(
+              onPressed: (provider.isLoading || _isPageChanging) ? null : () {
+                // Return to current period based on currently selected preset type
+                final currentPreset = _getCurrentPresetFromCustomRange(provider);
+                provider.setDateRange(currentPreset);
+              },
+              icon: const Icon(Icons.today, size: 16),
+              label: const Text('Trở về hiện tại'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.green,
+                textStyle: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  DateRangePreset _getCurrentPresetFromCustomRange(ReportProvider provider) {
+    // Determine what the "current" preset should be based on the time range being viewed
+    final now = DateTime.now();
+    final rangeInDays = provider.selectedDateRange.duration.inDays;
+
+    if (rangeInDays <= 7) return DateRangePreset.thisWeek;
+    if (rangeInDays <= 31) return DateRangePreset.thisMonth;
+    return DateRangePreset.thisYear;
+  }
+
+  bool _isActuallyViewingPast(ReportProvider provider) {
+    // Check if the selected date range is actually in the PAST
+    // by comparing range end with current period end based on preset type
+    final now = DateTime.now();
+    final selectedEnd = provider.selectedDateRange.end;
+
+    // Get current period end based on selected preset type
+    DateTime currentPeriodEnd;
+    switch (provider.selectedPreset) {
+      case DateRangePreset.thisWeek:
+      case DateRangePreset.custom:
+        // Current week end (Sunday)
+        final firstDayOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        currentPeriodEnd = firstDayOfWeek.add(const Duration(days: 6));
+        break;
+      case DateRangePreset.thisMonth:
+        // Current month end
+        currentPeriodEnd = DateTime(now.year, now.month + 1, 0);
+        break;
+      case DateRangePreset.thisYear:
+        // Current year end
+        currentPeriodEnd = DateTime(now.year, 12, 31);
+        break;
+      default:
+        currentPeriodEnd = now;
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.star, color: Colors.green[600]),
-                const SizedBox(width: 8),
-                Text(
-                  'Top 10 Sản Phẩm (30 ngày qua)',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _topProducts!.length,
-              separatorBuilder: (context, index) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final product = _topProducts![index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.green[100],
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    product['product_name'] ?? 'N/A',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  subtitle: Text(
-                    'Số lượng: ${(product['total_quantity'] ?? 0).toStringAsFixed(0)} ${product['unit'] ?? ''}',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  trailing: Text(
-                    AppFormatter.formatCompactCurrency(product['total_revenue'] ?? 0),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green[600],
-                    ),
-                  ),
+    // Viewing past if selected range ends BEFORE current period end (with 1 day tolerance)
+    return selectedEnd.isBefore(currentPeriodEnd.subtract(const Duration(days: 1)));
+  }
+
+  Widget _buildChartPage(ReportProvider provider) {
+    if (provider.revenueTrend.isEmpty) {
+      return const Center(child: Text("Không có dữ liệu xu hướng."));
+    }
+
+    final currentSpots = provider.revenueTrend.asMap().entries.map((e) {
+      return FlSpot(e.key.toDouble(), e.value.currentPeriodRevenue);
+    }).toList();
+
+    final previousSpots = provider.revenueTrend.asMap().entries.map((e) {
+      return FlSpot(e.key.toDouble(), e.value.previousPeriodRevenue);
+    }).toList();
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((spot) {
+                final date = provider.revenueTrend[spot.spotIndex].reportDate;
+                final revenue = spot.y;
+                return LineTooltipItem(
+                  '${DateFormat.MMMd().format(date)}\n${AppFormatter.formatCurrency(revenue)}',
+                  const TextStyle(color: Colors.white),
+                );
+              }).toList();
+            },
+          ),
+        ),
+
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: (provider.revenueTrend.length / 5).ceil().toDouble(),
+              getTitlesWidget: (value, meta) {
+                final index = value.toInt();
+                if (index >= provider.revenueTrend.length) return const SizedBox();
+                final date = provider.revenueTrend[index].reportDate;
+                return SideTitleWidget(
+                  meta: meta,
+                  space: 10,
+                  child: Text(DateFormat.MMMd().format(date), style: const TextStyle(fontSize: 10, color: Colors.grey)),
                 );
               },
             ),
-          ],
+          ),
         ),
+
+        lineBarsData: [
+          // Previous period line (dashed and faint)
+          LineChartBarData(
+            spots: previousSpots,
+            isCurved: true,
+            color: Colors.grey.withOpacity(0.5),
+            barWidth: 2,
+            isStrokeCapRound: true,
+            dotData: FlDotData(show: false),
+            dashArray: [5, 5],
+            belowBarData: BarAreaData(show: false),
+          ),
+          // Current period line (solid, gradient, with area)
+          LineChartBarData(
+            spots: currentSpots,
+            isCurved: true,
+            gradient: const LinearGradient(
+              colors: [Colors.green, Colors.teal],
+            ),
+            barWidth: 4,
+            isStrokeCapRound: true,
+            dotData: FlDotData(show: true),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [Colors.green.withOpacity(0.3), Colors.teal.withOpacity(0.0)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRankings(ReportProvider provider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Bảng Xếp Hạng', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        _buildTopProductsCard(provider),
+
+      ],
+    );
+  }
+
+  // ===========================================================================
+  // TAB 2: INVENTORY DASHBOARD (Placeholder)
+  // ===========================================================================
+  Widget _buildInventoryTab(ReportProvider provider) {
+    return const Center(child: Text('Nội dung Tồn Kho sắp ra mắt'));
+  }
+
+  // ===========================================================================
+  // TAB 3: PRODUCT PERFORMANCE (Placeholder)
+  // ===========================================================================
+  Widget _buildProductsTab(ReportProvider provider) {
+    return const Center(child: Text('Nội dung Sản Phẩm sắp ra mắt'));
+  }
+
+  // ===========================================================================
+  // SHARED WIDGETS (Could be moved to shared/widgets)
+  // ===========================================================================
+
+  Widget _buildTopProductsCard(ReportProvider provider) {
+    final topProducts = provider.topProducts;
+    if (topProducts.isEmpty) {
+      return const Card(child: ListTile(title: Text('Không có dữ liệu sản phẩm bán chạy')));
+    }
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Top 5 Sản Phẩm Bán Chạy', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+          ...topProducts.map((product) {
+            return ListTile(
+              title: Text(product.productName),
+              subtitle: Text('Số lượng: ${product.totalQuantity.toStringAsFixed(0)}'),
+              trailing: Text(AppFormatter.formatCurrency(product.totalRevenue)),
+            );
+          }).toList(),
+        ],
       ),
     );
   }
@@ -666,122 +542,24 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
       ),
     );
   }
+}
 
-  Widget _buildReportLinkCard(String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
-    return Card(
-      child: ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(color: Colors.grey[600]),
-        ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: onTap,
-      ),
-    );
-  }
-
-  Future<void> _showMonthPicker() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _selectedMonth,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      initialDatePickerMode: DatePickerMode.year,
-    );
-
-    if (date != null) {
-      setState(() => _selectedMonth = date);
-      await _loadMonthlyData();
+// Extension to give readable names to presets
+extension on DateRangePreset {
+  String get name {
+    switch (this) {
+      case DateRangePreset.today:
+        return 'Hôm nay';
+      case DateRangePreset.thisWeek:
+        return 'Tuần này';
+      case DateRangePreset.thisMonth:
+        return 'Tháng này';
+      case DateRangePreset.thisQuarter:
+        return 'Quý này';
+      case DateRangePreset.thisYear:
+        return 'Năm nay';
+      case DateRangePreset.custom:
+        return 'Tùy chỉnh';
     }
-  }
-
-  Future<void> _showQuarterPicker() async {
-    final result = await showDialog<Map<String, int>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Chọn Quý'),
-        content: SizedBox(
-          width: double.minPositive,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (int quarter = 1; quarter <= 4; quarter++)
-                ListTile(
-                  title: Text('Quý $quarter/$_selectedYear'),
-                  onTap: () => Navigator.pop(context, {'quarter': quarter, 'year': _selectedYear}),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        _selectedQuarter = result['quarter']!;
-        _selectedYear = result['year']!;
-      });
-      await _loadQuarterlyData();
-    }
-  }
-
-  Future<void> _showTaxExportDialog() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Xuất Dữ Liệu Thuế'),
-        content: const Text(
-          'Tính năng xuất dữ liệu thuế để chuẩn bị báo cáo cho cơ quan thuế.\n\nSẽ bao gồm:\n- Tổng doanh thu theo tháng/quý\n- Thuế GTGT (1.5%)\n- Chi tiết giao dịch\n- Báo cáo tài chính',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _showComingSoonDialog('Xuất dữ liệu thuế');
-            },
-            child: const Text('Xuất File'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showComingSoonDialog(String feature) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sắp Ra Mắt'),
-        content: Text('Tính năng "$feature" đang được phát triển và sẽ có trong phiên bản tiếp theo.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đã hiểu'),
-          ),
-        ],
-      ),
-    );
   }
 }
