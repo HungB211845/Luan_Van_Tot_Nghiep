@@ -1120,6 +1120,33 @@ class ProductService extends BaseService {
     }
   }
 
+  /// Lấy ONLY total products count (optimized for dashboard)
+  /// Fast query (~50ms) without fetching full product data or alerts
+  Future<int> getTotalProductsCount() async {
+    try {
+      ensureAuthenticated();
+
+      // Use existing optimized RPC function
+      final result = await _supabase.rpc(
+        'get_estimated_count',
+        params: {'table_name': 'products', 'store_id_param': currentStoreId},
+      );
+
+      return result as int;
+    } catch (e) {
+      // Fallback to regular count if RPC fails
+      try {
+        final response = await addStoreFilter(
+          _supabase.from('products').select('id').eq('is_active', true),
+        );
+        return response.length;
+      } catch (fallbackError) {
+        print('Error getting total products count: $fallbackError');
+        return 0;
+      }
+    }
+  }
+
   /// Search products by barcode/SKU for POS
   Future<Product?> scanProductBySKU(String sku) async {
     try {

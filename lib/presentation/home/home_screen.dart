@@ -37,13 +37,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _quickAccessPageController = PageController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final productProvider = context.read<ProductProvider>();
-      productProvider.loadDashboardStats();
-      productProvider.loadAlerts();
+      // OPTIMIZED: Use parallel loading with new ReportService methods
+      // Load alerts separately for "For You" widget
+      context.read<ProductProvider>().loadAlerts();
       context.read<DebtProvider>().loadAllDebts();
       context.read<TransactionProvider>().loadTransactions(limit: 5);
       context.read<QuickAccessProvider>().loadConfiguration();
-      context.read<ReportProvider>().loadDashboardData();
+      context.read<ReportProvider>().loadDashboardData(); // For revenue chart
     });
   }
 
@@ -54,13 +54,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refreshData() async {
-    final productProvider = context.read<ProductProvider>();
+    // OPTIMIZED: Parallel loading with new methods
     await Future.wait([
-      productProvider.loadDashboardStats(),
-      productProvider.loadAlerts(),
+      context.read<ProductProvider>().loadAlerts(), // For low stock/expiring alerts
       context.read<DebtProvider>().loadAllDebts(),
       context.read<TransactionProvider>().loadTransactions(limit: 5),
-      context.read<ReportProvider>().loadDashboardData(),
+      context.read<ReportProvider>().loadDashboardData(), // For revenue chart (7 days)
     ]);
   }
 

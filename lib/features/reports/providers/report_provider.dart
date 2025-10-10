@@ -95,6 +95,33 @@ class ReportProvider with ChangeNotifier {
     }
   }
 
+  // Optimized method to load ONLY today's revenue for HomeScreen dashboard
+  Future<void> loadTodayRevenue() async {
+    try {
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
+
+      _revenueSummary = await _reportService.getRevenueSummaryWithComparison(todayStart, todayEnd);
+    } catch (e) {
+      _errorMessage = e.toString();
+      print('Error loading today revenue: $e');
+      rethrow;
+    }
+  }
+
+  // Optimized method to load inventory analytics WITHOUT notifyListeners
+  // Used for HomeScreen to avoid multiple rebuilds
+  Future<void> loadInventoryAnalytics() async {
+    try {
+      _inventoryAnalytics = await _reportService.getInventoryAnalytics();
+    } catch (e) {
+      _errorMessage = e.toString();
+      print('Error loading inventory analytics: $e');
+      rethrow;
+    }
+  }
+
   // UI calls this method to change the date range
   Future<void> setDateRange(DateRangePreset preset, {DateTimeRange? customRange}) async {
     _selectedPreset = preset;
