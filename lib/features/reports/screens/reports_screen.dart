@@ -11,6 +11,9 @@ import '../../../shared/widgets/loading_widget.dart';
 import 'package:agricultural_pos/features/products/screens/reports/expiry_report_screen.dart';
 import 'package:agricultural_pos/features/products/screens/reports/low_stock_report_screen.dart';
 import 'package:agricultural_pos/features/products/screens/reports/slow_moving_report_screen.dart';
+import 'top_value_products_screen.dart';
+import 'fast_turnover_products_screen.dart';
+import 'slow_turnover_products_screen.dart';
 
 // Custom iOS-style spring physics for PageView
 class IOSSpringScrollPhysics extends ScrollPhysics {
@@ -490,7 +493,7 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   }
 
   // ===========================================================================
-  // TAB 2: INVENTORY DASHBOARD (Tổng Quan Tồn Kho)
+  // TAB 2: INVENTORY DASHBOARD (Apple HIG Grouped List Style)
   // ===========================================================================
   Widget _buildInventoryTab(ReportProvider provider) {
     final analytics = provider.inventoryAnalytics;
@@ -502,394 +505,339 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     return RefreshIndicator(
       onRefresh: () => provider.loadInventoryData(forceRefresh: true),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         children: [
           // Section 1: Giá trị Tồn kho
-          Text('Giá Trị Tồn Kho', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          _buildInventoryValueMetrics(analytics),
+          _buildSectionHeader('GIÁ TRỊ TỒN KHO'),
+          _buildValueMetricsGroup(analytics),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
 
-          // Section 2: Cảnh báo Hành động (ExpansionTile with self-titled header)
-          _buildInventoryAlerts(analytics),
+          // Section 2: Cảnh báo
+          _buildSectionHeader('CẢNH BÁO'),
+          _buildAlertsGroup(analytics),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
 
-          // Section 3: Phân tích Tồn kho
-          Text('Phân Tích Tồn Kho', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          _buildInventoryAnalytics(provider),
+          // Section 3: Phân tích
+          _buildSectionHeader('PHÂN TÍCH'),
+          _buildAnalyticsGroup(provider),
         ],
       ),
     );
   }
 
-  /// Section 1: Widget "Giá trị Tồn kho" - 3 financial metrics
-  Widget _buildInventoryValueMetrics(InventoryAnalytics analytics) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricItem(
-                    'Giá Mua Vào',
-                    AppFormatter.formatCompactCurrency(analytics.totalInventoryValue),
-                    Icons.shopping_cart,
-                    Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMetricItem(
-                    'Giá Bán Ra',
-                    AppFormatter.formatCompactCurrency(analytics.totalSellingValue),
-                    Icons.sell,
-                    Colors.green,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildMetricItem(
-              'Lợi Nhuận Tiềm Năng (${analytics.profitMargin.toStringAsFixed(1)}%)',
-              AppFormatter.formatCompactCurrency(analytics.potentialProfit),
-              Icons.trending_up,
-              Colors.teal,
-            ),
-          ],
+  /// iOS-style section header
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade600,
+          letterSpacing: 0.5,
         ),
       ),
     );
   }
 
-  /// Section 2: Widget "Cảnh báo Hành động" - 3 actionable alerts (ExpansionTile)
-  Widget _buildInventoryAlerts(InventoryAnalytics analytics) {
-    final totalAlerts = _getTotalAlerts(analytics);
-    final hasAlerts = totalAlerts > 0;
+  /// Section 1: Value Metrics - Simple rows without decoration colors
+  Widget _buildValueMetricsGroup(InventoryAnalytics analytics) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          _buildValueRow(
+            label: 'Giá Trị Kho (Giá vốn)',
+            value: AppFormatter.formatCurrency(analytics.totalInventoryValue),
+            isFirst: true,
+          ),
+          Divider(height: 1, thickness: 0.5, color: Colors.grey.shade300),
+          _buildValueRow(
+            label: 'Giá Trị Hàng Hóa (Giá bán)',
+            value: AppFormatter.formatCurrency(analytics.totalSellingValue),
+          ),
+          Divider(height: 1, thickness: 0.5, color: Colors.grey.shade300),
+          _buildValueRow(
+            label: 'Lợi Nhuận Tiềm Năng',
+            value: AppFormatter.formatCurrency(analytics.potentialProfit),
+            valueColor: Colors.green, // Semantic color: positive indicator
+            subtitle: '${analytics.profitMargin.toStringAsFixed(1)}% biên lợi nhuận',
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: (hasAlerts ? Colors.orange : Colors.grey.shade400).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Stack(
+  Widget _buildValueRow({
+    required String label,
+    required String value,
+    Color? valueColor,
+    String? subtitle,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  color: hasAlerts ? Colors.orange : Colors.grey.shade400,
-                  size: 20,
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
-                if (hasAlerts)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 12,
-                        minHeight: 12,
-                      ),
-                      child: Text(
-                        '$totalAlerts',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
                     ),
                   ),
+                ],
               ],
             ),
           ),
-          title: const Text(
-            'Cảnh Báo & Hành Động',
+          Text(
+            value,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
+              color: valueColor ?? Colors.black87,
             ),
           ),
-          subtitle: Text(
-            hasAlerts ? '$totalAlerts cảnh báo cần xử lý' : 'Không có cảnh báo',
-            style: TextStyle(
-              fontSize: 12,
-              color: hasAlerts ? Colors.orange.shade700 : Colors.green.shade700,
-              fontWeight: hasAlerts ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Column(
-                children: [
-                  _buildAlertCard(
-                    title: 'Tồn Kho Thấp',
-                    count: analytics.lowStockItems,
-                    icon: Icons.inventory_2_outlined,
-                    color: analytics.lowStockItems > 0 ? Colors.orange : Colors.grey.shade400,
-                    subtitle: analytics.lowStockItems == 0 ? 'Tất cả sản phẩm đầy đủ' : null,
-                    onTap: analytics.lowStockItems > 0
-                        ? () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const LowStockReportScreen()),
-                            );
-                          }
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildAlertCard(
-                    title: 'Sắp Hết Hạn',
-                    count: analytics.expiringSoonItems,
-                    icon: Icons.warning_amber_rounded,
-                    color: analytics.expiringSoonItems > 0 ? Colors.red : Colors.grey.shade400,
-                    subtitle: analytics.expiringSoonItems == 0 ? 'Không có hàng sắp hết hạn' : null,
-                    onTap: analytics.expiringSoonItems > 0
-                        ? () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const ExpiryReportScreen()),
-                            );
-                          }
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildAlertCard(
-                    title: 'Hàng Ế',
-                    count: analytics.slowMovingItems,
-                    icon: Icons.pause_circle_outline,
-                    color: analytics.slowMovingItems > 0 ? Colors.grey.shade700 : Colors.grey.shade400,
-                    subtitle: analytics.slowMovingItems == 0 ? 'Hàng hóa luân chuyển tốt' : null,
-                    onTap: analytics.slowMovingItems > 0
-                        ? () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const SlowMovingReportScreen()),
-                            );
-                          }
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  /// Helper to calculate total alerts count
-  int _getTotalAlerts(InventoryAnalytics analytics) {
-    return analytics.lowStockItems +
-           analytics.expiringSoonItems +
-           analytics.slowMovingItems;
+  /// Section 2: Alerts - Navigable rows with semantic colors
+  Widget _buildAlertsGroup(InventoryAnalytics analytics) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          _buildAlertRow(
+            label: 'Sắp hết hàng',
+            count: analytics.lowStockItems,
+            icon: Icons.inventory_2_outlined,
+            color: analytics.lowStockItems > 0 ? Colors.orange : null,
+            onTap: analytics.lowStockItems > 0
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LowStockReportScreen()),
+                    );
+                  }
+                : null,
+            isFirst: true,
+          ),
+          Divider(height: 1, thickness: 0.5, color: Colors.grey.shade300),
+          _buildAlertRow(
+            label: 'Sắp hết hạn',
+            count: analytics.expiringSoonItems,
+            icon: Icons.schedule,
+            color: analytics.expiringSoonItems > 0 ? Colors.red : null,
+            onTap: analytics.expiringSoonItems > 0
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ExpiryReportScreen()),
+                    );
+                  }
+                : null,
+          ),
+          Divider(height: 1, thickness: 0.5, color: Colors.grey.shade300),
+          _buildAlertRow(
+            label: 'Hàng ế',
+            count: analytics.slowMovingItems,
+            icon: Icons.pause_circle_outline,
+            color: analytics.slowMovingItems > 0 ? Colors.grey.shade700 : null,
+            onTap: analytics.slowMovingItems > 0
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SlowMovingReportScreen()),
+                    );
+                  }
+                : null,
+            isLast: true,
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildAlertCard({
-    required String title,
+  Widget _buildAlertRow({
+    required String label,
     required int count,
     required IconData icon,
-    required Color color,
-    String? subtitle,
+    Color? color,
     VoidCallback? onTap,
+    bool isFirst = false,
+    bool isLast = false,
   }) {
-    final isDisabled = onTap == null;
+    final hasAlert = count > 0;
+    final displayColor = color ?? Colors.grey.shade400;
 
-    return Card(
-      elevation: isDisabled ? 0 : 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      color: isDisabled ? Colors.grey.shade50 : null,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDisabled ? Colors.grey.shade600 : null,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$count sản phẩm',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontWeight: count > 0 ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.green.shade700,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.vertical(
+        top: isFirst ? const Radius.circular(10) : Radius.zero,
+        bottom: isLast ? const Radius.circular(10) : Radius.zero,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: displayColor, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: hasAlert ? null : Colors.grey.shade600,
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: isDisabled ? Colors.grey.shade300 : Colors.grey[400],
+            ),
+            Text(
+              '$count sản phẩm',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: hasAlert ? FontWeight.w600 : FontWeight.w400,
+                color: hasAlert ? displayColor : Colors.grey.shade500,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chevron_right,
+              color: Colors.grey.shade400,
+              size: 20,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  /// Section 3: Widget "Phân tích Tồn kho" - 3 expandable ranking lists
-  Widget _buildInventoryAnalytics(ReportProvider provider) {
-    return Column(
-      children: [
-        _buildExpandableProductList(
-          title: 'Top 5 Sản Phẩm Giá Trị Cao',
-          products: provider.topValueProducts,
-          icon: Icons.star,
-          color: Colors.amber,
-          valueLabel: 'Giá trị',
-          isValueMetric: true,
-        ),
-        const SizedBox(height: 8),
-        _buildExpandableProductList(
-          title: 'Top 5 Hàng Bán Nhanh',
-          products: provider.fastTurnoverProducts,
-          icon: Icons.speed,
-          color: Colors.green,
-          valueLabel: 'Tỷ lệ',
-          isValueMetric: false,
-        ),
-        const SizedBox(height: 8),
-        _buildExpandableProductList(
-          title: 'Top 5 Hàng Bán Chậm',
-          products: provider.slowTurnoverProducts,
-          icon: Icons.slow_motion_video,
-          color: Colors.grey,
-          valueLabel: 'Tỷ lệ',
-          isValueMetric: false,
-        ),
-      ],
+  /// Section 3: Analytics - Navigable rows to dedicated screens
+  Widget _buildAnalyticsGroup(ReportProvider provider) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          _buildAnalyticsRow(
+            label: 'Top Sản phẩm Giá trị cao',
+            count: provider.topValueProducts.length,
+            icon: Icons.inventory,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TopValueProductsScreen()),
+              );
+            },
+            isFirst: true,
+          ),
+          Divider(height: 1, thickness: 0.5, color: Colors.grey.shade300),
+          _buildAnalyticsRow(
+            label: 'Top Hàng bán nhanh',
+            count: provider.fastTurnoverProducts.length,
+            icon: Icons.speed,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const FastTurnoverProductsScreen()),
+              );
+            },
+          ),
+          Divider(height: 1, thickness: 0.5, color: Colors.grey.shade300),
+          _buildAnalyticsRow(
+            label: 'Top Hàng bán chậm',
+            count: provider.slowTurnoverProducts.length,
+            icon: Icons.slow_motion_video,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SlowTurnoverProductsScreen()),
+              );
+            },
+            isLast: true,
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildExpandableProductList({
-    required String title,
-    required List products,
+  Widget _buildAnalyticsRow({
+    required String label,
+    required int count,
     required IconData icon,
-    required Color color,
-    required String valueLabel,
-    required bool isValueMetric,
+    required VoidCallback onTap,
+    bool isFirst = false,
+    bool isLast = false,
   }) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.vertical(
+        top: isFirst ? const Radius.circular(10) : Radius.zero,
+        bottom: isLast ? const Radius.circular(10) : Radius.zero,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.grey.shade700, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
             ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+            Text(
+              '$count sản phẩm',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
             ),
-          ),
-          subtitle: Text(
-            '${products.length} sản phẩm',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-          children: products.isEmpty
-              ? [
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'Không có dữ liệu',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ]
-              : products.map<Widget>((product) {
-                  return ListTile(
-                    dense: true,
-                    title: Text(
-                      product.productName,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    subtitle: Text(
-                      product.sku,
-                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          valueLabel,
-                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                        ),
-                        Text(
-                          isValueMetric
-                              ? AppFormatter.formatCompactCurrency(product.metricValue)
-                              : product.metricValue.toStringAsFixed(2),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: color,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chevron_right,
+              color: Colors.grey.shade400,
+              size: 20,
+            ),
+          ],
         ),
       ),
     );
@@ -927,51 +875,6 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
               trailing: Text(AppFormatter.formatCurrency(product.totalRevenue)),
             );
           }).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricItem(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 18),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
         ],
       ),
     );
