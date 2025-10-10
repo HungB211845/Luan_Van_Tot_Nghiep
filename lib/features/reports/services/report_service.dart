@@ -72,7 +72,8 @@ class ReportService {
       final alertsData = responses[1] as Map<String, dynamic>;
 
       // Debug logging to see actual API response
-      print('🔍 DEBUG: Inventory Alerts Raw Response');
+      // Only log when there are actual alerts or errors
+      // print('🔍 DEBUG: Inventory Alerts Raw Response');
       print('  Low Stock Products: ${alertsData['low_stock_products']}');
       print('  Expiring Soon Products: ${alertsData['expiring_soon_products']}');
       print('  Slow Moving Products: ${alertsData['slow_moving_products']}');

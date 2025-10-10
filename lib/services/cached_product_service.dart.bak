@@ -47,7 +47,9 @@ class CachedProductService extends BaseService {
       sort: '${sortBy}_$sortDirection',
     );
 
-    _debugLog('🔍 CACHE DEBUG: Built cache key: $cacheKey');
+    if (CacheConfig.enableCacheLogging) {
+      print('🔍 CACHE DEBUG: Built cache key: $cacheKey');
+    }
 
     // Thử lấy từ cache trước
     if (useCache) {
@@ -57,9 +59,7 @@ class CachedProductService extends BaseService {
       );
 
       if (cachedData != null) {
-        if (CacheConfig.enableCacheLogging) {
-          _debugLog('🎯 Cache HIT: Found ${(cachedData['items'] as List).length} cached items for key: $cacheKey');
-        }
+        print('🎯 Cache HIT: Found ${(cachedData['items'] as List).length} cached items for key: $cacheKey');
         // Reconstruct PaginatedResult from cached data
         final items = (cachedData['items'] as List)
             .map((item) => Product.fromJson(item as Map<String, dynamic>))
@@ -71,19 +71,19 @@ class CachedProductService extends BaseService {
           limit: cachedData['limit'] as int,
         );
       } else {
-        _debugLog('💾 Cache MISS: No cached data found for key: $cacheKey');
+        print('💾 Cache MISS: No cached data found for key: $cacheKey');
       }
     } else {
-      _debugLog('💾 Cache DISABLED: useCache=false for key: $cacheKey');
+      print('💾 Cache DISABLED: useCache=false for key: $cacheKey');
     }
 
-    _debugLog('💾 Cache MISS: Fetching from DB for store: $storeId...');
+    print('💾 Cache MISS: Fetching from DB for store: $storeId...');
     
     // Nếu cache miss thì query database WITH STORE ISOLATION
     try {
       final offset = (page - 1) * limit;
       
-      _debugLog('🔍 DEBUG: Building count query for store: $storeId');
+      print('🔍 DEBUG: Building count query for store: $storeId');
       // 🎯 CRITICAL FIX: Add store filtering to count query with error handling AND active filter
       var countQuery = addStoreFilter(
         supabase.from('products_with_details').select('id')
@@ -97,13 +97,13 @@ class CachedProductService extends BaseService {
         countQuery = countQuery.or('name.ilike.%$normalizedSearch%,sku.ilike.%$normalizedSearch%,description.ilike.%$normalizedSearch%');
       }
       
-      _debugLog('🔍 DEBUG: Count query after store filter built successfully');
-      _debugLog('🔍 DEBUG: Executing count query...');
+      print('🔍 DEBUG: Count query after store filter built successfully');
+      print('🔍 DEBUG: Executing count query...');
       final countResponse = await countQuery;
       final totalCount = countResponse.length;
-      _debugLog('🔍 DEBUG: Count query result: $totalCount items');
+      print('🔍 DEBUG: Count query result: $totalCount items');
 
-      _debugLog('🔍 DEBUG: Building data query for store: $storeId');
+      print('🔍 DEBUG: Building data query for store: $storeId');
       // 🎯 CRITICAL FIX: Add store filtering to data query with error handling AND active filter
       var query = addStoreFilter(
         supabase.from('products_with_details').select('*')
@@ -118,20 +118,20 @@ class CachedProductService extends BaseService {
         query = query.or('name.ilike.%$normalizedSearch%,sku.ilike.%$normalizedSearch%,description.ilike.%$normalizedSearch%');
       }
       
-      _debugLog('🔍 DEBUG: Data query after store filter built successfully');
-      _debugLog('🔍 DEBUG: Executing data query with range $offset to ${offset + limit - 1}...');
+      print('🔍 DEBUG: Data query after store filter built successfully');
+      print('🔍 DEBUG: Executing data query with range $offset to ${offset + limit - 1}...');
       final response = await query
           .order(sortBy, ascending: ascending)
           .range(offset, offset + limit - 1);
 
-      _debugLog('🔍 DEBUG: Data query completed, processing ${(response as List).length} items');
+      print('🔍 DEBUG: Data query completed, processing ${(response as List).length} items');
 
       // response is already List<Map<String, dynamic>> in Supabase 2.10.1
       final result = PaginatedResult.fromSupabaseResponse(
         items: (response as List).map((json) {
           final product = Product.fromJson(json as Map<String, dynamic>);
           // 🔍 DEBUG: Verify product data including price
-          _debugLog('🔍 VERIFIED: Product "${product.name}" (active: ${product.isActive}) price: ${product.currentSellingPrice} store: ${product.storeId}');
+          print('🔍 VERIFIED: Product "${product.name}" (active: ${product.isActive}) price: ${product.currentSellingPrice} store: ${product.storeId}');
           return product;
         }).toList(),
         totalCount: totalCount,
@@ -139,7 +139,7 @@ class CachedProductService extends BaseService {
         limit: limit,
       );
 
-      _debugLog('🔍 DEBUG: Successfully created PaginatedResult with ${result.items.length} items');
+      print('🔍 DEBUG: Successfully created PaginatedResult with ${result.items.length} items');
 
       // Cache kết quả cho lần sau (với store_id trong key)
       final cacheData = {
@@ -161,8 +161,8 @@ class CachedProductService extends BaseService {
         persistent: false,
       );
 
-      _debugLog('🔍 DEBUG: Cache saved successfully for key: $cacheKey');
-      _debugLog('🎯 Cache SAVED: $cacheKey with ${result.items.length} items');
+      print('🔍 DEBUG: Cache saved successfully for key: $cacheKey');
+      print('🎯 Cache SAVED: $cacheKey with ${result.items.length} items');
       return result;
     } catch (e, stackTrace) {
       print('🚨 ERROR in getProductsPaginated: $e');
@@ -186,12 +186,12 @@ class CachedProductService extends BaseService {
       );
       
       if (cached != null) {
-        _debugLog('🎯 Category cache HIT: ${category.toString()} for store: $storeId');
+        print('🎯 Category cache HIT: ${category.toString()} for store: $storeId');
         return cached;
       }
     }
 
-    _debugLog('💾 Category cache MISS: Fetching ${category.toString()} for store: $storeId...');
+    print('💾 Category cache MISS: Fetching ${category.toString()} for store: $storeId...');
 
     try {
       // 🎯 CRITICAL FIX: Add store filtering
@@ -244,12 +244,12 @@ class CachedProductService extends BaseService {
       );
       
       if (cached != null) {
-        _debugLog('🎯 Search cache HIT: $query for store: $storeId');
+        print('🎯 Search cache HIT: $query for store: $storeId');
         return cached;
       }
     }
 
-    _debugLog('💾 Search cache MISS: Searching "$query" for store: $storeId...');
+    print('💾 Search cache MISS: Searching "$query" for store: $storeId...');
 
     try {
       // 🎯 CRITICAL FIX: Add store filtering to search
@@ -272,7 +272,7 @@ class CachedProductService extends BaseService {
           .toList();
 
       // Debug: Log search results for verification
-      _debugLog('🔍 Search "$query" found ${results.length} products for store $storeId: ${results.take(3).map((p) => p.name).join(", ")}${results.length > 3 ? "..." : ""}');
+      print('🔍 Search "$query" found ${results.length} products for store $storeId: ${results.take(3).map((p) => p.name).join(", ")}${results.length > 3 ? "..." : ""}');
 
       // Cache search results nhưng không lâu vì có thể thay đổi (với store_id trong key)
       await _cache.set(
@@ -301,12 +301,12 @@ class CachedProductService extends BaseService {
       );
       
       if (cached != null) {
-        _debugLog('🎯 Dashboard cache HIT for store: $storeId');
+        print('🎯 Dashboard cache HIT for store: $storeId');
         return cached;
       }
     }
 
-    _debugLog('💾 Dashboard cache MISS: Fetching stats for store: $storeId...');
+    print('💾 Dashboard cache MISS: Fetching stats for store: $storeId...');
 
     try {
       // 🎯 CRITICAL FIX: Add store filtering to dashboard stats
@@ -355,7 +355,7 @@ class CachedProductService extends BaseService {
       );
       
       if (cached != null) {
-        _debugLog('🎯 Low stock cache HIT for store: $storeId');
+        print('🎯 Low stock cache HIT for store: $storeId');
         return cached;
       }
     }
@@ -428,7 +428,7 @@ class CachedProductService extends BaseService {
     if (sort != null) parts.add('s$sort');
     
     final cacheKey = 'cache_${parts.join('_')}';
-    _debugLog('🔍 CACHE KEY BUILT: $cacheKey');
+    print('🔍 CACHE KEY BUILT: $cacheKey');
     return cacheKey;
   }
 }

@@ -1450,12 +1450,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       final productsWithZeroPrice = _products.where((p) => p.currentSellingPrice == 0).toList();
       
       if (productsWithZeroPrice.isEmpty) {
-        print('✅ All products have valid prices, no sync needed');
+        // Only log when debug is enabled
+        if (kDebugMode) print('✅ All products have valid prices, no sync needed');
         // Update stock and price maps for all products
         for (final product in _products) {
           _stockMap[product.id] = product.availableStock ?? 0;
           _currentPrices[product.id] = product.currentSellingPrice;
-          print('💰 Using existing price for ${product.name}: ${product.currentSellingPrice}');
+          // Remove individual price logging to reduce spam
+          // if (kDebugMode) print('💰 Using existing price for ${product.name}: ${product.currentSellingPrice}');
         }
       } else {
         print('🔄 ONE-TIME SYNC: Found ${productsWithZeroPrice.length} products with 0 price, syncing...');
@@ -1474,7 +1476,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
             print('🔄 Synced ${product.name}: ${_currentPrices[product.id]}');
           } else {
             _currentPrices[product.id] = product.currentSellingPrice;
-            print('💰 Using existing price for ${product.name}: ${product.currentSellingPrice}');
+            // Remove price logging to reduce spam
+            // if (kDebugMode) print('💰 Using existing price for ${product.name}: ${product.currentSellingPrice}');
           }
         }
         

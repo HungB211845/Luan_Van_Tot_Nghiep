@@ -91,7 +91,8 @@ class ReportProvider with ChangeNotifier {
   Future<void> loadRevenueData({bool forceRefresh = false}) async {
     // Skip if already loaded and not forcing refresh
     if (_revenueLoaded && !forceRefresh) {
-      print('📊 Revenue data already loaded, skipping...');
+      // Only log when debug mode is enabled
+      if (kDebugMode) print('📊 Revenue data already loaded, skipping...');
       return;
     }
 
@@ -107,7 +108,8 @@ class ReportProvider with ChangeNotifier {
     notifyListeners(); // Show loading state immediately
 
     try {
-      print('📊 Loading revenue data for date range: ${_selectedDateRange.start} to ${_selectedDateRange.end}');
+      // Only log loading in debug mode
+      if (kDebugMode) print('📊 Loading revenue data for date range: ${_selectedDateRange.start} to ${_selectedDateRange.end}');
 
       // Load only revenue-related data (3 RPCs)
       final results = await Future.wait([
@@ -121,7 +123,8 @@ class ReportProvider with ChangeNotifier {
       _topProducts = results[2] as List<TopProduct>;
 
       _revenueLoaded = true;
-      print('✅ Revenue data loaded successfully');
+      // Only log success in debug mode
+      if (kDebugMode) print('✅ Revenue data loaded successfully');
     } catch (e) {
       _errorMessage = e.toString();
       print('❌ Error loading revenue data: $e');
@@ -170,7 +173,8 @@ class ReportProvider with ChangeNotifier {
       _slowTurnoverProducts = analyticsLists['slow_turnover'] ?? [];
 
       _inventoryLoaded = true;
-      print('✅ Inventory data loaded successfully');
+      // Only log success in debug mode
+      if (kDebugMode) print('✅ Inventory data loaded successfully');
     } catch (e) {
       _errorMessage = e.toString();
       print('❌ Error loading inventory data: $e');
@@ -219,13 +223,15 @@ class ReportProvider with ChangeNotifier {
   // LEGACY: Load all data at once (for backward compatibility & refresh)
   // ============================================================================
   Future<void> loadDashboardData({bool forceRefresh = false}) async {
-    print('🔄 Loading all dashboard data...');
+    // Removed dashboard loading log to reduce spam
+    // if (kDebugMode) print('🔄 Loading all dashboard data...');
     await Future.wait([
       loadRevenueData(forceRefresh: forceRefresh),
       loadInventoryData(forceRefresh: forceRefresh),
       loadProductData(forceRefresh: forceRefresh),
     ]);
-    print('✅ All dashboard data loaded');
+    // Only log completion in debug mode
+    if (kDebugMode) print('✅ All dashboard data loaded');
   }
 
   // Reset loaded flags when date range changes

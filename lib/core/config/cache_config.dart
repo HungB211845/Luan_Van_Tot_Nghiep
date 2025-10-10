@@ -20,8 +20,8 @@ class CacheConfig {
   static const int maxMemorySizeBytes = 5 * 1024 * 1024; // 5MB
   
   // Debug Settings
-  static const bool enableCacheLogging = true;
-  static const bool enablePerformanceLogging = true;
+  static const bool enableCacheLogging = false; // 🔥 DISABLED to reduce console spam
+  static const bool enablePerformanceLogging = false; // 🔥 DISABLED for production-like experience
   
   // Cache Keys Prefix (for easy invalidation)
   static const String cachePrefix = 'agripos_v1';

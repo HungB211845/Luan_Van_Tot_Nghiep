@@ -54,7 +54,8 @@ class AppRouter {
   static const String home = RouteNames.home;
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
-    debugPrint('🔍 ROUTER DEBUG: Generating route for: ${settings.name}');
+    // Only log routing in debug mode when needed
+    // debugPrint('🔍 ROUTER DEBUG: Generating route for: ${settings.name}');
     switch (settings.name) {
       case RouteNames.splash:
         return IOSPageRoute(child: const SplashScreen(), settings: settings);

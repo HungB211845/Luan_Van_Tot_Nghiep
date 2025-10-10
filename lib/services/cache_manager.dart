@@ -6,7 +6,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
-//import 'package:agricultural_pos/features/products/models/product.dart'; 
+import '../core/config/cache_config.dart'; // 🔥 ADD: Import cache config 
 
 // Cache entry với expiry time
 class CacheEntry<T> {
@@ -42,6 +42,13 @@ class CacheManager extends ChangeNotifier {
   factory CacheManager() => _instance;
   CacheManager._internal();
 
+  // 🔥 Helper method for conditional debug logging
+  void _debugLog(String message) {
+    if (CacheConfig.enableCacheLogging) {
+      print(message);
+    }
+  }
+
   // In-memory cache with LRU eviction (nhanh nhất)
   final Map<String, CacheEntry> _memoryCache = {};
   final Map<String, DateTime> _accessTimes = {};  // Track access times for LRU
@@ -76,22 +83,22 @@ class CacheManager extends ChangeNotifier {
     );
     _accessTimes[key] = now;
     
-    print('🔍 CACHE DEBUG: Stored key "$key" in memory cache with expiry ${expiry ?? _defaultExpiry}');
-    print('🔍 CACHE DEBUG: Memory cache size: ${_memoryCache.length}');
+    _debugLog('🔍 CACHE DEBUG: Stored key "$key" in memory cache with expiry ${expiry ?? _defaultExpiry}');
+    _debugLog('🔍 CACHE DEBUG: Memory cache size: ${_memoryCache.length}');
   }
 
   T? getMemory<T>(String key) {
     final entry = _memoryCache[key];
-    print('🔍 CACHE DEBUG: Looking for key "$key" in memory cache');
-    print('🔍 CACHE DEBUG: Entry found: ${entry != null}');
+    _debugLog('🔍 CACHE DEBUG: Looking for key "$key" in memory cache');
+    _debugLog('🔍 CACHE DEBUG: Entry found: ${entry != null}');
     
     if (entry == null) {
-      print('🔍 CACHE DEBUG: No entry found for key "$key"');
+      _debugLog('🔍 CACHE DEBUG: No entry found for key "$key"');
       return null;
     }
     
     if (entry.isExpired) {
-      print('🔍 CACHE DEBUG: Entry expired for key "$key", removing');
+      _debugLog('🔍 CACHE DEBUG: Entry expired for key "$key", removing');
       _memoryCache.remove(key);
       _accessTimes.remove(key);
       return null;
@@ -99,7 +106,7 @@ class CacheManager extends ChangeNotifier {
 
     // Update access time for LRU
     _accessTimes[key] = DateTime.now();
-    print('🔍 CACHE DEBUG: Returning cached data for key "$key"');
+    _debugLog('🔍 CACHE DEBUG: Returning cached data for key "$key"');
     return entry.data as T?;
   }
 
