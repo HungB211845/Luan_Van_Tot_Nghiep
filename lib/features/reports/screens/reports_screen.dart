@@ -5,9 +5,12 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
 import '../providers/report_provider.dart';
+import '../models/inventory_analytics.dart';
 import '../../../shared/utils/formatter.dart';
 import '../../../shared/widgets/loading_widget.dart';
 import 'package:agricultural_pos/features/products/screens/reports/expiry_report_screen.dart';
+import 'package:agricultural_pos/features/products/screens/reports/low_stock_report_screen.dart';
+import 'package:agricultural_pos/features/products/screens/reports/slow_moving_report_screen.dart';
 
 // Custom iOS-style spring physics for PageView
 class IOSSpringScrollPhysics extends ScrollPhysics {
@@ -43,13 +46,45 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _pageController = PageController(initialPage: 1); // Start at middle page
+
+    // Add listener to load data lazily when tab changes
+    _tabController.addListener(_onTabChanged);
+
+    // Load initial tab data (Tab 0: Revenue)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReportProvider>().loadDashboardData();
+      _loadDataForCurrentTab();
     });
+  }
+
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging) {
+      // Only trigger when tab animation completes
+      _loadDataForCurrentTab();
+    }
+  }
+
+  void _loadDataForCurrentTab() {
+    final provider = context.read<ReportProvider>();
+    final currentTab = _tabController.index;
+
+    print('📑 Tab changed to: $currentTab');
+
+    switch (currentTab) {
+      case 0: // Revenue Tab
+        provider.loadRevenueData();
+        break;
+      case 1: // Inventory Tab
+        provider.loadInventoryData();
+        break;
+      case 2: // Product Tab
+        provider.loadProductData();
+        break;
+    }
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _pageController.dispose();
     super.dispose();
@@ -96,7 +131,7 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   // ===========================================================================
   Widget _buildRevenueTab(ReportProvider provider) {
     return RefreshIndicator(
-      onRefresh: () => provider.loadDashboardData(),
+      onRefresh: () => provider.loadRevenueData(forceRefresh: true),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -455,10 +490,330 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   }
 
   // ===========================================================================
-  // TAB 2: INVENTORY DASHBOARD (Placeholder)
+  // TAB 2: INVENTORY DASHBOARD (Tổng Quan Tồn Kho)
   // ===========================================================================
   Widget _buildInventoryTab(ReportProvider provider) {
-    return const Center(child: Text('Nội dung Tồn Kho sắp ra mắt'));
+    final analytics = provider.inventoryAnalytics;
+
+    if (analytics == null) {
+      return const Center(child: Text('Không có dữ liệu tồn kho'));
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => provider.loadInventoryData(forceRefresh: true),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Section 1: Giá trị Tồn kho
+          Text('Giá Trị Tồn Kho', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          _buildInventoryValueMetrics(analytics),
+
+          const SizedBox(height: 24),
+
+          // Section 2: Cảnh báo Hành động
+          Text('Cảnh Báo & Hành Động', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          _buildInventoryAlerts(analytics),
+
+          const SizedBox(height: 24),
+
+          // Section 3: Phân tích Tồn kho
+          Text('Phân Tích Tồn Kho', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          _buildInventoryAnalytics(provider),
+        ],
+      ),
+    );
+  }
+
+  /// Section 1: Widget "Giá trị Tồn kho" - 3 financial metrics
+  Widget _buildInventoryValueMetrics(InventoryAnalytics analytics) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricItem(
+                    'Giá Mua Vào',
+                    AppFormatter.formatCompactCurrency(analytics.totalInventoryValue),
+                    Icons.shopping_cart,
+                    Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricItem(
+                    'Giá Bán Ra',
+                    AppFormatter.formatCompactCurrency(analytics.totalSellingValue),
+                    Icons.sell,
+                    Colors.green,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildMetricItem(
+              'Lợi Nhuận Tiềm Năng (${analytics.profitMargin.toStringAsFixed(1)}%)',
+              AppFormatter.formatCompactCurrency(analytics.potentialProfit),
+              Icons.trending_up,
+              Colors.teal,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Section 2: Widget "Cảnh báo Hành động" - 3 actionable alerts
+  Widget _buildInventoryAlerts(InventoryAnalytics analytics) {
+    return Column(
+      children: [
+        _buildAlertCard(
+          title: 'Tồn Kho Thấp',
+          count: analytics.lowStockItems,
+          icon: Icons.inventory_2_outlined,
+          color: analytics.lowStockItems > 0 ? Colors.orange : Colors.grey.shade400,
+          subtitle: analytics.lowStockItems == 0 ? 'Tất cả sản phẩm đầy đủ' : null,
+          onTap: analytics.lowStockItems > 0
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LowStockReportScreen()),
+                  );
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        _buildAlertCard(
+          title: 'Sắp Hết Hạn',
+          count: analytics.expiringSoonItems,
+          icon: Icons.warning_amber_rounded,
+          color: analytics.expiringSoonItems > 0 ? Colors.red : Colors.grey.shade400,
+          subtitle: analytics.expiringSoonItems == 0 ? 'Không có hàng sắp hết hạn' : null,
+          onTap: analytics.expiringSoonItems > 0
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ExpiryReportScreen()),
+                  );
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        _buildAlertCard(
+          title: 'Hàng Ế',
+          count: analytics.slowMovingItems,
+          icon: Icons.pause_circle_outline,
+          color: analytics.slowMovingItems > 0 ? Colors.grey.shade700 : Colors.grey.shade400,
+          subtitle: analytics.slowMovingItems == 0 ? 'Hàng hóa luân chuyển tốt' : null,
+          onTap: analytics.slowMovingItems > 0
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SlowMovingReportScreen()),
+                  );
+                }
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAlertCard({
+    required String title,
+    required int count,
+    required IconData icon,
+    required Color color,
+    String? subtitle,
+    VoidCallback? onTap,
+  }) {
+    final isDisabled = onTap == null;
+
+    return Card(
+      elevation: isDisabled ? 0 : 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      color: isDisabled ? Colors.grey.shade50 : null,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: isDisabled ? Colors.grey.shade600 : null,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$count sản phẩm',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontWeight: count > 0 ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.green.shade700,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: isDisabled ? Colors.grey.shade300 : Colors.grey[400],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Section 3: Widget "Phân tích Tồn kho" - 3 expandable ranking lists
+  Widget _buildInventoryAnalytics(ReportProvider provider) {
+    return Column(
+      children: [
+        _buildExpandableProductList(
+          title: 'Top 5 Sản Phẩm Giá Trị Cao',
+          products: provider.topValueProducts,
+          icon: Icons.star,
+          color: Colors.amber,
+          valueLabel: 'Giá trị',
+          isValueMetric: true,
+        ),
+        const SizedBox(height: 8),
+        _buildExpandableProductList(
+          title: 'Top 5 Hàng Bán Nhanh',
+          products: provider.fastTurnoverProducts,
+          icon: Icons.speed,
+          color: Colors.green,
+          valueLabel: 'Tỷ lệ',
+          isValueMetric: false,
+        ),
+        const SizedBox(height: 8),
+        _buildExpandableProductList(
+          title: 'Top 5 Hàng Bán Chậm',
+          products: provider.slowTurnoverProducts,
+          icon: Icons.slow_motion_video,
+          color: Colors.grey,
+          valueLabel: 'Tỷ lệ',
+          isValueMetric: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpandableProductList({
+    required String title,
+    required List products,
+    required IconData icon,
+    required Color color,
+    required String valueLabel,
+    required bool isValueMetric,
+  }) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            '${products.length} sản phẩm',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
+          children: products.isEmpty
+              ? [
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'Không có dữ liệu',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                ]
+              : products.map<Widget>((product) {
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      product.productName,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    subtitle: Text(
+                      product.sku,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          valueLabel,
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                        ),
+                        Text(
+                          isValueMetric
+                              ? AppFormatter.formatCompactCurrency(product.metricValue)
+                              : product.metricValue.toStringAsFixed(2),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+        ),
+      ),
+    );
   }
 
   // ===========================================================================

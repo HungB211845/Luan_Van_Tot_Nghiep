@@ -5,6 +5,7 @@ import '../services/report_service.dart';
 import '../models/revenue_trend_point.dart';
 import '../models/inventory_analytics.dart';
 import '../models/top_product.dart';
+import '../models/inventory_product.dart';
 
 // Defines the preset date ranges for the UI filter.
 enum DateRangePreset {
@@ -21,6 +22,16 @@ class ReportProvider with ChangeNotifier {
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+
+  // Per-tab loading flags to prevent duplicate calls
+  bool _isLoadingRevenue = false;
+  bool _isLoadingInventory = false;
+  bool _isLoadingProduct = false;
+
+  // Per-tab loaded flags for lazy loading
+  bool _revenueLoaded = false;
+  bool _inventoryLoaded = false;
+  bool _productLoaded = false;
 
   // State for the new flexible date range
   DateTimeRange _selectedDateRange;
@@ -41,6 +52,15 @@ class ReportProvider with ChangeNotifier {
 
   InventoryAnalytics? _inventoryAnalytics;
   InventoryAnalytics? get inventoryAnalytics => _inventoryAnalytics;
+
+  List<InventoryProduct> _topValueProducts = [];
+  List<InventoryProduct> get topValueProducts => _topValueProducts;
+
+  List<InventoryProduct> _fastTurnoverProducts = [];
+  List<InventoryProduct> get fastTurnoverProducts => _fastTurnoverProducts;
+
+  List<InventoryProduct> _slowTurnoverProducts = [];
+  List<InventoryProduct> get slowTurnoverProducts => _slowTurnoverProducts;
 
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
@@ -65,34 +85,154 @@ class ReportProvider with ChangeNotifier {
     return DateTimeRange(start: firstDay, end: lastDay);
   }
 
-  // Main data loading function for the new dashboard
-  Future<void> loadDashboardData() async {
+  // ============================================================================
+  // LAZY LOADING: Tab 1 - Revenue Data
+  // ============================================================================
+  Future<void> loadRevenueData({bool forceRefresh = false}) async {
+    // Skip if already loaded and not forcing refresh
+    if (_revenueLoaded && !forceRefresh) {
+      print('📊 Revenue data already loaded, skipping...');
+      return;
+    }
+
+    // Skip if already loading
+    if (_isLoadingRevenue) {
+      print('⚠️ Already loading revenue data, skipping...');
+      return;
+    }
+
+    _isLoadingRevenue = true;
     _isLoading = true;
     _errorMessage = null;
-    // DO NOT notifyListeners() here. This is an anti-pattern.
+    notifyListeners(); // Show loading state immediately
 
     try {
-      // Use Future.wait for concurrent fetching based on the selected date range
+      print('📊 Loading revenue data for date range: ${_selectedDateRange.start} to ${_selectedDateRange.end}');
+
+      // Load only revenue-related data (3 RPCs)
       final results = await Future.wait([
         _reportService.getRevenueSummaryWithComparison(_selectedDateRange.start, _selectedDateRange.end),
         _reportService.getRevenueTrend(_selectedDateRange.start, _selectedDateRange.end),
         _reportService.getTopPerformingProducts(startDate: _selectedDateRange.start, endDate: _selectedDateRange.end),
-        _reportService.getInventoryAnalytics(), // This one is independent of date range for now
       ]);
 
-      // Assign results safely
       _revenueSummary = results[0] as Map<String, dynamic>;
       _revenueTrend = results[1] as List<RevenueTrendPoint>;
       _topProducts = results[2] as List<TopProduct>;
-      _inventoryAnalytics = results[3] as InventoryAnalytics;
 
+      _revenueLoaded = true;
+      print('✅ Revenue data loaded successfully');
     } catch (e) {
       _errorMessage = e.toString();
-      print('Error loading dashboard data: $e');
+      print('❌ Error loading revenue data: $e');
     } finally {
+      _isLoadingRevenue = false;
       _isLoading = false;
-      notifyListeners(); // Notify listeners ONCE at the end.
+      notifyListeners();
     }
+  }
+
+  // ============================================================================
+  // LAZY LOADING: Tab 2 - Inventory Data
+  // ============================================================================
+  Future<void> loadInventoryData({bool forceRefresh = false}) async {
+    // Skip if already loaded and not forcing refresh
+    if (_inventoryLoaded && !forceRefresh) {
+      print('📦 Inventory data already loaded, skipping...');
+      return;
+    }
+
+    // Skip if already loading
+    if (_isLoadingInventory) {
+      print('⚠️ Already loading inventory data, skipping...');
+      return;
+    }
+
+    _isLoadingInventory = true;
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners(); // Show loading state immediately
+
+    try {
+      print('📦 Loading inventory data...');
+
+      // Load only inventory-related data (2 RPCs)
+      final results = await Future.wait([
+        _reportService.getInventoryAnalytics(),
+        _reportService.getInventoryAnalyticsLists(),
+      ]);
+
+      _inventoryAnalytics = results[0] as InventoryAnalytics;
+
+      final analyticsLists = results[1] as Map<String, List<InventoryProduct>>;
+      _topValueProducts = analyticsLists['top_value'] ?? [];
+      _fastTurnoverProducts = analyticsLists['fast_turnover'] ?? [];
+      _slowTurnoverProducts = analyticsLists['slow_turnover'] ?? [];
+
+      _inventoryLoaded = true;
+      print('✅ Inventory data loaded successfully');
+    } catch (e) {
+      _errorMessage = e.toString();
+      print('❌ Error loading inventory data: $e');
+    } finally {
+      _isLoadingInventory = false;
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ============================================================================
+  // LAZY LOADING: Tab 3 - Product Data (Future Implementation)
+  // ============================================================================
+  Future<void> loadProductData({bool forceRefresh = false}) async {
+    if (_productLoaded && !forceRefresh) {
+      print('⭐ Product data already loaded, skipping...');
+      return;
+    }
+
+    if (_isLoadingProduct) {
+      print('⚠️ Already loading product data, skipping...');
+      return;
+    }
+
+    _isLoadingProduct = true;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      print('⭐ Loading product data...');
+      // TODO: Implement product-specific data loading when needed
+      await Future.delayed(const Duration(milliseconds: 100)); // Placeholder
+      _productLoaded = true;
+      print('✅ Product data loaded successfully');
+    } catch (e) {
+      _errorMessage = e.toString();
+      print('❌ Error loading product data: $e');
+    } finally {
+      _isLoadingProduct = false;
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ============================================================================
+  // LEGACY: Load all data at once (for backward compatibility & refresh)
+  // ============================================================================
+  Future<void> loadDashboardData({bool forceRefresh = false}) async {
+    print('🔄 Loading all dashboard data...');
+    await Future.wait([
+      loadRevenueData(forceRefresh: forceRefresh),
+      loadInventoryData(forceRefresh: forceRefresh),
+      loadProductData(forceRefresh: forceRefresh),
+    ]);
+    print('✅ All dashboard data loaded');
+  }
+
+  // Reset loaded flags when date range changes
+  void _resetLoadedFlags() {
+    _revenueLoaded = false;
+    _inventoryLoaded = false;
+    _productLoaded = false;
   }
 
   // Optimized method to load ONLY today's revenue for HomeScreen dashboard
@@ -160,8 +300,9 @@ class ReportProvider with ChangeNotifier {
         }
         break;
     }
-    // After setting the new range, reload all data
-    await loadDashboardData();
+    // Date range changed - reset loaded flags and force refresh revenue data
+    _resetLoadedFlags();
+    await loadRevenueData(forceRefresh: true);
   }
 
   Future<void> selectNextPeriod() async {
@@ -190,7 +331,8 @@ class ReportProvider with ChangeNotifier {
     }
     _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
     _selectedPreset = DateRangePreset.custom; // Any navigated range is custom
-    await loadDashboardData();
+    _resetLoadedFlags();
+    await loadRevenueData(forceRefresh: true);
   }
 
   Future<void> selectPreviousPeriod() async {
@@ -219,6 +361,7 @@ class ReportProvider with ChangeNotifier {
     }
     _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
     _selectedPreset = DateRangePreset.custom; // Any navigated range is custom
-    await loadDashboardData();
+    _resetLoadedFlags();
+    await loadRevenueData(forceRefresh: true);
   }
 }

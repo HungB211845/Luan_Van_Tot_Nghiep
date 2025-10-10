@@ -6,6 +6,7 @@ class InventoryAnalytics {
   final double profitMargin;
   final int lowStockItems;
   final int expiringSoonItems;
+  final int slowMovingItems; // Products with no sales in 90 days
   final int totalBatches;
 
   InventoryAnalytics({
@@ -15,6 +16,7 @@ class InventoryAnalytics {
     required this.profitMargin,
     required this.lowStockItems,
     required this.expiringSoonItems,
+    required this.slowMovingItems,
     required this.totalBatches,
   });
 
@@ -26,6 +28,7 @@ class InventoryAnalytics {
       profitMargin: (json['profit_margin'] as num?)?.toDouble() ?? 0.0,
       lowStockItems: json['low_stock_items'] as int? ?? 0,
       expiringSoonItems: json['expiring_soon_items'] as int? ?? 0,
+      slowMovingItems: json['slow_moving_items'] as int? ?? 0,
       totalBatches: json['total_batches'] as int? ?? 0,
     );
   }

@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/revenue_trend_point.dart';
 import '../models/inventory_analytics.dart';
 import '../models/top_product.dart';
+import '../models/inventory_product.dart';
 
 class ReportService {
   final _supabase = Supabase.instance.client;
@@ -67,8 +68,17 @@ class ReportService {
         _supabase.rpc('get_inventory_alerts'),
       ]);
 
-      final summaryData = (responses[0] as List).first as Map<String, dynamic>; 
+      final summaryData = (responses[0] as List).first as Map<String, dynamic>;
       final alertsData = responses[1] as Map<String, dynamic>;
+
+      // Debug logging to see actual API response
+      print('🔍 DEBUG: Inventory Alerts Raw Response');
+      print('  Low Stock Products: ${alertsData['low_stock_products']}');
+      print('  Expiring Soon Products: ${alertsData['expiring_soon_products']}');
+      print('  Slow Moving Products: ${alertsData['slow_moving_products']}');
+      print('  Low Stock Count: ${(alertsData['low_stock_products'] as List).length}');
+      print('  Expiring Soon Count: ${(alertsData['expiring_soon_products'] as List).length}');
+      print('  Slow Moving Count: ${(alertsData['slow_moving_products'] as List?)?.length ?? 0}');
 
       // Combine results into a single model.
       return InventoryAnalytics.fromJson({
@@ -80,9 +90,61 @@ class ReportService {
         'total_batches': summaryData['total_batches'],
         'low_stock_items': (alertsData['low_stock_products'] as List).length,
         'expiring_soon_items': (alertsData['expiring_soon_products'] as List).length,
+        'slow_moving_items': (alertsData['slow_moving_products'] as List?)?.length ?? 0,
       });
     } catch (e) {
       print('Error in getInventoryAnalytics: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetches inventory analytics lists (top/bottom products by value and turnover)
+  Future<Map<String, List<InventoryProduct>>> getInventoryAnalyticsLists() async {
+    try {
+      final response = await _supabase.rpc('get_inventory_analytics_lists');
+      final data = response as Map<String, dynamic>;
+
+      return {
+        'top_value': (data['top_value_products'] as List)
+            .map((item) => InventoryProduct.fromJson(item))
+            .toList(),
+        'fast_turnover': (data['fast_turnover_products'] as List)
+            .map((item) => InventoryProduct.fromJson(item))
+            .toList(),
+        'slow_turnover': (data['slow_turnover_products'] as List)
+            .map((item) => InventoryProduct.fromJson(item))
+            .toList(),
+      };
+    } catch (e) {
+      print('Error in getInventoryAnalyticsLists: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetches detailed low stock products for alert screen
+  Future<List<Map<String, dynamic>>> getLowStockProducts({int threshold = 10}) async {
+    try {
+      final response = await _supabase.rpc('get_inventory_alerts', params: {
+        'p_low_stock_threshold': threshold,
+      });
+      final data = response as Map<String, dynamic>;
+      return (data['low_stock_products'] as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      print('Error in getLowStockProducts: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetches detailed slow moving products for alert screen
+  Future<List<Map<String, dynamic>>> getSlowMovingProducts({int days = 90}) async {
+    try {
+      final response = await _supabase.rpc('get_inventory_alerts', params: {
+        'p_slow_moving_days': days,
+      });
+      final data = response as Map<String, dynamic>;
+      return (data['slow_moving_products'] as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      print('Error in getSlowMovingProducts: $e');
       rethrow;
     }
   }
