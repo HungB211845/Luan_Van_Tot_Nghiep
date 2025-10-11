@@ -10,16 +10,17 @@ import 'package:path/path.dart' as path;
 /// Service for handling product image operations
 /// - Pick from camera/gallery
 /// - Download from URL
-/// - Compress and resize (200×250px, JPEG 85%)
+/// - Compress and resize (400×500px, max 50KB with progressive compression)
 /// - Upload to Supabase Storage
 class ImageService {
   final SupabaseClient _supabase = Supabase.instance.client;
   final ImagePicker _picker = ImagePicker();
 
   // Target dimensions for product images
-  static const int targetWidth = 200;
-  static const int targetHeight = 250;
-  static const int jpegQuality = 85;
+  static const int targetWidth = 400;
+  static const int targetHeight = 500;
+  static const int jpegQuality = 80;
+  static const int maxFileSizeKB = 50; // Hard limit 50KB
   static const String bucketName = 'product-images';
 
   /// Upload product image from camera, gallery, or URL
@@ -105,8 +106,8 @@ class ImageService {
     }
   }
 
-  /// Compress and resize image to target dimensions
-  /// Target: 200×250px, JPEG 85% quality
+  /// Compress and resize image to target dimensions with progressive quality
+  /// Target: 400×500px, max 50KB with progressive compression (80% → 75% → 65% → 50%)
   Future<Uint8List?> _compressAndResizeImage(Uint8List imageBytes) async {
     try {
       // Decode image
@@ -116,7 +117,7 @@ class ImageService {
       }
 
       // Calculate aspect ratio to fit within target dimensions
-      // Maintain aspect ratio while ensuring it fits in 200×250px box
+      // Maintain aspect ratio while ensuring it fits in 400×500px box
       int newWidth = targetWidth;
       int newHeight = targetHeight;
 
@@ -141,15 +142,43 @@ class ImageService {
         interpolation: img.Interpolation.linear,
       );
 
-      // Encode to JPEG with 85% quality
-      final compressed = img.encodeJpg(resized, quality: jpegQuality);
-
       if (kDebugMode) {
-        print('📐 Original size: ${image.width}×${image.height} (${(imageBytes.length / 1024).toStringAsFixed(2)} KB)');
-        print('📐 Resized to: ${resized.width}×${resized.height} (${(compressed.length / 1024).toStringAsFixed(2)} KB)');
+        print('📐 Original: ${image.width}×${image.height} (${(imageBytes.length / 1024).toStringAsFixed(2)} KB)');
+        print('📐 Resized to: ${resized.width}×${resized.height}');
       }
 
-      return Uint8List.fromList(compressed);
+      // Progressive compression: Try quality levels until size is acceptable
+      final qualityLevels = [85, 75, 65, 50];
+      Uint8List? bestResult;
+
+      for (final quality in qualityLevels) {
+        final compressed = img.encodeJpg(resized, quality: quality);
+        final sizeKB = compressed.length / 1024;
+
+        if (kDebugMode) {
+          print('🔄 Trying quality $quality%: ${sizeKB.toStringAsFixed(2)} KB');
+        }
+
+        bestResult = Uint8List.fromList(compressed);
+
+        // If within limit, use this quality
+        if (sizeKB <= maxFileSizeKB) {
+          if (kDebugMode) {
+            print('✅ Final: Quality $quality%, ${sizeKB.toStringAsFixed(2)} KB (within ${maxFileSizeKB}KB limit)');
+          }
+          break;
+        }
+      }
+
+      // If still too large even at 50% quality, log warning but accept
+      if (bestResult != null) {
+        final finalSize = bestResult.length / 1024;
+        if (finalSize > maxFileSizeKB && kDebugMode) {
+          print('⚠️ Warning: Final size ${finalSize.toStringAsFixed(2)} KB exceeds ${maxFileSizeKB}KB limit (using lowest quality 50%)');
+        }
+      }
+
+      return bestResult;
     } catch (e) {
       if (kDebugMode) {
         print('❌ Error compressing image: $e');
