@@ -49,6 +49,12 @@ dependencies:
   flutter_facebook_auth: ^7.0.1
   local_auth: ^2.3.0
   flutter_secure_storage: ^9.2.2
+  
+  # Export functionality dependencies
+  csv: ^6.0.0
+  share_plus: ^10.0.0
+  path_provider: ^2.1.4
+  file_saver: ^0.2.13
   shared_preferences: ^2.3.2
   crypto: ^3.0.6
   device_info_plus: ^10.1.2

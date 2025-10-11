@@ -12,6 +12,7 @@ import '../../shared/utils/formatter.dart';
 import '../../shared/utils/datetime_helpers.dart';
 import 'providers/quick_access_provider.dart';
 import '../../features/reports/providers/report_provider.dart';
+import 'package:intl/intl.dart';
 import '../../features/reports/models/daily_revenue.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -43,7 +44,15 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<DebtProvider>().loadAllDebts();
       context.read<TransactionProvider>().loadTransactions(limit: 5);
       context.read<QuickAccessProvider>().loadConfiguration();
-      context.read<ReportProvider>().loadDashboardData(); // For revenue chart
+      
+      // Load weekly revenue specifically for "7 ngày" widget
+      context.read<ReportProvider>().loadWeeklyRevenueForHome();
+      
+      // PRELOAD: Background load all report data for faster Reports screen access
+      // Delay slightly to not interfere with critical HomeScreen data
+      Future.delayed(const Duration(milliseconds: 500), () {
+        context.read<ReportProvider>().preloadAllReportData();
+      });
     });
   }
 
@@ -263,40 +272,68 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 📊 Interactive Revenue Chart Widget
+  // 📊 Interactive Revenue Chart Widget (Cloned from Reports Screen)
   Widget _buildRevenueChartWidget() {
     return Consumer<ReportProvider>(
       builder: (context, reportProvider, child) {
-        // 🔥 FIX: Show skeleton while loading OR if no data loaded yet
-        if (reportProvider.isLoading || reportProvider.revenueTrend.isEmpty) {
+        // Show loading while data is being fetched
+        if (reportProvider.homeScreenRevenueTrend.isEmpty && reportProvider.errorMessage == null) {
           return Container(
             height: 300,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Center(child: CircularProgressIndicator()),
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Đang tải dữ liệu doanh thu 7 ngày...'),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        // Show error state if loading failed
+        if (reportProvider.errorMessage != null && reportProvider.homeScreenRevenueTrend.isEmpty) {
+          return Container(
+            height: 300,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text('Không thể tải dữ liệu doanh thu'),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () => reportProvider.loadWeeklyRevenueForHome(),
+                    child: const Text('Thử lại'),
+                  ),
+                ],
+              ),
+            ),
           );
         }
 
-        // Map RevenueTrendPoint to DailyRevenue format for chart compatibility
-        final revenueTrend = reportProvider.revenueTrend;
-        final weeklyData = revenueTrend.map((point) {
-          return DailyRevenue(
-            date: point.reportDate,
-            revenue: point.currentPeriodRevenue,
-            transactionCount: 0, // Transaction count not available from RPC
-          );
-        }).toList();
+        // Use weekly revenue trend data (forced weekly range)
+        final weeklyTrend = reportProvider.homeScreenRevenueTrend;
+        final double maxDailyRevenue = weeklyTrend.isEmpty
+            ? 0.0
+            : weeklyTrend.map((point) => point.currentPeriodRevenue).reduce((a, b) => a > b ? a : b);
 
-        final maxRevenue = weeklyData.isEmpty
-            ? 100000.0
-            : weeklyData.map((d) => d.revenue).reduce((a, b) => a > b ? a : b) *
-                  1.2;
+        final maxRevenue = (maxDailyRevenue > 0) ? maxDailyRevenue * 1.2 : 100000.0;
 
-        final totalRevenue = weeklyData.fold<double>(
+        final totalWeekRevenue = weeklyTrend.fold<double>(
           0.0,
-          (sum, day) => sum + day.revenue,
+          (sum, point) => sum + point.currentPeriodRevenue,
         );
 
         return Container(
@@ -315,202 +352,173 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: Tap to view Reports
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(
-                    context,
-                    rootNavigator: true,
-                  ).pushNamed(RouteNames.reports);
-                },
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Doanh thu 7 ngày',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+              // Header with navigation arrows for week switching
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Previous week button
+                  IconButton(
+                    onPressed: () => reportProvider.showPreviousWeekForHome(),
+                    icon: Icon(
+                      Icons.chevron_left,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  
+                  // Title and date range (tap to go to Reports)
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(
+                          context,
+                          rootNavigator: true,
+                        ).pushNamed(RouteNames.reports);
+                      },
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Doanh thu 7 ngày',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${DateFormat('dd/MM').format(reportProvider.homeScreenWeekStart)} - ${DateFormat('dd/MM').format(reportProvider.homeScreenWeekStart.add(const Duration(days: 6)))}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Icon(
-                      CupertinoIcons.chevron_right,
-                      color: Colors.grey.shade400,
-                      size: 20,
+                  ),
+                  
+                  // Next week button  
+                  IconButton(
+                    onPressed: reportProvider.canShowNextWeekForHome
+                        ? () => reportProvider.showNextWeekForHome()
+                        : null, // Disable button if next week is in the future
+                    icon: Icon(
+                      Icons.chevron_right,
+                      color: reportProvider.canShowNextWeekForHome
+                          ? Colors.grey.shade600
+                          : Colors.grey.shade300, // Visually indicate disabled state
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Total revenue display
+              Text(
+                AppFormatter.formatCurrency(totalWeekRevenue),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
-              // Interactive Bar Chart
+              // Interactive Bar Chart (Cloned from Reports)
               SizedBox(
                 height: 180,
                 child: BarChart(
                   BarChartData(
-                    alignment: BarChartAlignment.spaceAround,
                     maxY: maxRevenue,
                     barTouchData: BarTouchData(
                       enabled: true,
-                      touchCallback: (event, response) {
-                        if (event.isInterestedForInteractions &&
-                            response != null &&
-                            response.spot != null) {
-                          setState(() {
-                            _selectedDayIndex =
-                                response.spot!.touchedBarGroupIndex;
-                          });
-                        }
-                      },
                       touchTooltipData: BarTouchTooltipData(
-                        getTooltipColor: (group) => Colors.black87,
-                        tooltipBorder: const BorderSide(
-                          color: Colors.transparent,
-                        ),
-                        tooltipPadding: const EdgeInsets.all(8),
-                        tooltipMargin: 8,
                         getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                          if (groupIndex >= weeklyData.length) return null;
-                          final data = weeklyData[groupIndex];
+                          if (groupIndex >= weeklyTrend.length) return null;
+                          final point = weeklyTrend[groupIndex];
+                          final weekday = DateFormat('EEEE', 'vi').format(point.reportDate);
                           return BarTooltipItem(
-                            '${data.fullWeekdayName}\n${AppFormatter.formatCurrency(data.revenue)}',
+                            '$weekday\n${AppFormatter.formatCurrency(rod.toY)}',
                             const TextStyle(
                               color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
                           );
                         },
                       ),
+                      touchCallback: (FlTouchEvent event, barTouchResponse) {
+                        setState(() {
+                          if (!event.isInterestedForInteractions ||
+                              barTouchResponse == null ||
+                              barTouchResponse.spot == null) {
+                            _selectedDayIndex = null;
+                            return;
+                          }
+                          _selectedDayIndex = barTouchResponse.spot!.touchedBarGroupIndex;
+                        });
+                      },
                     ),
                     titlesData: FlTitlesData(
                       show: true,
                       bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            final index = value.toInt();
-                            if (index >= weeklyData.length) {
-                              return const SizedBox();
-                            }
-                            return Text(
-                              weeklyData[index].weekdayLabel,
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
-                                fontWeight: _selectedDayIndex == index
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                          getTitlesWidget: (double value, TitleMeta meta) {
+                            if (value.toInt() >= weeklyTrend.length) return const Text('');
+                            final date = weeklyTrend[value.toInt()].reportDate;
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                DateFormat('E', 'vi').format(date),
+                                style: TextStyle(
+                                  color: _selectedDayIndex == value.toInt()
+                                      ? Colors.green
+                                      : Colors.grey.shade600,
+                                  fontSize: 12,
+                                  fontWeight: _selectedDayIndex == value.toInt()
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
                               ),
                             );
                           },
                         ),
                       ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      topTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
+                      leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
-                    gridData: FlGridData(show: false),
                     borderData: FlBorderData(show: false),
-                    barGroups: weeklyData
-                        .asMap()
-                        .entries
-                        .map(
-                          (entry) => _buildBarGroup(
-                            entry.key,
-                            entry.value.revenue,
-                            isSelected: _selectedDayIndex == entry.key,
+                    barGroups: weeklyTrend.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final point = entry.value;
+                      final isSelected = _selectedDayIndex == index;
+                      
+                      return BarChartGroupData(
+                        x: index,
+                        barRods: [
+                          BarChartRodData(
+                            toY: point.currentPeriodRevenue,
+                            color: isSelected ? Colors.green.shade700 : Colors.green.shade400,
+                            width: 20,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                           ),
-                        )
-                        .toList(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Tooltip: Tap to view transaction details
-              if (_selectedDayIndex != null &&
-                  _selectedDayIndex! < weeklyData.length)
-                GestureDetector(
-                  onTap: () {
-                    // Navigate to transaction list filtered by date
-                    Navigator.of(context, rootNavigator: true).pushNamed(
-                      RouteNames.transactionList,
-                      arguments: weeklyData[_selectedDayIndex!].date,
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                weeklyData[_selectedDayIndex!].fullWeekdayName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                AppFormatter.formatCurrency(weeklyData[_selectedDayIndex!].revenue),
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          CupertinoIcons.chevron_right,
-                          color: Colors.green,
-                          size: 20,
-                        ),
-                      ],
+                        ],
+                      );
+                    }).toList(),
+                    gridData: FlGridData(
+                      show: true,
+                      drawHorizontalLine: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: maxRevenue / 4,
+                      getDrawingHorizontalLine: (value) {
+                        return FlLine(
+                          color: Colors.grey.shade200,
+                          strokeWidth: 1,
+                        );
+                      },
                     ),
                   ),
-                ),
-
-              if (_selectedDayIndex != null) const SizedBox(height: 16),
-
-              // Summary: Tap to view Reports
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(
-                    context,
-                    rootNavigator: true,
-                  ).pushNamed(RouteNames.reports);
-                },
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Tổng tuần này',
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
-                    ),
-                    Text(
-                      AppFormatter.formatCurrency(totalRevenue),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],
@@ -520,19 +528,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  BarChartGroupData _buildBarGroup(int x, double y, {bool isSelected = false}) {
-    return BarChartGroupData(
-      x: x,
-      barRods: [
-        BarChartRodData(
-          toY: y,
-          color: isSelected ? Colors.green.shade700 : Colors.green,
-          width: isSelected ? 24 : 20,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-        ),
-      ],
-    );
-  }
 
   // 🎯 Smart "For You" Widget - Actionable Insights
   Widget _buildForYouWidget() {

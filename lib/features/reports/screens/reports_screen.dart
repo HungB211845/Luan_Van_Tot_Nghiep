@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -8,6 +9,7 @@ import '../providers/report_provider.dart';
 import '../models/inventory_analytics.dart';
 import '../../../shared/utils/formatter.dart';
 import '../../../shared/widgets/loading_widget.dart';
+import '../../../shared/utils/responsive.dart';
 import 'package:agricultural_pos/features/products/screens/reports/expiry_report_screen.dart';
 import 'package:agricultural_pos/features/products/screens/reports/low_stock_report_screen.dart';
 import 'package:agricultural_pos/features/products/screens/reports/slow_moving_report_screen.dart';
@@ -66,23 +68,11 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     }
   }
 
-  void _loadDataForCurrentTab() {
-    final provider = context.read<ReportProvider>();
-    final currentTab = _tabController.index;
-
-    print('📑 Tab changed to: $currentTab');
-
-    switch (currentTab) {
-      case 0: // Revenue Tab
-        provider.loadRevenueData();
-        break;
-      case 1: // Inventory Tab
-        provider.loadInventoryData();
-        break;
-      case 2: // Product Tab
-        provider.loadProductData();
-        break;
-    }
+  /// Helper to get tax period description
+  String _getTaxPeriodDescription(DateTimeRange range) {
+    final start = DateFormat('dd/MM/yyyy').format(range.start);
+    final end = DateFormat('dd/MM/yyyy').format(range.end);
+    return 'Từ $start đến $end';
   }
 
   @override
@@ -97,35 +87,186 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   Widget build(BuildContext context) {
     return Consumer<ReportProvider>(
       builder: (context, provider, child) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Báo Cáo Kinh Doanh'),
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
-            bottom: TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              indicatorColor: Colors.white,
-              tabs: const [
-                Tab(icon: Icon(Icons.trending_up), text: 'Doanh Thu'),
-                Tab(icon: Icon(Icons.inventory), text: 'Tồn Kho'),
-                Tab(icon: Icon(Icons.star), text: 'Sản Phẩm'),
-              ],
-            ),
-          ),
+        return ResponsiveScaffold(
+          title: 'Báo Cáo Kinh Doanh',
           body: provider.isLoading
               ? const Center(child: LoadingWidget())
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildRevenueTab(provider),
-                    _buildInventoryTab(provider),
-                    _buildProductsTab(provider),
-                  ],
+              : context.adaptiveWidget(
+                  mobile: _buildMobileLayout(provider),
+                  tablet: _buildTabletLayout(provider), 
+                  desktop: _buildDesktopLayout(provider),
                 ),
         );
       },
+    );
+  }
+
+  // Mobile Layout: Standard TabBar
+  Widget _buildMobileLayout(ReportProvider provider) {
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          labelColor: Colors.green,
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: Colors.green,
+          tabs: const [
+            Tab(icon: Icon(Icons.trending_up), text: 'Doanh Thu'),
+            Tab(icon: Icon(Icons.inventory), text: 'Tồn Kho'),
+            Tab(icon: Icon(Icons.receipt_long), text: 'Thuế'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildRevenueTab(provider),
+              _buildInventoryTab(provider),
+              _buildTaxTab(provider),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Tablet Layout: Side tabs with larger content area
+  Widget _buildTabletLayout(ReportProvider provider) {
+    return Row(
+      children: [
+        // Side Navigation Panel
+        Container(
+          width: context.adaptiveValue(mobile: 200.0, tablet: 250.0, desktop: 300.0),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            border: Border(right: BorderSide(color: Colors.grey.shade300)),
+          ),
+          child: Column(
+            children: [
+              _buildTabletNavigationTile(
+                index: 0,
+                icon: Icons.trending_up,
+                title: 'Doanh Thu',
+                subtitle: 'Phân tích doanh thu',
+                provider: provider,
+              ),
+              _buildTabletNavigationTile(
+                index: 1,
+                icon: Icons.inventory,
+                title: 'Tồn Kho',
+                subtitle: 'Quản lý kho hàng',
+                provider: provider,
+              ),
+              _buildTabletNavigationTile(
+                index: 2,
+                icon: Icons.receipt_long,
+                title: 'Thuế',
+                subtitle: 'Báo cáo thuế',
+                provider: provider,
+              ),
+            ],
+          ),
+        ),
+        
+        // Content Area
+        Expanded(
+          child: Container(
+            padding: EdgeInsets.all(context.sectionPadding),
+            child: _getCurrentTabContent(provider),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Desktop Layout: Master-Detail with enhanced navigation
+  Widget _buildDesktopLayout(ReportProvider provider) {
+    return Row(
+      children: [
+        // Enhanced Side Navigation
+        Container(
+          width: 320,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(right: BorderSide(color: Colors.grey.shade200)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(2, 0),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Navigation Header
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.green.shade600, Colors.green.shade500],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.analytics, color: Colors.white, size: 28),
+                    SizedBox(width: 12),
+                    Text(
+                      'Business Analytics',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Navigation Items
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  children: [
+                    _buildDesktopNavigationTile(
+                      index: 0,
+                      icon: Icons.trending_up,
+                      title: 'Revenue Analytics',
+                      subtitle: 'Track revenue trends and performance',
+                      provider: provider,
+                    ),
+                    _buildDesktopNavigationTile(
+                      index: 1,
+                      icon: Icons.inventory_2,
+                      title: 'Inventory Management', 
+                      subtitle: 'Monitor stock levels and alerts',
+                      provider: provider,
+                    ),
+                    _buildDesktopNavigationTile(
+                      index: 2,
+                      icon: Icons.receipt_long,
+                      title: 'Tax Reporting',
+                      subtitle: 'Calculate tax obligations',
+                      provider: provider,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Main Content Area
+        Expanded(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            padding: const EdgeInsets.all(32),
+            child: _getCurrentTabContent(provider),
+          ),
+        ),
+      ],
     );
   }
 
@@ -139,8 +280,6 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
         padding: const EdgeInsets.all(16),
         children: [
           _buildTrendAnalysisCard(provider),
-          const SizedBox(height: 24),
-          _buildRankings(provider),
         ],
       ),
     );
@@ -232,7 +371,7 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
         style: SegmentedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          selectedBackgroundColor: Colors.lightGreen,
+          selectedBackgroundColor: Colors.green,
           selectedForegroundColor: Colors.white,
         ),
       ),
@@ -477,18 +616,6 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRankings(ReportProvider provider) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Bảng Xếp Hạng', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 16),
-        _buildTopProductsCard(provider),
-
-      ],
     );
   }
 
@@ -844,10 +971,608 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   }
 
   // ===========================================================================
-  // TAB 3: PRODUCT PERFORMANCE (Placeholder)
+  // TAB 3: TAX DASHBOARD
   // ===========================================================================
-  Widget _buildProductsTab(ReportProvider provider) {
-    return const Center(child: Text('Nội dung Sản Phẩm sắp ra mắt'));
+  Widget _buildTaxTab(ReportProvider provider) {
+    final taxSummary = provider.taxSummary;
+
+    if (taxSummary == null) {
+      return const Center(child: Text('Không có dữ liệu thuế'));
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => provider.loadTaxData(forceRefresh: true),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Time Range Selector for Tax Period
+          _buildTaxTimeRangeSelector(provider),
+          const SizedBox(height: 16),
+
+          // Tax Obligation Summary Card
+          _buildTaxObligationCard(taxSummary, provider),
+          const SizedBox(height: 16),
+
+          // Revenue Breakdown Card
+          _buildRevenueBreakdownCard(taxSummary),
+          const SizedBox(height: 16),
+
+          // Expense Breakdown Card
+          _buildExpenseBreakdownCard(taxSummary),
+          const SizedBox(height: 16),
+
+          // Actions Section
+          _buildTaxActionsCard(),
+        ],
+      ),
+    );
+  }
+
+  /// Tax-specific time range selector with month as default
+  Widget _buildTaxTimeRangeSelector(ReportProvider provider) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'KHOẢNG THỜI GIAN KÊ KHAI',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Remove AnimatedSwitcher to prevent rebuilds - use simple SegmentedButton
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<DateRangePreset>(
+                segments: const [
+                  ButtonSegment(value: DateRangePreset.thisWeek, label: Text('Tuần')),
+                  ButtonSegment(value: DateRangePreset.thisMonth, label: Text('Tháng')),
+                  ButtonSegment(value: DateRangePreset.thisQuarter, label: Text('Quý')),
+                  ButtonSegment(value: DateRangePreset.thisYear, label: Text('Năm')),
+                ],
+                selected: {provider.selectedPreset},
+                onSelectionChanged: (newSelection) {
+                  // Immediate UI update without await to prevent blocking
+                  provider.setDateRangeForTaxSilent(newSelection.first);
+                },
+                style: SegmentedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  selectedBackgroundColor: Colors.green,
+                  selectedForegroundColor: Colors.white,
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Simple text without AnimatedSwitcher
+            Text(
+              _getTaxPeriodDescription(provider.selectedDateRange),
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Widget 2: Tax Obligation Summary Card
+  Widget _buildTaxObligationCard(taxSummary, ReportProvider provider) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'NGHĨA VỤ THUẾ',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Tổng Doanh Thu Kê Khai
+            _buildTaxSummaryRow(
+              label: 'Tổng Doanh thu Kê khai',
+              value: AppFormatter.formatCurrency(taxSummary.totalRevenue),
+            ),
+            const Divider(height: 24),
+
+            // Thuế Phải Nộp (Highlighted)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'THUẾ PHẢI NỘP (1.5%)',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  AppFormatter.formatCurrency(taxSummary.estimatedTax),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Hạn Nộp (Placeholder - will calculate from period)
+            Text(
+              'Hạn nộp: ${_getTaxDeadline(provider.selectedDateRange)}',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Widget 3: Revenue Breakdown Card
+  Widget _buildRevenueBreakdownCard(taxSummary) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'DIỄN GIẢI DOANH THU',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            _buildTaxSummaryRow(
+              label: 'Doanh thu Bán hàng (POS)',
+              value: AppFormatter.formatCurrency(taxSummary.totalRevenue),
+              subtitle: '${taxSummary.totalTransactions} giao dịch',
+            ),
+            const Divider(height: 24),
+
+            _buildTaxSummaryRow(
+              label: 'Doanh thu từ các nguồn khác',
+              value: AppFormatter.formatCurrency(0),
+              subtitle: 'Chưa áp dụng',
+              isPlaceholder: true,
+            ),
+            const Divider(height: 24),
+
+            _buildTaxSummaryRow(
+              label: 'TỔNG DOANH THU KÊ KHAI',
+              value: AppFormatter.formatCurrency(taxSummary.totalRevenue),
+              isBold: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Widget 4: Expense Breakdown Card
+  Widget _buildExpenseBreakdownCard(taxSummary) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'DIỄN GIẢI CHI PHÍ',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            _buildTaxSummaryRow(
+              label: 'Chi phí Nhập hàng (PO)',
+              value: AppFormatter.formatCurrency(taxSummary.totalExpenses),
+            ),
+            const Divider(height: 24),
+
+            _buildTaxSummaryRow(
+              label: 'Chi phí Vận hành khác',
+              value: AppFormatter.formatCurrency(0),
+              subtitle: 'Chưa áp dụng',
+              isPlaceholder: true,
+            ),
+            const Divider(height: 24),
+
+            _buildTaxSummaryRow(
+              label: 'TỔNG CHI PHÍ',
+              value: AppFormatter.formatCurrency(taxSummary.totalExpenses),
+              isBold: true,
+            ),
+            const SizedBox(height: 16),
+
+            // Lợi nhuận thực (Info only)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Lợi nhuận thực (sau thuế)',
+                        style: TextStyle(fontSize: 13, color: Colors.black87),
+                      ),
+                      Text(
+                        '${taxSummary.profitMargin.toStringAsFixed(1)}% biên lợi nhuận',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    AppFormatter.formatCurrency(taxSummary.netProfit),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Widget 5: Actions Card with Export Functionality
+  Widget _buildTaxActionsCard() {
+    return Consumer<ReportProvider>(
+      builder: (context, provider, child) {
+        // Platform-specific subtitle text
+        String getExportSubtitle() {
+          if (kIsWeb) {
+            return 'Chức năng xuất file chưa hỗ trợ trên web, vui lòng sử dụng ứng dụng mobile';
+          } else if (context.isMobile) {
+            return 'Chia sẻ qua AirDrop, Email hoặc lưu vào Files';
+          } else {
+            return 'Lưu file CSV vào máy tính của bạn';
+          }
+        }
+
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Column(
+            children: [
+              ListTile(
+                leading: provider.isExporting
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download, color: Colors.green),
+                title: const Text('Xuất Bảng kê Bán hàng'),
+                subtitle: Text(
+                  provider.isExporting
+                      ? 'Đang tạo và xử lý file...'
+                      : getExportSubtitle(),
+                ),
+                trailing: provider.isExporting
+                    ? null
+                    : const Icon(Icons.chevron_right),
+                onTap: provider.isExporting
+                    ? null
+                    : () async {
+                        await provider.exportSalesLedgerAction();
+                        
+                        // Show error snackbar if export failed
+                        if (provider.exportError != null && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(provider.exportError!),
+                              backgroundColor: Colors.red,
+                              action: SnackBarAction(
+                                label: 'Thử lại',
+                                textColor: Colors.white,
+                                onPressed: () => provider.exportSalesLedgerAction(),
+                              ),
+                            ),
+                          );
+                        } else if (provider.exportError == null && context.mounted) {
+                          // Show success message for desktop (mobile has native feedback)
+                          if (!context.isMobile && !kIsWeb) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ File đã được lưu thành công!'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        }
+                      },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.description, color: Colors.blue),
+                title: const Text('Xuất Tờ khai Thuế (Mẫu 01/CNKD)'),
+                subtitle: const Text('Xem và sao chép thông tin cho tờ khai'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Màn hình tờ khai sẽ được triển khai sau')),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Helper widget for tax summary rows
+  Widget _buildTaxSummaryRow({
+    required String label,
+    required String value,
+    String? subtitle,
+    bool isBold = false,
+    bool isPlaceholder = false,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: isBold ? 15 : 14,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                  color: isPlaceholder ? Colors.grey.shade500 : null,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isBold ? 16 : 15,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: isPlaceholder ? Colors.grey.shade500 : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _loadDataForCurrentTab() {
+    final provider = context.read<ReportProvider>();
+    final currentTab = _tabController.index;
+
+    switch (currentTab) {
+      case 0: // Revenue Tab
+        // Check if data already loaded from preload cache - NO FORCE REFRESH
+        if (!provider.revenueLoaded) {
+          provider.loadRevenueData(forceRefresh: false);
+        }
+        break;
+      case 1: // Inventory Tab
+        // Check if data already loaded from preload cache - NO FORCE REFRESH
+        if (!provider.inventoryLoaded) {
+          provider.loadInventoryData(forceRefresh: false);
+        }
+        break;
+      case 2: // Tax Tab
+        // Check if data already loaded from preload cache - NO FORCE REFRESH
+        if (!provider.taxLoaded) {
+          provider.loadTaxData(forceRefresh: false);
+        }
+        break;
+    }
+  }
+
+  // Helper: Get current tab content based on selected index
+  Widget _getCurrentTabContent(ReportProvider provider) {
+    switch (_tabController.index) {
+      case 0:
+        return _buildRevenueTab(provider);
+      case 1:
+        return _buildInventoryTab(provider);
+      case 2:
+        return _buildTaxTab(provider);
+      default:
+        return _buildRevenueTab(provider);
+    }
+  }
+
+  // Tablet Navigation Tile
+  Widget _buildTabletNavigationTile({
+    required int index,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ReportProvider provider,
+  }) {
+    final isSelected = _tabController.index == index;
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: isSelected ? Colors.green : Colors.grey.shade600,
+          size: 24,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.green : Colors.grey.shade800,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        selected: isSelected,
+        selectedTileColor: Colors.green.withOpacity(0.1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        onTap: () {
+          _tabController.animateTo(index);
+          _loadDataForCurrentTab();
+        },
+      ),
+    );
+  }
+
+  // Desktop Navigation Tile (Enhanced)
+  Widget _buildDesktopNavigationTile({
+    required int index,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ReportProvider provider,
+  }) {
+    final isSelected = _tabController.index == index;
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Material(
+        color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            _tabController.animateTo(index);
+            _loadDataForCurrentTab();
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? Colors.green.withOpacity(0.2)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isSelected ? Colors.green : Colors.grey.shade600,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? Colors.green.shade700 : Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Container(
+                    width: 4,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Helper to calculate tax deadline based on period
+  String _getTaxDeadline(DateTimeRange range) {
+    // Tax deadline is typically the 20th of the month following the tax period
+    final lastDayOfPeriod = range.end;
+    final deadlineMonth = lastDayOfPeriod.month == 12 ? 1 : lastDayOfPeriod.month + 1;
+    final deadlineYear = lastDayOfPeriod.month == 12 ? lastDayOfPeriod.year + 1 : lastDayOfPeriod.year;
+    final deadline = DateTime(deadlineYear, deadlineMonth, 20);
+    return DateFormat('dd/MM/yyyy').format(deadline);
   }
 
   // ===========================================================================
