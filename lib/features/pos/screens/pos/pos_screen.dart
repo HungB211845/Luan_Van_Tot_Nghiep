@@ -16,6 +16,7 @@ import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../../customers/models/customer.dart';
 import '../../../customers/screens/customers/customer_list_screen.dart';
+import '../../../products/widgets/product_image_widget.dart';
 import 'confirm_credit_sale_sheet.dart';
 
 class POSScreen extends StatefulWidget {
@@ -406,7 +407,14 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(Icons.inventory_2_outlined, color: Colors.grey[400], size: 40),
+                  Flexible(
+                    flex: 3, // Give image higher priority for space
+                    child: ProductImageWidget(
+                      imageUrl: product.imageUrl,
+                      size: ProductImageSize.grid,
+                      width: double.infinity,
+                    ),
+                  ),
                   Text(
                     product.name,
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -417,6 +425,9 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                   Text(
                     AppFormatter.formatCurrency(_viewModel!.productProvider.getCurrentPrice(product.id)),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green),
+                    textAlign: TextAlign.center,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

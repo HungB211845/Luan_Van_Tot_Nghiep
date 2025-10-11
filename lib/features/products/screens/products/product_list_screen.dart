@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../providers/product_provider.dart';
+import '../../widgets/product_image_widget.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/responsive.dart';
@@ -707,31 +708,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
                         ),
                       )
                     else
-                      Container(
+                      ProductImageWidget(
+                        imageUrl: product.imageUrl,
+                        size: ProductImageSize.list,
                         width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.green.withOpacity(0.2) : Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: product.imageUrl != null && product.imageUrl!.isNotEmpty
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  product.imageUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Icon(
-                                    Icons.inventory_2,
-                                    color: isSelected ? Colors.green[700] : Colors.green,
-                                    size: 28,
-                                  ),
-                                ),
-                              )
-                            : Icon(
-                                Icons.inventory_2,
-                                color: isSelected ? Colors.green[700] : Colors.green,
-                                size: 28,
-                              ),
                       ),
                     const SizedBox(width: 12),
                     Expanded(

@@ -5,11 +5,13 @@ import 'add_product_step3_screen.dart';
 class AddProductStep2Screen extends StatefulWidget {
   final String productName;
   final String companyId;
+  final String? imageUrl;
 
   const AddProductStep2Screen({
     super.key,
     required this.productName,
     required this.companyId,
+    this.imageUrl,
   });
 
   @override
@@ -109,9 +111,9 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
 
             const SizedBox(height: 40),
 
-            // Category options - Large cards
+            // Category options - Large cards (scrollable)
             Expanded(
-              child: Column(
+              child: ListView(
                 children: [
                   _buildCategoryCard(
                     ProductCategory.FERTILIZER,
@@ -285,6 +287,7 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
           builder: (context) => AddProductStep3Screen(
             productName: widget.productName,
             companyId: widget.companyId,
+            imageUrl: widget.imageUrl,
             category: _selectedCategory!,
           ),
         ),

@@ -57,6 +57,12 @@ dependencies:
   google_fonts: ^6.3.2
   fl_chart: ^1.1.1
 
+  # Image management dependencies
+  image_picker: ^1.0.7
+  image: ^4.1.7
+  cached_network_image: ^3.3.1
+  http: ^1.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

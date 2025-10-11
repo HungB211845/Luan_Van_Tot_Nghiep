@@ -3,6 +3,7 @@ import '../models/revenue_trend_point.dart';
 import '../models/inventory_analytics.dart';
 import '../models/top_product.dart';
 import '../models/inventory_product.dart';
+import '../models/daily_revenue.dart';
 
 class ReportService {
   final _supabase = Supabase.instance.client;
@@ -33,6 +34,30 @@ class ReportService {
       return data.map((item) => RevenueTrendPoint.fromJson(item)).toList();
     } catch (e) {
       print('Error in getRevenueTrend: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetches revenue data for a week (7 days) starting from given date
+  Future<List<DailyRevenue>> getRevenueForWeek(DateTime startDate) async {
+    try {
+      final endDate = startDate.add(const Duration(days: 6));
+
+      final trendData = await getRevenueTrend(
+        startDate,
+        endDate,
+        interval: 'day'
+      );
+
+      // Convert RevenueTrendPoint to DailyRevenue
+      // Note: transaction_count is not available, so we set it to 0
+      return trendData.map((point) => DailyRevenue(
+        date: point.reportDate,
+        revenue: point.currentPeriodRevenue,
+        transactionCount: 0, // Not available from revenue_trend RPC
+      )).toList();
+    } catch (e) {
+      print('Error in getRevenueForWeek: $e');
       rethrow;
     }
   }

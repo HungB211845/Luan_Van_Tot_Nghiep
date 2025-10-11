@@ -10,12 +10,14 @@ import '../../../../shared/services/base_service.dart';
 class AddProductStep3Screen extends StatefulWidget {
   final String productName;
   final String companyId;
+  final String? imageUrl;
   final ProductCategory category;
 
   const AddProductStep3Screen({
     super.key,
     required this.productName,
     required this.companyId,
+    this.imageUrl,
     required this.category,
   });
 
@@ -615,6 +617,7 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
         name: widget.productName,
         category: widget.category,
         companyId: widget.companyId,
+        imageUrl: widget.imageUrl,
         attributes: _buildAttributes(),
         isActive: true,
         isBanned: false,

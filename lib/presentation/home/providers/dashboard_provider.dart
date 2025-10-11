@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../models/daily_revenue.dart';
-import '../services/report_service.dart';
+import '../../../features/reports/models/daily_revenue.dart';
+import '../../../features/reports/services/report_service.dart';
 
 class DashboardProvider with ChangeNotifier {
   final ReportService _reportService = ReportService();
