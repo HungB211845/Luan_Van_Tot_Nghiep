@@ -123,43 +123,47 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           ),
           items: unitOptions.map((String unit) {
             String displayText = unit;
-            
+
             // Add conversion factor if available
             if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-              final unitObj = snapshot.data!.firstWhere(
-                (u) => u.unitName == unit,
-                orElse: () => null,
-              );
+              dynamic unitObj;
+              try {
+                unitObj = snapshot.data!.firstWhere((u) => u.unitName == unit);
+              } catch (e) {
+                unitObj = null; // Not found
+              }
+
               if (unitObj != null && unitObj.conversionFactor != 1.0) {
                 displayText = '$unit (×${unitObj.conversionFactor})';
               }
             }
-            
+
             return DropdownMenuItem<String>(
               value: unit,
               child: Text(displayText),
             );
           }).toList(),
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              // Update unitId for conversion tracking
-              String? unitId;
-              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                final unitObj = snapshot.data!.firstWhere(
-                  (u) => u.unitName == newValue,
-                  orElse: () => null,
-                );
-                unitId = unitObj?.id;
-              }
-              
-              poProvider.updatePOCartItem(
-                item.product.id,
-                newUnit: newValue,
-                newUnitId: unitId, // 🔥 NEW: Pass unitId for conversion
-              );
-            }
-          },
-        );
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            String? unitId;
+                            dynamic unitObj; // Use dynamic type to match snapshot
+                            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                              try {
+                                unitObj = snapshot.data!.firstWhere((u) => u.unitName == newValue);
+                                unitId = unitObj?.id;
+                              } catch (e) {
+                                // Handle case where unit is not found, unitId remains null
+                                unitObj = null;
+                              }
+                            }
+                            
+                            poProvider.updatePOCartItem(
+                              item.product.id,
+                              newUnit: newValue,
+                              newUnitId: unitId, // 🔥 NEW: Pass unitId for conversion
+                            );
+                          }
+                        },        );
       },
     );
   }
