@@ -8,7 +8,6 @@ import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../products/models/product.dart';
 import '../../../products/models/product_unit.dart';
-import '../../../products/services/product_unit_service.dart';
 import '../../../products/widgets/unit_selection_sheet.dart';
 import '../../models/payment_method.dart';
 import '../../../products/providers/product_provider.dart';
@@ -469,12 +468,12 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
   /// Handle product tap with Multi-UoM support
   /// Shows unit selector if product has multiple units, otherwise adds directly
   Future<void> _handleProductTap(Product product, int quantityInCart) async {
-    final unitService = ProductUnitService();
-    final stock = _viewModel!.productProvider.getProductStock(product.id);
+    final provider = _viewModel!.productProvider;
+    final stock = provider.getProductStock(product.id);
 
     try {
-      // Load available units for this product
-      final units = await unitService.getProductUnits(product.id);
+      // Load available units for this product (cached)
+      final units = await provider.getProductUnits(product.id);
 
       if (units.isEmpty) {
         // No units configured, add with default behavior (quantity only)

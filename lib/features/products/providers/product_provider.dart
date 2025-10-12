@@ -34,6 +34,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
   // Products with memory management
   List<Product> _products = [];
+  final Map<String, List<ProductUnit>> _unitCache = {};
   final Map<ProductCategory?, List<Product>> _productsByCategory = {};
   List<Product> _filteredProducts = [];
   Product? _selectedProduct;
@@ -113,11 +114,12 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
 
     if (category == null) {
-      return _productsByCategory[null] ?? _products;
+      final baseList = _productsByCategory[null] ?? _products;
+      return List<Product>.from(baseList);
     }
 
     if (_productsByCategory.containsKey(category)) {
-      return _productsByCategory[category]!;
+      return List<Product>.from(_productsByCategory[category]!);
     }
 
     final allProducts = _productsByCategory[null] ?? _products;
@@ -210,18 +212,15 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         useCache: useCache, // Use the parameter value
       );
 
-      // Cache products per category for shared access
-      final items = _paginatedProducts!.items;
-      _productsByCategory[category] = List<Product>.from(items);
+      final items = List<Product>.from(_paginatedProducts!.items);
+      _productsByCategory[category] = items;
 
-      // Update legacy list for backward compatibility (all products cache)
       if (category == null) {
         _products = items;
       }
 
       _selectedCategory = category;
 
-      // 🔥 CRITICAL: Perform ONE-TIME price sync if products have 0 price
       await _performOneTimePriceSyncIfNeeded();
 
       // Clear old search state
@@ -947,7 +946,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       } else {
         // Load all units to find default unit's conversion factor
         try {
-          final allUnits = await _unitService.getProductUnits(product.id);
+          final allUnits = await getProductUnits(product.id);
           final defaultUnit = allUnits.firstWhere(
             (u) => u.isDefaultSellingUnit,
             orElse: () => allUnits.isNotEmpty ? allUnits.first : selectedUnit,
@@ -1330,12 +1329,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         List<ProductUnit> productUnits = unitCache[product.id] ?? const <ProductUnit>[];
         if (!unitCache.containsKey(product.id)) {
           try {
-            productUnits = await _unitService.getProductUnits(product.id);
+            productUnits = await getProductUnits(product.id);
           } catch (e) {
             productUnits = [];
             debugPrint('⚠️ Failed to load units for product ${product.name}: $e');
           }
           unitCache[product.id] = productUnits;
+        } else {
+          productUnits = unitCache[product.id]!;
         }
 
         ProductUnit? matchedUnit;
@@ -1570,6 +1571,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     await _cachedService.invalidateSearchCache();
     await _cachedService.invalidateDashboardCache();
     _productsByCategory.clear();
+    _unitCache.clear();
   }
 
   /// Force refresh dashboard stats with cache support
@@ -2267,12 +2269,17 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
   /// Get product units for Multi-UoM support
   /// Used by UI components to display unit selection
-  Future<List<ProductUnit>> getProductUnits(String productId) async {
+  Future<List<ProductUnit>> getProductUnits(String productId, {bool forceRefresh = false}) async {
+    if (!forceRefresh && _unitCache.containsKey(productId)) {
+      return List<ProductUnit>.from(_unitCache[productId]!);
+    }
     try {
-      return await _unitService.getProductUnits(productId);
+      final units = await _unitService.getProductUnits(productId);
+      _unitCache[productId] = units;
+      return List<ProductUnit>.from(units);
     } catch (e) {
       print('Error loading product units: $e');
-      return []; // Return empty list on error
+      return List<ProductUnit>.from(_unitCache[productId] ?? []);
     }
   }
 
@@ -2280,9 +2287,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   /// Used to ensure UI shows latest unit configuration after changes
   Future<void> refreshProductUnitsCache(String productId) async {
     try {
-      // For now, just invalidate by reloading units
-      // In future, could implement proper cache invalidation
-      await _unitService.getProductUnits(productId);
+      final units = await _unitService.getProductUnits(productId);
+      _unitCache[productId] = units;
       print('✅ Refreshed product units cache for product: $productId');
     } catch (e) {
       print('❌ Error refreshing product units cache: $e');
