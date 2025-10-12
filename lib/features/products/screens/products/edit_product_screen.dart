@@ -446,7 +446,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         }
 
       } else if (_selectedCategory == ProductCategory.PESTICIDE) {
-        // Pesticide: Create "Chai 500ml" and "ml" units
+        // Pesticide: Create "Chai 500ml", "Thùng", and "ml" units
         final packageQty = int.tryParse(_packageQtyController.text.trim()) ?? 20;
         final volume = int.tryParse(_packageVolumeController.text.trim()) ?? 500;
         final packageUnitName = '$_packageUnitType $volume$_baseUnitType';
@@ -457,13 +457,18 @@ class _EditProductScreenState extends State<EditProductScreen> {
           conversionFactor = volume / 1000; // 1000ml = 1 lít
         }
 
+        // 🔥 NEW: Calculate box conversion factor (packageQty × volume per package)
+        final boxConversionFactor = packageQty * conversionFactor;
+
         // 🔥 STEP 2: Calculate pesticide unit prices
         final packagePrice = productPrice; // Package unit = full product price
         final baseUnitPrice = productPrice / conversionFactor; // Base unit = price ÷ conversion factor
+        final boxPrice = productPrice * packageQty; // 🔥 NEW: Box price = package price × quantity per box
 
         // 🔥 ENHANCED: Handle existing units properly to avoid default conflicts
         ProductUnit? existingMainUnit;
         ProductUnit? existingBaseUnit;
+        ProductUnit? existingBoxUnit; // 🔥 NEW: Track existing box unit
         ProductUnit? existingDefaultUnit;
         
         for (final unit in _productUnits) {
@@ -472,6 +477,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
           }
           if (unit.unitName.toLowerCase() == _baseUnitType.toLowerCase()) {
             existingBaseUnit = unit;
+          }
+          if (unit.unitName.toLowerCase() == 'thùng') { // 🔥 NEW: Check for existing box unit
+            existingBoxUnit = unit;
           }
           if (unit.isDefaultSellingUnit) {
             existingDefaultUnit = unit;
@@ -531,6 +539,33 @@ class _EditProductScreenState extends State<EditProductScreen> {
               conversionFactor: conversionFactor,
               unitPrice: packagePrice, // 🔥 FIXED: Set full product price for package unit
               isDefaultSellingUnit: true,
+              isActive: true,
+              storeId: '',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
+
+        // 🔥 Step 3: Create/update "Thùng" unit for wholesale purchase
+        if (existingBoxUnit != null) {
+          await _unitService.updateProductUnit(
+            existingBoxUnit.copyWith(
+              unitName: 'Thùng',
+              conversionFactor: boxConversionFactor,
+              isDefaultSellingUnit: false, // Box unit should not be default selling unit
+              unitPrice: boxPrice,
+            ),
+          );
+        } else {
+          await _unitService.createProductUnit(
+            ProductUnit(
+              id: '',
+              productId: productId,
+              unitName: 'Thùng',
+              conversionFactor: boxConversionFactor,
+              unitPrice: boxPrice,
+              isDefaultSellingUnit: false, // Box unit for wholesale only
               isActive: true,
               storeId: '',
               createdAt: DateTime.now(),
@@ -1223,8 +1258,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
         // Helper text
         Text(
-          'Hệ thống sẽ tự tạo 2 đơn vị: '
-          '"$_packageUnitType ${_packageVolumeController.text}$_baseUnitType" và "$_baseUnitType"',
+          'Hệ thống sẽ tự tạo 3 đơn vị:\n'
+          '• "$_packageUnitType ${_packageVolumeController.text}$_baseUnitType" (bán lẻ)\n'
+          '• "Thùng" (${_packageQtyController.text} $_packageUnitType, nhập hàng)\n'
+          '• "$_baseUnitType" (đơn vị cơ sở)',
           style: TextStyle(
             fontSize: 12,
             color: Colors.grey[600],
