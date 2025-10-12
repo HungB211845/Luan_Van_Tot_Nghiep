@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart'; // Add this import
 import '../../../models/product.dart';
+import '../../../models/product_unit.dart'; // Add this import
+import '../../../providers/product_provider.dart'; // Add this import
 
 class CurrencyInputFormatter extends TextInputFormatter {
   @override
@@ -49,7 +52,7 @@ class ProductEntryBottomSheet extends StatefulWidget {
   final int? existingQuantity;
   final double? existingPrice;
   final String? existingUnit;
-  final Function(int quantity, double price, String unit) onAdd;
+  final Function(int quantity, double price, String unit, String? unitId) onAdd; // 🔥 ADD: unitId parameter
 
   const ProductEntryBottomSheet({
     Key? key,
@@ -72,6 +75,9 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   final FocusNode _priceFocusNode = FocusNode();
 
   String _selectedUnit = 'kg';
+  String? _selectedUnitId; // 🔥 NEW: Track selected unit ID
+  List<ProductUnit> _productUnits = []; // 🔥 NEW: Product units from database
+  bool _isLoadingUnits = true; // 🔥 NEW: Loading state
 
   @override
   void initState() {
@@ -82,7 +88,58 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     if (widget.existingPrice != null && widget.existingPrice! > 0) {
       _priceController.text = _formatInputPrice(widget.existingPrice!);
     }
-    _selectedUnit = widget.existingUnit ?? _getDefaultUnit();
+    
+    // 🔥 NEW: Load product units and set default selection
+    _loadProductUnits();
+  }
+
+  /// 🔥 NEW: Load product units from database
+  Future<void> _loadProductUnits() async {
+    try {
+      final productProvider = context.read<ProductProvider>();
+      final units = await productProvider.getProductUnits(widget.product.id);
+      if (mounted) {
+        setState(() {
+          _productUnits = units;
+          _isLoadingUnits = false;
+          
+          // Set initial unit selection
+          if (units.isNotEmpty) {
+            // Try to match existing unit first
+            if (widget.existingUnit != null) {
+              final existingUnit = units.firstWhere(
+                (u) => u.unitName.toLowerCase() == widget.existingUnit!.toLowerCase(),
+                orElse: () => units.firstWhere((u) => u.isDefaultSellingUnit, orElse: () => units.first),
+              );
+              _selectedUnit = existingUnit.unitName;
+              _selectedUnitId = existingUnit.id;
+            } else {
+              // No existing unit, use default selling unit
+              final defaultUnit = units.firstWhere(
+                (u) => u.isDefaultSellingUnit,
+                orElse: () => units.first,
+              );
+              _selectedUnit = defaultUnit.unitName;
+              _selectedUnitId = defaultUnit.id;
+            }
+          } else {
+            // No units configured, fallback to category-based default
+            _selectedUnit = _getDefaultUnit();
+            _selectedUnitId = null;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _productUnits = [];
+          _isLoadingUnits = false;
+          _selectedUnit = widget.existingUnit ?? _getDefaultUnit();
+          _selectedUnitId = null;
+        });
+      }
+      print('Failed to load product units: $e');
+    }
   }
 
   @override
@@ -106,6 +163,12 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   }
 
   List<String> _getUnitOptions() {
+    // 🔥 NEW: Use actual product units if available
+    if (_productUnits.isNotEmpty) {
+      return _productUnits.map((unit) => unit.unitName).toList();
+    }
+    
+    // Fallback to category-based units
     switch (widget.product.category) {
       case ProductCategory.FERTILIZER:
         return ['kg', 'tấn', 'bao'];
@@ -116,12 +179,31 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     }
   }
 
+  /// 🔥 NEW: Get conversion info for display
+  String _getConversionInfo() {
+    if (_productUnits.isEmpty || _selectedUnitId == null) {
+      return '';
+    }
+    
+    final selectedUnit = _productUnits.firstWhere(
+      (u) => u.id == _selectedUnitId,
+      orElse: () => _productUnits.first,
+    );
+    
+    if (selectedUnit.conversionFactor != 1.0) {
+      return '(×${selectedUnit.conversionFactor} ${widget.product.effectiveBaseUnit})';
+    }
+    
+    return '';
+  }
+
   void _handleAdd() {
     final quantity = int.tryParse(_quantityController.text) ?? 0;
     final price = _parseCurrency(_priceController.text);
 
     if (quantity > 0 && price >= 0) {
-      widget.onAdd(quantity, price, _selectedUnit);
+      // 🔥 NEW: Pass unitId for conversion tracking
+      widget.onAdd(quantity, price, _selectedUnit, _selectedUnitId);
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -333,44 +415,102 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
                   const SizedBox(height: 20),
 
                   // Unit selector
-                  const Text(
-                    'Đơn vị',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+                  Row(
+                    children: [
+                      const Text(
+                        'Đơn vị',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      if (_getConversionInfo().isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          _getConversionInfo(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedUnit,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
+                  if (_isLoadingUnits)
+                    Container(
+                      height: 56,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: categoryColor, width: 2),
+                      child: const Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Đang tải đơn vị...'),
+                          ],
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      value: _selectedUnit,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: categoryColor, width: 2),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                       ),
+                      items: _getUnitOptions().map((unit) {
+                        // Find conversion factor for display
+                        String displayText = unit;
+                        if (_productUnits.isNotEmpty) {
+                          final unitObj = _productUnits.firstWhere(
+                            (u) => u.unitName == unit,
+                            orElse: () => _productUnits.first,
+                          );
+                          if (unitObj.conversionFactor != 1.0) {
+                            displayText = '$unit (×${unitObj.conversionFactor})';
+                          }
+                        }
+                        
+                        return DropdownMenuItem(
+                          value: unit,
+                          child: Text(displayText, style: const TextStyle(fontSize: 16)),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedUnit = value;
+                            // Update selected unit ID
+                            if (_productUnits.isNotEmpty) {
+                              final unitObj = _productUnits.firstWhere(
+                                (u) => u.unitName == value,
+                                orElse: () => _productUnits.first,
+                              );
+                              _selectedUnitId = unitObj.id;
+                            }
+                          });
+                        }
+                      },
                     ),
-                    items: _getUnitOptions().map((unit) {
-                      return DropdownMenuItem(
-                        value: unit,
-                        child: Text(unit, style: const TextStyle(fontSize: 16)),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _selectedUnit = value;
-                        });
-                      }
-                    },
-                  ),
 
                   const SizedBox(height: 20),
 

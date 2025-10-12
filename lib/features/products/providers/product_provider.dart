@@ -4,12 +4,14 @@ import '../models/product.dart';
 import '../models/product_batch.dart';
 import '../models/seasonal_price.dart';
 import '../models/banned_substance.dart';
+import '../models/product_unit.dart'; // Multi-UoM support
 import '../widgets/price_history_widget.dart';
 import '../../pos/models/transaction.dart';
 import '../../pos/models/transaction_item.dart';
 import '../../pos/models/transaction_item_details.dart';
 import '../../pos/models/payment_method.dart';
 import '../services/product_service.dart';
+import '../services/product_unit_service.dart'; // Multi-UoM support
 import '../../../shared/models/paginated_result.dart';
 import '../../../shared/services/base_service.dart';
 import '../../../shared/providers/memory_managed_provider.dart';
@@ -23,6 +25,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   final ProductService _productService = ProductService();
   final CachedProductService _cachedService = CachedProductService();
   final TransactionService _transactionService = TransactionService();
+  final ProductUnitService _unitService = ProductUnitService(); // Multi-UoM support
 
   // =====================================================
   // STATE VARIABLES
@@ -892,17 +895,65 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // SHOPPING CART OPERATIONS (POS)
   // =====================================================
 
-  void addToCart(Product product, int quantity, {double? customPrice}) {
-    final price = customPrice ?? getCurrentPrice(product.id);
+  // Multi-UoM: async method to support unit selection
+  Future<void> addToCart(Product product, int quantity, {double? customPrice, ProductUnit? selectedUnit}) async {
+    // 🔥 ENHANCED: Calculate unit-specific price by loading all units if needed
+    double price;
+    if (customPrice != null) {
+      price = customPrice;
+    } else if (selectedUnit != null && selectedUnit.unitPrice > 0) {
+      // Use database price if available
+      price = selectedUnit.unitPrice;
+    } else {
+      // Calculate price on-the-fly
+      final productPrice = product.currentSellingPrice;
+      if (productPrice <= 0) {
+        price = getCurrentPrice(product.id); // Fallback
+      } else if (selectedUnit == null) {
+        price = productPrice; // No unit specified
+      } else {
+        // Load all units to find default unit's conversion factor
+        try {
+          final allUnits = await _unitService.getProductUnits(product.id);
+          final defaultUnit = allUnits.firstWhere(
+            (u) => u.isDefaultSellingUnit,
+            orElse: () => allUnits.isNotEmpty ? allUnits.first : selectedUnit,
+          );
+          
+          if (selectedUnit.id == defaultUnit.id) {
+            // This IS the default unit → full product price
+            price = productPrice; // 660K ✅
+          } else {
+            // This is NOT default unit → calculate from default unit's conversion factor
+            price = productPrice / defaultUnit.conversionFactor; // 660K ÷ 50 = 13.2K ✅
+          }
+        } catch (e) {
+          // Fallback if loading units fails
+          debugPrint('Error loading units for price calculation: $e');
+          price = productPrice; // Use product price as fallback
+        }
+      }
+    }
 
     if (price <= 0) {
       _setError('Sản phẩm chưa có giá bán');
       return;
     }
 
+    // Load default unit if not provided
+    ProductUnit? unit = selectedUnit;
+    if (unit == null) {
+      unit = await _unitService.getDefaultUnit(product.id);
+      // If no default unit exists, fallback to base unit (factor = 1.0)
+    }
+
+    final unitConversionFactor = unit?.conversionFactor ?? 1.0;
+    final baseUnitQty = quantity * unitConversionFactor;
+
+    // Check stock using base unit quantity
     final stock = getProductStock(product.id);
-    if (stock < quantity) {
-      _setError('Không đủ hàng tồn kho (còn $stock)');
+    if (stock < baseUnitQty) {
+      _setError('Không đủ hàng tồn kho (còn ${stock ~/ unitConversionFactor} ${unit?.unitName ?? product.effectiveBaseUnit})');
       return;
     }
 
@@ -915,9 +966,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       // Update existing item
       final existing = _cartItems[existingIndex];
       final newQuantity = existing.quantity + quantity;
+      final newBaseUnitQty = newQuantity * unitConversionFactor;
 
-      if (stock < newQuantity) {
-        _setError('Không đủ hàng tồn kho (còn $stock)');
+      if (stock < newBaseUnitQty) {
+        _setError('Không đủ hàng tồn kho (còn ${stock ~/ unitConversionFactor} ${unit?.unitName ?? product.effectiveBaseUnit})');
         return;
       }
 
@@ -926,7 +978,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         subTotal: newQuantity * price,
       );
     } else {
-      // Add new item
+      // Add new item with unit information
       _cartItems.add(
         CartItem(
           productId: product.id,
@@ -935,6 +987,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
           quantity: quantity,
           priceAtSale: price,
           subTotal: quantity * price,
+          selectedUnitId: unit?.id,
+          selectedUnitName: unit?.unitName ?? product.effectiveBaseUnit,
+          selectedUnitConversionFactor: unitConversionFactor,
         ),
       );
     }
@@ -999,6 +1054,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
     try {
       // Convert cart items to transaction items
+      // Multi-UoM: Map unit fields for historical tracking
       final transactionItems = _cartItems
           .map(
             (cartItem) => TransactionItem(
@@ -1011,6 +1067,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
               subTotal: cartItem.subTotal,
               createdAt: DateTime.now(),
               storeId: BaseService.getDefaultStoreId(),
+              unitId: cartItem.selectedUnitId,
+              unitName: cartItem.selectedUnitName,
+              unitConversionFactor: cartItem.selectedUnitConversionFactor,
+              baseUnitQuantity: cartItem.baseUnitQuantity,
             ),
           )
           .toList();
@@ -1058,6 +1118,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
     try {
       // Convert cart items to transaction items
+      // Multi-UoM: Map unit fields for historical tracking
       final transactionItems = _cartItems
           .map(
             (cartItem) => TransactionItem(
@@ -1070,6 +1131,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
               subTotal: cartItem.subTotal,
               createdAt: DateTime.now(),
               storeId: BaseService.getDefaultStoreId(),
+              unitId: cartItem.selectedUnitId,
+              unitName: cartItem.selectedUnitName,
+              unitConversionFactor: cartItem.selectedUnitConversionFactor,
+              baseUnitQuantity: cartItem.baseUnitQuantity,
             ),
           )
           .toList();
@@ -1220,6 +1285,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
             sku: 'N/A',
             category: ProductCategory.FERTILIZER, // Default
             attributes: {},
+            baseUnit: 'unit', // Default base unit
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
             storeId: BaseService.getDefaultStoreId(),
@@ -1905,6 +1971,66 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
+  /// Quick add batch with unit conversion support
+  /// 🔥 NEW: Multi-UoM version of quickAddBatch with proper unit conversion
+  Future<bool> quickAddBatchWithUnit({
+    required String productId,
+    required int quantity,
+    required double costPrice,
+    required double newSellingPrice,
+    String? unitId, // Unit ID for conversion
+  }) async {
+    try {
+      _setStatus(ProductStatus.loading);
+
+      final batchId = await _productService.quickAddBatch(
+        productId: productId,
+        quantity: quantity,
+        costPrice: costPrice,
+        newSellingPrice: newSellingPrice,
+        unitId: unitId, // Pass unit ID for conversion
+      );
+
+      if (batchId.isNotEmpty) {
+        // Reload batches for this product
+        await loadProductBatches(productId);
+
+        // FIXED: Update stock after adding batch
+        await _updateProductStock(productId);
+
+        // Update selling price in local cache
+        final productIndex = _products.indexWhere((p) => p.id == productId);
+        if (productIndex != -1) {
+          _products[productIndex] = _products[productIndex].copyWith(
+            currentSellingPrice: newSellingPrice,
+            // FIXED: Also update availableStock in the model if available
+            availableStock: _stockMap[productId],
+          );
+        }
+
+        if (_selectedProduct?.id == productId) {
+          _selectedProduct = _selectedProduct!.copyWith(
+            currentSellingPrice: newSellingPrice,
+            availableStock: _stockMap[productId],
+          );
+        }
+
+        // FIXED: Update _currentPrices cache for POS
+        _currentPrices[productId] = newSellingPrice;
+
+        _setStatus(ProductStatus.success);
+        notifyListeners();
+        return true;
+      } else {
+        _setError('Không thể thêm lô hàng');
+        return false;
+      }
+    } catch (e) {
+      _setError('Lỗi thêm lô hàng nhanh với đơn vị: $e');
+      return false;
+    }
+  }
+
   /// Lấy lịch sử thay đổi giá của một sản phẩm
   Future<List<PriceHistoryItem>> getPriceHistory(String productId) async {
     try {
@@ -1979,6 +2105,44 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       },
     };
   }
+
+  // =====================================================
+  // MULTI-UOM OPERATIONS
+  // =====================================================
+
+  /// Get product units for Multi-UoM support
+  /// Used by UI components to display unit selection
+  Future<List<ProductUnit>> getProductUnits(String productId) async {
+    try {
+      return await _unitService.getProductUnits(productId);
+    } catch (e) {
+      print('Error loading product units: $e');
+      return []; // Return empty list on error
+    }
+  }
+
+  /// 🔥 NEW: Refresh product units cache for a specific product
+  /// Used to ensure UI shows latest unit configuration after changes
+  Future<void> refreshProductUnitsCache(String productId) async {
+    try {
+      // For now, just invalidate by reloading units
+      // In future, could implement proper cache invalidation
+      await _unitService.getProductUnits(productId);
+      print('✅ Refreshed product units cache for product: $productId');
+    } catch (e) {
+      print('❌ Error refreshing product units cache: $e');
+    }
+  }
+
+  /// Get default selling unit for a product
+  Future<ProductUnit?> getDefaultUnit(String productId) async {
+    try {
+      return await _unitService.getDefaultUnit(productId);
+    } catch (e) {
+      print('Error loading default unit: $e');
+      return null;
+    }
+  }
 }
 
 // =====================================================
@@ -1994,6 +2158,11 @@ class CartItem {
   final double subTotal;
   final double discountAmount;
 
+  // Multi-UoM support
+  final String? selectedUnitId;
+  final String selectedUnitName;
+  final double selectedUnitConversionFactor;
+
   CartItem({
     required this.productId,
     required this.productName,
@@ -2002,13 +2171,22 @@ class CartItem {
     required this.priceAtSale,
     required this.subTotal,
     this.discountAmount = 0,
+    this.selectedUnitId,
+    this.selectedUnitName = '',
+    this.selectedUnitConversionFactor = 1.0,
   });
+
+  // Computed property: quantity in base unit
+  double get baseUnitQuantity => quantity * selectedUnitConversionFactor;
 
   CartItem copyWith({
     int? quantity,
     double? priceAtSale,
     double? subTotal,
     double? discountAmount,
+    String? selectedUnitId,
+    String? selectedUnitName,
+    double? selectedUnitConversionFactor,
   }) {
     return CartItem(
       productId: productId,
@@ -2018,6 +2196,9 @@ class CartItem {
       priceAtSale: priceAtSale ?? this.priceAtSale,
       subTotal: subTotal ?? this.subTotal,
       discountAmount: discountAmount ?? this.discountAmount,
+      selectedUnitId: selectedUnitId ?? this.selectedUnitId,
+      selectedUnitName: selectedUnitName ?? this.selectedUnitName,
+      selectedUnitConversionFactor: selectedUnitConversionFactor ?? this.selectedUnitConversionFactor,
     );
   }
 }

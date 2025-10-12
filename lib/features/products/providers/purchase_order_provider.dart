@@ -4,11 +4,13 @@ import '../models/purchase_order.dart';
 import '../models/purchase_order_item.dart';
 import '../models/purchase_order_status.dart';
 import '../models/product_batch.dart';
+import '../models/product_unit.dart'; // Add this import
 import '../services/purchase_order_service.dart';
 import '../services/product_service.dart'; // For product filtering
 import '../models/product.dart'; // For adding to cart
 import './product_provider.dart'; // Import ProductProvider
 import '../../../shared/services/base_service.dart';
+import '../../../shared/utils/formatter.dart'; // 🔥 ADD: For proper formatting
 
 // Trạng thái cho giỏ hàng nhập
 
@@ -19,6 +21,7 @@ class POCartItem {
   double unitCost;
   double? sellingPrice; // MODIFIED: Make nullable
   String? unit;
+  String? unitId; // 🔥 NEW: Unit ID for Multi-UoM conversion
 
   final TextEditingController quantityController;
   final TextEditingController unitCostController;
@@ -30,12 +33,15 @@ class POCartItem {
     this.unitCost = 0.0,
     this.sellingPrice,
     this.unit,
+    this.unitId, // 🔥 NEW: Unit ID parameter
   })  : quantityController = TextEditingController(text: quantity.toString()),
         unitCostController = TextEditingController(
-          text: unitCost.toStringAsFixed(0),
+          text: unitCost > 0 ? AppFormatter.formatNumber(unitCost) : '', // 🔥 FIXED: Use AppFormatter
         ),
         sellingPriceController = TextEditingController(
-          text: sellingPrice != null ? sellingPrice.toStringAsFixed(0) : '',
+          text: sellingPrice != null && sellingPrice! > 0 
+              ? AppFormatter.formatNumber(sellingPrice!) // 🔥 FIXED: Use AppFormatter
+              : '',
         );
 
   void dispose() {
@@ -50,6 +56,7 @@ class POCartItem {
     double? unitCost,
     double? sellingPrice,
     String? unit,
+    String? unitId, // 🔥 NEW: unitId parameter
   }) {
     return POCartItem(
       product: product ?? this.product,
@@ -57,6 +64,7 @@ class POCartItem {
       unitCost: unitCost ?? this.unitCost,
       sellingPrice: sellingPrice ?? this.sellingPrice,
       unit: unit ?? this.unit,
+      unitId: unitId ?? this.unitId, // 🔥 NEW: Copy unitId
     );
   }
 }
@@ -500,6 +508,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
     double? newUnitCost,
     double? newSellingPrice,
     String? newUnit,
+    String? newUnitId, // 🔥 NEW: Add unitId parameter
     bool? clearSellingPrice, // Add explicit flag for clearing
   }) {
     final index = _poCartItems.indexWhere(
@@ -514,7 +523,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
       if (newUnitCost != null) {
         _poCartItems[index].unitCost = newUnitCost.clamp(0.0, double.infinity);
         _poCartItems[index].unitCostController.text =
-            _poCartItems[index].unitCost.toStringAsFixed(0);
+            _poCartItems[index].unitCost > 0 
+                ? AppFormatter.formatNumber(_poCartItems[index].unitCost) // 🔥 FIXED: Use AppFormatter
+                : '';
       }
       // Handle selling price update
       if (clearSellingPrice == true) {
@@ -526,10 +537,15 @@ class PurchaseOrderProvider extends ChangeNotifier {
         _poCartItems[index].sellingPrice =
             newSellingPrice.clamp(0.0, double.infinity);
         _poCartItems[index].sellingPriceController.text =
-            _poCartItems[index].sellingPrice!.toStringAsFixed(0);
+            _poCartItems[index].sellingPrice! > 0 
+                ? AppFormatter.formatNumber(_poCartItems[index].sellingPrice!) // 🔥 FIXED: Use AppFormatter
+                : '';
       }
       if (newUnit != null) {
         _poCartItems[index].unit = newUnit;
+      }
+      if (newUnitId != null) {
+        _poCartItems[index].unitId = newUnitId; // 🔥 NEW: Update unitId
       }
       notifyListeners();
     }
@@ -602,27 +618,87 @@ class PurchaseOrderProvider extends ChangeNotifier {
       storeId: BaseService.getDefaultStoreId(),
     );
 
-    final items = validItems
-        .map(
-          (cartItem) => PurchaseOrderItem(
-            id: '', // Handled by DB
-            purchaseOrderId: '', // Handled by service
-            productId: cartItem.product.id,
-            quantity: cartItem.quantity,
-            unitCost: cartItem.unitCost,
-            sellingPrice: cartItem.sellingPrice ?? cartItem.product.currentSellingPrice, // Use new price or default to current
-            unit: cartItem.unit,
-            totalCost: cartItem.quantity * cartItem.unitCost,
-            createdAt: DateTime.now(),
-            storeId: BaseService.getDefaultStoreId(),
-          ),
-        )
-        .toList();
+    // 🔥 NEW: Process items with unit conversion and selling price updates
+    final items = <PurchaseOrderItem>[];
+    
+    for (final cartItem in validItems) {
+      // 🔥 NEW: Convert quantity to base unit if unitId is available
+      int baseQuantity = cartItem.quantity; // Default to input quantity
+      
+      if (cartItem.unitId != null) {
+        try {
+          final units = await _productProvider.getProductUnits(cartItem.product.id);
+          final selectedUnit = units.firstWhere(
+            (u) => u.id == cartItem.unitId,
+            orElse: () => units.isNotEmpty ? units.first : ProductUnit( // 🔥 FIX: Return actual ProductUnit
+              id: '',
+              productId: cartItem.product.id,
+              unitName: cartItem.product.effectiveBaseUnit,
+              conversionFactor: 1.0,
+              unitPrice: 0,
+              isDefaultSellingUnit: false,
+              isActive: true,
+              storeId: '',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+          
+          if (selectedUnit.conversionFactor > 0) { // 🔥 FIX: Remove null check
+            // Convert: input quantity × conversion factor = base quantity
+            // Example: 50 Bao × 50 kg/Bao = 2500 kg (base unit)
+            baseQuantity = (cartItem.quantity * selectedUnit.conversionFactor).toInt();
+            print('DEBUG: PO Unit Conversion - ${cartItem.quantity} ${cartItem.unit} → ${baseQuantity} base units');
+          }
+        } catch (e) {
+          print('Warning: Could not convert units for ${cartItem.product.name}: $e');
+          // Continue with original quantity if conversion fails
+        }
+      }
+
+      // 🔥 NEW: Update product selling price if changed
+      if (cartItem.sellingPrice != null && 
+          cartItem.sellingPrice! > 0 && 
+          cartItem.sellingPrice! != cartItem.product.currentSellingPrice) {
+        try {
+          await _productService.updateCurrentSellingPrice(
+            cartItem.product.id,
+            cartItem.sellingPrice!,
+            reason: 'Updated via Purchase Order creation',
+          );
+          print('DEBUG: Updated selling price for ${cartItem.product.name}: ${cartItem.sellingPrice}');
+        } catch (e) {
+          print('Warning: Could not update selling price for ${cartItem.product.name}: $e');
+          // Continue with PO creation even if price update fails
+        }
+      }
+
+      // Create PO item with converted quantity
+      items.add(PurchaseOrderItem(
+        id: '', // Handled by DB
+        purchaseOrderId: '', // Handled by service
+        productId: cartItem.product.id,
+        quantity: baseQuantity, // 🔥 CRITICAL: Use converted base quantity
+        unitCost: cartItem.unitCost,
+        sellingPrice: cartItem.sellingPrice ?? cartItem.product.currentSellingPrice,
+        unit: cartItem.unit,
+        totalCost: cartItem.quantity * cartItem.unitCost, // Keep original calculation for PO total
+        createdAt: DateTime.now(),
+        storeId: BaseService.getDefaultStoreId(),
+        notes: cartItem.unitId != null 
+            ? 'Unit conversion: ${cartItem.quantity} ${cartItem.unit} → ${baseQuantity} base units'
+            : null,
+      ));
+    }
 
     try {
       final newPO = await _poService.createPurchaseOrder(order, items);
       clearPOCart();
       await loadPurchaseOrders(); // Refresh the list
+      
+      // 🔥 NEW: Refresh product provider to reflect selling price updates
+      await _productProvider.refreshAllCache();
+      
       _setStatus(POStatus.success);
       return newPO;
     } catch (e) {

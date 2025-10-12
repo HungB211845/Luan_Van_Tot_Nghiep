@@ -6,6 +6,8 @@ import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/responsive.dart';
 import '../../models/product.dart';
+import '../../models/product_unit.dart';
+import '../../services/product_unit_service.dart';
 import '../../providers/product_provider.dart';
 import '../../widgets/key_metrics_widget.dart';
 import '../../widgets/quick_actions_widget.dart';
@@ -30,12 +32,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _isMetricsLoading = true;  // For cost price, profit percentage
   bool _isBatchesLoading = true;  // For batches data
   bool _isPriceHistoryLoading = true; // For price history
-  
+
   bool _isEditMode = false;
   double _totalStock = 0;
   double _averageCostPrice = 0;
   double _grossProfitPercentage = 0;
   List<PriceHistoryItem> _priceHistory = [];
+
+  // Multi-UoM support
+  List<ProductUnit> _productUnits = [];
+  final _unitService = ProductUnitService();
 
   // Edit mode controllers
   final TextEditingController _priceController = TextEditingController();
@@ -65,13 +71,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     // 🎯 PHASE 1: Load basic stock data immediately (fastest)
     _loadBasicData();
 
-    // 🎯 PHASE 2: Load expensive metrics in parallel (background)
+    // 🎯 PHASE 2: Load product units (for Multi-UoM display)
+    _loadProductUnits();
+
+    // 🎯 PHASE 3: Load expensive metrics in parallel (background)
     _loadMetricsInBackground();
 
-    // 🎯 PHASE 3: Load batches data (can be lazy loaded)
+    // 🎯 PHASE 4: Load batches data (can be lazy loaded)
     _loadBatchesInBackground();
 
-    // 🎯 PHASE 4: Load price history (least priority, can be on-demand)
+    // 🎯 PHASE 5: Load price history (least priority, can be on-demand)
     _loadPriceHistoryInBackground();
   }
 
@@ -83,9 +92,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     // Get stock from cache (already loaded in ProductProvider)
     _totalStock = provider.getProductStock(product.id).toDouble();
-    
+
     // UI can display immediately with basic product info
     if (mounted) setState(() {});
+  }
+
+  /// Load product units for Multi-UoM display
+  Future<void> _loadProductUnits() async {
+    final product = context.read<ProductProvider>().selectedProduct;
+    if (product == null) return;
+
+    try {
+      final units = await _unitService.getProductUnits(product.id);
+      if (mounted) {
+        setState(() {
+          _productUnits = units;
+        });
+      }
+    } catch (e) {
+      // Silent fail - units are optional feature
+      if (mounted) {
+        setState(() {
+          _productUnits = [];
+        });
+      }
+    }
   }
 
   /// Load expensive metrics in background
@@ -259,6 +290,46 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  /// Get inventory display string with Multi-UoM support
+  /// Example: "10 Bao và 25 kg" or "525 kg" if no larger units
+  /// 🔥 FIXED: Now properly converts base stock to selling units
+  String _getInventoryDisplayString(double baseStock, String baseUnit) {
+    if (_productUnits.isEmpty) {
+      // No units configured, show base stock only
+      return '${baseStock.toInt()} $baseUnit';
+    }
+
+    // Find default selling unit (the unit customers see)
+    final defaultUnit = _productUnits.firstWhere(
+      (u) => u.isDefaultSellingUnit,
+      orElse: () => _productUnits.first,
+    );
+
+    if (defaultUnit.conversionFactor <= 0) {
+      // Invalid conversion factor, fallback to base unit
+      return '${baseStock.toInt()} $baseUnit';
+    }
+
+    // Convert base stock to selling units
+    // Example: 2500 kg ÷ 50 kg/bag = 50 bags  
+    final sellingUnitStock = baseStock / defaultUnit.conversionFactor;
+    final wholeParts = sellingUnitStock.floor();
+    final remainder = baseStock - (wholeParts * defaultUnit.conversionFactor);
+
+    if (wholeParts == 0) {
+      // Not enough for even one selling unit - show base unit only
+      return '${baseStock.toInt()} $baseUnit';
+    }
+
+    if (remainder > 0.1) { // Small tolerance for floating point
+      // Mixed display: "50 Bao và 25 kg"
+      return '$wholeParts ${defaultUnit.unitName} và ${remainder.toInt()} $baseUnit';
+    }
+
+    // Exact match: "50 Bao" 
+    return '$wholeParts ${defaultUnit.unitName}';
+  }
+
   Widget _buildInventoryExpansionTile() {
     return Consumer<ProductProvider>(
       builder: (context, provider, child) {
@@ -266,6 +337,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final totalBatches = batches.length;
         final activeBatches = batches.where((b) => b.quantity > 0).length;
         final totalStock = batches.fold<int>(0, (sum, batch) => sum + batch.quantity);
+        final product = provider.selectedProduct;
+
+        // Multi-UoM: Get inventory display string
+        final inventoryDisplay = product != null
+            ? _getInventoryDisplayString(totalStock.toDouble(), product.effectiveBaseUnit)
+            : '$totalStock đơn vị';
 
         return Card(
           margin: EdgeInsets.zero,
@@ -290,12 +367,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 color: Colors.green[700],
               ),
             ),
-            subtitle: Text(
-              '$totalBatches lô | Tổng: $totalStock đơn vị',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$totalBatches lô | Tổng: $inventoryDisplay',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+                if (_productUnits.isNotEmpty && product != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '(Quy đổi: ${totalStock.toInt()} ${product.effectiveBaseUnit})',
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ],
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -900,6 +993,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           grossProfitPercentage: _grossProfitPercentage,
           isEditMode: _isEditMode,
           isMetricsLoading: _isMetricsLoading, // 🚀 ADD: Loading state
+          productUnits: _productUnits, // 🔥 NEW: Pass product units for conversion
           priceController: _priceController,
           onPriceTap: _enterEditMode,
           onEnterEditMode: _enterEditMode,

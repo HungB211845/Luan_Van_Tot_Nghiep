@@ -12,6 +12,7 @@ class AddProductStep3Screen extends StatefulWidget {
   final String companyId;
   final String? imageUrl;
   final ProductCategory category;
+  final String baseUnit;
 
   const AddProductStep3Screen({
     super.key,
@@ -19,6 +20,7 @@ class AddProductStep3Screen extends StatefulWidget {
     required this.companyId,
     this.imageUrl,
     required this.category,
+    required this.baseUnit,
   });
 
   @override
@@ -38,8 +40,7 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
   // Fertilizer
   final _npkRatioController = TextEditingController();
   final _fertilizerTypeController = TextEditingController();
-  final _weightController = TextEditingController();
-  String _weightUnit = 'kg';
+  // 🔥 REMOVED: _weightController and _weightUnit - now configured in Multi-UoM system
 
   // Pesticide
   final _activeIngredientController = TextEditingController();
@@ -59,7 +60,7 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
     _descriptionController.dispose();
     _npkRatioController.dispose();
     _fertilizerTypeController.dispose();
-    _weightController.dispose();
+    // 🔥 REMOVED: _weightController disposal
     _activeIngredientController.dispose();
     _concentrationController.dispose();
     _volumeController.dispose();
@@ -343,41 +344,8 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
           },
         ),
 
-        const SizedBox(height: 16),
-
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: TextFormField(
-                controller: _weightController,
-                decoration: _buildInputDecoration(
-                  label: 'Khối lượng',
-                  hint: '0',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _weightUnit,
-                decoration: _buildInputDecoration(label: 'Đơn vị'),
-                items: ['kg', 'tấn', 'bao'].map((unit) {
-                  return DropdownMenuItem<String>(
-                    value: unit,
-                    child: Text(unit),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _weightUnit = value ?? 'kg';
-                  });
-                },
-              ),
-            ),
-          ],
-        ),
+        // 🔥 REMOVED: Weight/Unit fields - will be configured in Multi-UoM system later
+        // This eliminates confusion between attribute metadata and actual selling units
       ],
     );
   }
@@ -580,8 +548,8 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
         return FertilizerAttributes(
           npkRatio: _npkRatioController.text.trim(),
           type: _fertilizerTypeController.text.trim(),
-          weight: int.tryParse(_weightController.text.trim()) ?? 0,
-          unit: _weightUnit,
+          weight: 1, // 🔥 FIXED: Default value (not displayed to user)
+          unit: 'bao', // 🔥 FIXED: Default unit (actual unit comes from ProductUnit table)
         ).toJson();
 
       case ProductCategory.PESTICIDE:
@@ -627,6 +595,7 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         storeId: BaseService.getDefaultStoreId(),
+        baseUnit: widget.baseUnit,
       );
 
       final provider = context.read<ProductProvider>();

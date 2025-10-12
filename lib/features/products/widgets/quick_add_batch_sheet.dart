@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart'; // Re-add this import since we need ProductUnit type
 import '../providers/product_provider.dart';
 import '../../../shared/utils/input_formatters.dart';
 import '../../../shared/utils/formatter.dart';
@@ -94,16 +95,62 @@ class QuickAddBatchSheet extends StatefulWidget {
 class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isLoadingUnits = true;
 
   final _quantityController = TextEditingController();
   final _costPriceController = TextEditingController();
   final _newSellingPriceController = TextEditingController();
+
+  // 🔥 FIX: Proper type declaration for ProductUnit list
+  List<ProductUnit> _productUnits = [];
+  String? _selectedUnitId;
 
   @override
   void initState() {
     super.initState();
     // FIXED: Initialize with formatted price
     _newSellingPriceController.text = AppFormatter.formatNumber(widget.product.currentSellingPrice);
+    _loadProductUnits();
+  }
+
+  Future<void> _loadProductUnits() async {
+    try {
+      final productProvider = context.read<ProductProvider>();
+      final units = await productProvider.getProductUnits(widget.product.id);
+      if (mounted) {
+        setState(() {
+          _productUnits = units; 
+          // 🔥 FIXED: More robust unit selection logic
+          if (units.isNotEmpty) {
+            // Try to find default selling unit first
+            final defaultUnit = units.firstWhere(
+              (ProductUnit u) => u.isDefaultSellingUnit,
+              orElse: () => units.first, // 🔥 FIXED: Always provide fallback
+            );
+            _selectedUnitId = defaultUnit.id;
+            
+            print('DEBUG: Loaded ${units.length} units for ${widget.product.name}');
+            print('DEBUG: Selected default unit: ${defaultUnit.unitName} (isDefault: ${defaultUnit.isDefaultSellingUnit})');
+            for (final unit in units) {
+              print('DEBUG: Unit: ${unit.unitName}, isDefault: ${unit.isDefaultSellingUnit}, factor: ${unit.conversionFactor}');
+            }
+          } else {
+            _selectedUnitId = null;
+            print('DEBUG: No units found for ${widget.product.name}');
+          }
+          _isLoadingUnits = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _productUnits = [];
+          _selectedUnitId = null;
+          _isLoadingUnits = false;
+        });
+      }
+      print('Failed to load product units: $e');
+    }
   }
 
   @override
@@ -191,14 +238,45 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
   Widget _buildForm() {
     return Column(
       children: [
+        // Unit Selection (if multiple units available)
+        if (_productUnits.isNotEmpty) ...[
+          DropdownButtonFormField<String>(
+            value: _selectedUnitId,
+            decoration: InputDecoration(
+              labelText: 'Đơn vị *',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.straighten),
+              helperText: 'Chọn đơn vị để hệ thống tự chuyển đổi',
+            ),
+            items: _productUnits.map<DropdownMenuItem<String>>((ProductUnit unit) {
+              return DropdownMenuItem(
+                value: unit.id,
+                child: Text('${unit.unitName} (×${unit.conversionFactor})'),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedUnitId = value;
+              });
+            },
+            validator: (value) {
+              if (_productUnits.isNotEmpty && (value == null || value.isEmpty)) {
+                return 'Vui lòng chọn đơn vị';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+        
         TextFormField(
           controller: _quantityController,
           decoration: InputDecoration(
             labelText: 'Số lượng *',
             border: const OutlineInputBorder(),
-            suffixText: widget.product.unit.isNotEmpty ? widget.product.unit : 'đơn vị',
+            suffixText: _getSelectedUnitName(),
             prefixIcon: const Icon(Icons.inventory_2),
-            helperText: 'Ví dụ: 1.000',
+            helperText: _getQuantityHelperText(),
           ),
           // FIXED: Use simple formatter for quantity field
           keyboardType: TextInputType.number,
@@ -275,6 +353,28 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
         _buildProfitIndicator(),
       ],
     );
+  }
+
+  String _getSelectedUnitName() {
+    if (_productUnits.isEmpty || _selectedUnitId == null) {
+      return widget.product.unit.isNotEmpty ? widget.product.unit : 'đơn vị';
+    }
+    
+    // 🔥 FIXED: Use orElse to prevent exceptions
+    final selectedUnit = _productUnits.firstWhere(
+      (ProductUnit u) => u.id == _selectedUnitId,
+      orElse: () => _productUnits.first, // 🔥 CRITICAL: Always provide fallback
+    );
+    return selectedUnit.unitName;
+  }
+
+  String _getQuantityHelperText() {
+    if (_productUnits.isEmpty || _selectedUnitId == null) {
+      return 'Ví dụ: 1.000';
+    }
+    
+    // Use direct reference instead of creating unused variable
+    return 'Hệ thống sẽ tự chuyển đổi sang ${widget.product.effectiveBaseUnit}';
   }
 
   Widget _buildProfitIndicator() {
@@ -373,21 +473,29 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
           ? _extractSimpleNumber(newSellingPriceText) ?? 0
           : widget.product.currentSellingPrice; // Use current price if not provided
 
-      final success = await provider.quickAddBatch(
+      // 🔥 CRITICAL FIX: Pass unitId for conversion
+      final success = await provider.quickAddBatchWithUnit(
         productId: widget.product.id,
         quantity: quantity,
         costPrice: costPrice,
         newSellingPrice: newSellingPrice,
+        unitId: _selectedUnitId, // Pass selected unit for conversion
       );
 
       if (mounted) {
         if (success) {
           Navigator.pop(context);
           widget.onBatchAdded?.call(); // Trigger refresh on ProductDetailScreen
+          
+          // Show success message with conversion info
+          final unitName = _getSelectedUnitName();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Thêm lô hàng thành công'),
+            SnackBar(
+              content: Text(_productUnits.isNotEmpty && _selectedUnitId != null
+                  ? 'Thêm lô hàng thành công với chuyển đổi đơn vị ($quantity $unitName)'
+                  : 'Thêm lô hàng thành công'),
               backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
             ),
           );
         } else {

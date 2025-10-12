@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
+import '../../models/product_unit.dart'; // 🔥 NEW: Import ProductUnit model
 import '../../providers/purchase_order_provider.dart';
 import '../../services/product_service.dart'; // Import service
+import '../../services/product_unit_service.dart'; // 🔥 NEW: Import unit service
 import 'widgets/product_selection_header.dart';
 import 'widgets/live_cart_summary.dart';
 import 'widgets/simple_product_card.dart';
@@ -27,12 +29,14 @@ class BulkProductSelectionScreen extends StatefulWidget {
 
 class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen> {
   final ProductService _productService = ProductService(); // Instantiate service
+  final ProductUnitService _unitService = ProductUnitService(); // 🔥 NEW: Unit service
   final TextEditingController _searchController = TextEditingController();
 
   // Local state for this screen
   List<Product> _supplierProducts = [];
   bool _isLoading = true;
   final Map<String, POCartItem> _localCartItems = {};
+  final Map<String, List<ProductUnit>> _productUnits = {}; // 🔥 NEW: Cache units per product
   ProductCategory? _selectedCategory;
   String _searchQuery = '';
   bool _isCartExpanded = false;
@@ -61,6 +65,18 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
     setState(() => _isLoading = true);
     try {
       final products = await _productService.getProductsByCompany(widget.supplierId);
+
+      // 🔥 NEW: Load units for each product
+      for (final product in products) {
+        try {
+          final units = await _unitService.getProductUnits(product.id);
+          _productUnits[product.id] = units;
+        } catch (e) {
+          debugPrint('Failed to load units for ${product.name}: $e');
+          _productUnits[product.id] = []; // Empty list on error
+        }
+      }
+
       if (mounted) {
         setState(() {
           _supplierProducts = products;
@@ -91,13 +107,14 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
         existingQuantity: cartItem?.quantity,
         existingPrice: cartItem?.unitCost,
         existingUnit: cartItem?.unit,
-        onAdd: (quantity, price, unit) {
+        onAdd: (quantity, price, unit, unitId) {  // 🔥 ADD: unitId parameter
           setState(() {
             _localCartItems[product.id] = POCartItem(
               product: product,
               quantity: quantity,
               unitCost: price,
               unit: unit,
+              unitId: unitId, // 🔥 NEW: Store unit ID for conversion
             );
           });
         },
@@ -218,9 +235,15 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
                             final cartItem = _localCartItems[product.id];
                             final bool isInCart = cartItem != null && cartItem.quantity > 0;
 
+                            // 🔥 NEW: Calculate display stock in default selling unit
+                            final units = _productUnits[product.id] ?? [];
+                            final displayStock = product.getStockInDefaultUnit(units);
+                            final stockUnit = product.getDefaultUnitName(units);
+
                             return SimpleProductCard(
                               product: product,
-                              currentStock: product.availableStock ?? 0,
+                              currentStock: displayStock.toInt(), // 🔥 FIXED: Display converted stock (e.g., 53 Bao instead of 2682 kg)
+                              stockUnit: stockUnit, // 🔥 NEW: Pass unit name
                               isInCart: isInCart,
                               cartQuantity: cartItem?.quantity ?? 0,
                               onTap: () => _showProductEntrySheet(product, cartItem),

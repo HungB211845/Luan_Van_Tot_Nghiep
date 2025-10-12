@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/product.dart';
+import '../../models/product_unit.dart';
 import '../../models/fertilizer_attributes.dart';
 import '../../models/pesticide_attributes.dart';
 import '../../models/seed_attributes.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart';
+import '../../services/product_unit_service.dart';
 import '../../../../shared/services/base_service.dart';
 import '../../../../shared/services/image_service.dart';
 import '../../widgets/product_image_widget.dart';
@@ -30,10 +32,22 @@ class _EditProductScreenState extends State<EditProductScreen> {
   String? _imageUrl;
   bool _isUploadingImage = false;
 
+  // Product Unit Service
+  final ProductUnitService _unitService = ProductUnitService();
+  List<ProductUnit> _productUnits = [];
+  bool _isLoadingUnits = true;
+
   // Controllers
   late TextEditingController _nameController;
   late TextEditingController _skuController;
   late TextEditingController _descriptionController;
+
+  // Unit Config Controllers
+  final _bagWeightController = TextEditingController(text: '50'); // Default 50kg per bag
+  final _packageQtyController = TextEditingController(text: '20'); // Default 20 units per package
+  final _packageVolumeController = TextEditingController(text: '500'); // Default 500ml per unit
+  String _packageUnitType = 'Chai'; // Chai, Gói, Lọ
+  String _baseUnitType = 'ml'; // ml, lít for pesticide
 
   // Dropdown selections
   late ProductCategory _selectedCategory;
@@ -42,8 +56,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
   // Attribute Controllers
   final _npkRatioController = TextEditingController();
   final _fertilizerTypeController = TextEditingController();
-  final _weightController = TextEditingController();
-  final _weightUnitController = TextEditingController();
+  // 🔥 REMOVED: _weightController and _weightUnitController - now configured in "Đơn Vị Bán Hàng" section
   final _activeIngredientController = TextEditingController();
   final _concentrationController = TextEditingController();
   final _volumeController = TextEditingController();
@@ -65,15 +78,71 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _imageUrl = widget.product.imageUrl;
 
     _populateAttributeControllers();
+    _loadExistingUnits();
 
     // Track changes
     _nameController.addListener(() => setState(() => _hasChanges = true));
     _skuController.addListener(() => setState(() => _hasChanges = true));
     _descriptionController.addListener(() => setState(() => _hasChanges = true));
+    _bagWeightController.addListener(() => setState(() => _hasChanges = true));
+    _packageQtyController.addListener(() => setState(() => _hasChanges = true));
+    _packageVolumeController.addListener(() => setState(() => _hasChanges = true));
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CompanyProvider>().loadCompanies();
     });
+  }
+
+  Future<void> _loadExistingUnits() async {
+    try {
+      final units = await _unitService.getProductUnits(widget.product.id);
+      if (mounted) {
+        setState(() {
+          _productUnits = units;
+          _isLoadingUnits = false;
+        });
+
+        // Populate controllers from existing units
+        if (_selectedCategory == ProductCategory.FERTILIZER || _selectedCategory == ProductCategory.SEED) {
+          // Find "Bao" unit
+          final bagUnit = units.firstWhere(
+            (u) => u.unitName.toLowerCase() == 'bao',
+            orElse: () => units.first,
+          );
+          _bagWeightController.text = bagUnit.conversionFactor.toInt().toString();
+        } else if (_selectedCategory == ProductCategory.PESTICIDE) {
+          // Find main selling unit (default unit)
+          final mainUnit = units.firstWhere(
+            (u) => u.isDefaultSellingUnit,
+            orElse: () => units.first,
+          );
+
+          // Parse unit name like "Chai 500ml" → extract volume and type
+          final unitName = mainUnit.unitName;
+          if (unitName.contains('Chai')) {
+            _packageUnitType = 'Chai';
+          } else if (unitName.contains('Gói')) {
+            _packageUnitType = 'Gói';
+          } else if (unitName.contains('Lọ')) {
+            _packageUnitType = 'Lọ';
+          }
+
+          // Extract volume number
+          final volumeMatch = RegExp(r'(\d+)').firstMatch(unitName);
+          if (volumeMatch != null) {
+            _packageVolumeController.text = volumeMatch.group(1)!;
+          }
+
+          // Determine base unit from conversion factor
+          _baseUnitType = mainUnit.conversionFactor >= 1000 ? 'lít' : 'ml';
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingUnits = false);
+      }
+      debugPrint('Error loading product units: $e');
+    }
   }
 
   void _populateAttributeControllers() {
@@ -83,8 +152,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
         final fertilizerAttrs = FertilizerAttributes.fromJson(attrs);
         _npkRatioController.text = fertilizerAttrs.npkRatio;
         _fertilizerTypeController.text = fertilizerAttrs.type;
-        _weightController.text = fertilizerAttrs.weight.toString();
-        _weightUnitController.text = fertilizerAttrs.unit;
+        // 🔥 REMOVED: Weight/unit no longer populated from attributes
+        // These are now configured in "Đơn Vị Bán Hàng" section
         break;
       case ProductCategory.PESTICIDE:
         final pesticideAttrs = PesticideAttributes.fromJson(attrs);
@@ -108,10 +177,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _nameController.dispose();
     _skuController.dispose();
     _descriptionController.dispose();
+    _bagWeightController.dispose();
+    _packageQtyController.dispose();
+    _packageVolumeController.dispose();
     _npkRatioController.dispose();
     _fertilizerTypeController.dispose();
-    _weightController.dispose();
-    _weightUnitController.dispose();
+    // 🔥 REMOVED: _weightController and _weightUnitController disposal
     _activeIngredientController.dispose();
     _concentrationController.dispose();
     _volumeController.dispose();
@@ -157,6 +228,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Determine base unit based on category
+      String? baseUnit;
+      if (_selectedCategory == ProductCategory.FERTILIZER || _selectedCategory == ProductCategory.SEED) {
+        baseUnit = 'kg'; // Fertilizer & Seed use kg as base unit
+      } else if (_selectedCategory == ProductCategory.PESTICIDE) {
+        baseUnit = _baseUnitType; // Pesticide uses ml or lít
+      }
+
       final updatedProduct = widget.product.copyWith(
         name: _nameController.text.trim(),
         sku: _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
@@ -165,6 +244,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         companyId: _selectedCompanyId,
         imageUrl: _imageUrl,
         attributes: _buildAttributes(),
+        baseUnit: baseUnit, // Set base unit
         updatedAt: DateTime.now(),
       );
 
@@ -172,6 +252,16 @@ class _EditProductScreenState extends State<EditProductScreen> {
       final success = await provider.updateProduct(updatedProduct);
 
       if (success && mounted) {
+        // Save product units after product saved successfully
+        try {
+          await _saveProductUnits(widget.product.id);
+          // 🔥 CRITICAL: Reload units cache after successful save
+          await _loadExistingUnits();
+        } catch (e) {
+          debugPrint('Warning: Product saved but units failed: $e');
+          // Continue anyway - product is saved, units can be fixed later
+        }
+
         setState(() => _hasChanges = false);
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -256,14 +346,213 @@ class _EditProductScreenState extends State<EditProductScreen> {
     }
   }
 
+  /// Save product units based on category-specific config
+  Future<void> _saveProductUnits(String productId) async {
+    try {
+      // 🔥 STEP 1: Get product's current selling price for unit price calculation
+      final productPrice = widget.product.currentSellingPrice; // 🔥 FIXED: Use currentSellingPrice (not currentPrice)
+      debugPrint('🔥 DEBUG: Product ${widget.product.name} currentSellingPrice = $productPrice');
+      
+      if (_selectedCategory == ProductCategory.FERTILIZER || _selectedCategory == ProductCategory.SEED) {
+        // Fertilizer/Seed: Create "Bao" and "kg" units
+        final bagWeight = int.tryParse(_bagWeightController.text.trim()) ?? 50;
+
+        // 🔥 STEP 2: Calculate unit prices based on conversion factors
+        final bagPrice = productPrice; // 1 Bao = full product price (660K)
+        final kgPrice = productPrice / bagWeight; // 1 kg = product price ÷ bag weight (660K ÷ 50 = 13.2K)
+        debugPrint('🔥 DEBUG: bagWeight=$bagWeight, bagPrice=$bagPrice, kgPrice=$kgPrice');
+
+        // 🔥 CRITICAL: Handle existing inconsistent data
+        // First, ensure only one default unit exists by updating existing units
+        
+        // Find existing units
+        ProductUnit? existingBagUnit;
+        ProductUnit? existingKgUnit;
+        ProductUnit? existingDefaultUnit;
+        
+        for (final unit in _productUnits) {
+          if (unit.unitName.toLowerCase() == 'bao') {
+            existingBagUnit = unit;
+          } else if (unit.unitName.toLowerCase() == 'kg') {
+            existingKgUnit = unit;
+          }
+          if (unit.isDefaultSellingUnit) {
+            existingDefaultUnit = unit;
+          }
+        }
+
+        // 🔥 STRATEGY: Update existing units to match desired structure
+        
+        // Step 1: Update existing kg unit to be base unit (factor=1, not default)
+        if (existingKgUnit != null) {
+          await _unitService.updateProductUnit(
+            existingKgUnit.copyWith(
+              conversionFactor: 1.0, // Ensure kg is base unit
+              isDefaultSellingUnit: false, // kg should not be default
+              unitPrice: kgPrice, // 🔥 FIXED: Set calculated kg price
+            ),
+          );
+        } else {
+          // Create new kg base unit
+          await _unitService.createProductUnit(
+            ProductUnit(
+              id: '',
+              productId: productId,
+              unitName: 'kg',
+              conversionFactor: 1.0,
+              unitPrice: kgPrice, // 🔥 FIXED: Set calculated kg price
+              isDefaultSellingUnit: false,
+              isActive: true,
+              storeId: '',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
+
+        // Step 2: Handle Bao unit (should be default)
+        if (existingBagUnit != null) {
+          await _unitService.updateProductUnit(
+            existingBagUnit.copyWith(
+              conversionFactor: bagWeight.toDouble(),
+              isDefaultSellingUnit: true, // Bao should be default
+              unitPrice: bagPrice, // 🔥 FIXED: Set full product price for Bao
+            ),
+          );
+        } else {
+          // If no existing Bao unit, but there's another default unit, 
+          // we need to remove its default status first
+          if (existingDefaultUnit != null && existingDefaultUnit.unitName.toLowerCase() != 'bao') {
+            await _unitService.updateProductUnit(
+              existingDefaultUnit.copyWith(isDefaultSellingUnit: false),
+            );
+          }
+          
+          // Create new Bao default unit
+          await _unitService.createProductUnit(
+            ProductUnit(
+              id: '',
+              productId: productId,
+              unitName: 'Bao',
+              conversionFactor: bagWeight.toDouble(),
+              unitPrice: bagPrice, // 🔥 FIXED: Set full product price for Bao
+              isDefaultSellingUnit: true,
+              isActive: true,
+              storeId: '',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
+
+      } else if (_selectedCategory == ProductCategory.PESTICIDE) {
+        // Pesticide: Create "Chai 500ml" and "ml" units
+        final packageQty = int.tryParse(_packageQtyController.text.trim()) ?? 20;
+        final volume = int.tryParse(_packageVolumeController.text.trim()) ?? 500;
+        final packageUnitName = '$_packageUnitType $volume$_baseUnitType';
+
+        // Conversion factor: if base is lít and volume is large, convert to lít
+        double conversionFactor = volume.toDouble();
+        if (_baseUnitType == 'lít' && volume >= 1000) {
+          conversionFactor = volume / 1000; // 1000ml = 1 lít
+        }
+
+        // 🔥 STEP 2: Calculate pesticide unit prices
+        final packagePrice = productPrice; // Package unit = full product price
+        final baseUnitPrice = productPrice / conversionFactor; // Base unit = price ÷ conversion factor
+
+        // 🔥 ENHANCED: Handle existing units properly to avoid default conflicts
+        ProductUnit? existingMainUnit;
+        ProductUnit? existingBaseUnit;
+        ProductUnit? existingDefaultUnit;
+        
+        for (final unit in _productUnits) {
+          if (unit.unitName == packageUnitName || unit.isDefaultSellingUnit) {
+            existingMainUnit = unit;
+          }
+          if (unit.unitName.toLowerCase() == _baseUnitType.toLowerCase()) {
+            existingBaseUnit = unit;
+          }
+          if (unit.isDefaultSellingUnit) {
+            existingDefaultUnit = unit;
+          }
+        }
+
+        // Step 1: Update base unit (ml/lít) - should not be default
+        if (existingBaseUnit != null) {
+          await _unitService.updateProductUnit(
+            existingBaseUnit.copyWith(
+              unitName: _baseUnitType,
+              conversionFactor: 1.0,
+              isDefaultSellingUnit: false, // Base unit should not be default
+              unitPrice: baseUnitPrice, // 🔥 FIXED: Set calculated base unit price
+            ),
+          );
+        } else {
+          await _unitService.createProductUnit(
+            ProductUnit(
+              id: '',
+              productId: productId,
+              unitName: _baseUnitType,
+              conversionFactor: 1.0,
+              unitPrice: baseUnitPrice, // 🔥 FIXED: Set calculated base unit price
+              isDefaultSellingUnit: false,
+              isActive: true,
+              storeId: '',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
+
+        // Step 2: Update main selling unit (Chai 500ml) - should be default
+        if (existingMainUnit != null) {
+          await _unitService.updateProductUnit(
+            existingMainUnit.copyWith(
+              unitName: packageUnitName,
+              conversionFactor: conversionFactor,
+              isDefaultSellingUnit: true, // Main unit should be default
+              unitPrice: packagePrice, // 🔥 FIXED: Set full product price for package unit
+            ),
+          );
+        } else {
+          // Clear any existing default before creating new one
+          if (existingDefaultUnit != null && existingDefaultUnit.unitName != packageUnitName) {
+            await _unitService.updateProductUnit(
+              existingDefaultUnit.copyWith(isDefaultSellingUnit: false),
+            );
+          }
+          
+          await _unitService.createProductUnit(
+            ProductUnit(
+              id: '',
+              productId: productId,
+              unitName: packageUnitName,
+              conversionFactor: conversionFactor,
+              unitPrice: packagePrice, // 🔥 FIXED: Set full product price for package unit
+              isDefaultSellingUnit: true,
+              isActive: true,
+              storeId: '',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error saving product units: $e');
+      rethrow;
+    }
+  }
+
   Map<String, dynamic> _buildAttributes() {
     switch (_selectedCategory) {
       case ProductCategory.FERTILIZER:
         return FertilizerAttributes(
           npkRatio: _npkRatioController.text.trim(),
           type: _fertilizerTypeController.text.trim(),
-          weight: int.tryParse(_weightController.text.trim()) ?? 0,
-          unit: _weightUnitController.text.trim(),
+          weight: 1, // 🔥 FIXED: Default value (not displayed to user)
+          unit: 'bao', // 🔥 FIXED: Default unit (actual unit comes from ProductUnit table)
         ).toJson();
       case ProductCategory.PESTICIDE:
         return PesticideAttributes(
@@ -395,6 +684,42 @@ class _EditProductScreenState extends State<EditProductScreen> {
                     ],
                   ),
                 ),
+
+                const SizedBox(height: 20),
+
+                // Unit Config Section
+                if (!_isLoadingUnits)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Đơn Vị Bán Hàng',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ),
+                        _buildUnitConfigForm(),
+                      ],
+                    ),
+                  ),
 
                 const SizedBox(height: 40),
 
@@ -603,8 +928,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
       children: [
         TextFormField(
           controller: _npkRatioController,
-          decoration: _buildInputDecoration(label: 'Tỷ lệ NPK *', icon: Icons.science),
-          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập NPK' : null,
+          decoration: _buildInputDecoration(label: 'Tỷ lệ NPK', icon: Icons.science),
+          // Allow empty - NPK ratio is optional
+          validator: null,
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
@@ -617,32 +943,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
           }),
           validator: (v) => (v?.isEmpty ?? true) ? 'Chọn loại' : null,
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _weightController,
-                decoration: _buildInputDecoration(label: 'Khối lượng *'),
-                keyboardType: TextInputType.number,
-                validator: (v) => (v?.isEmpty ?? true) ? 'Nhập khối lượng' : null,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _weightUnitController.text.isEmpty ? null : _weightUnitController.text,
-                decoration: _buildInputDecoration(label: 'Đơn vị *'),
-                items: ['kg', 'tấn', 'bao'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                onChanged: (v) => setState(() {
-                  _weightUnitController.text = v ?? '';
-                  _hasChanges = true;
-                }),
-                validator: (v) => (v?.isEmpty ?? true) ? 'Chọn đơn vị' : null,
-              ),
-            ),
-          ],
-        ),
+        // 🔥 REMOVED: Weight/Unit fields - now configured in "Đơn Vị Bán Hàng" section
+        // This eliminates confusion between attribute metadata and actual selling units
       ],
     );
   }
@@ -726,6 +1028,208 @@ class _EditProductScreenState extends State<EditProductScreen> {
               ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  /// Unit Config Form - Different UI based on category
+  Widget _buildUnitConfigForm() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: _selectedCategory == ProductCategory.FERTILIZER || _selectedCategory == ProductCategory.SEED
+          ? _buildFertilizerSeedUnitConfig()
+          : _buildPesticideUnitConfig(),
+    );
+  }
+
+  /// Fertilizer & Seed: Simple bag weight input
+  Widget _buildFertilizerSeedUnitConfig() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Trọng lượng mỗi bao (kg)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _bagWeightController,
+          decoration: _buildInputDecoration(
+            label: 'VD: 50',
+            icon: Icons.scale,
+          ),
+          keyboardType: TextInputType.number,
+          validator: (v) {
+            if (v?.trim().isEmpty ?? true) return 'Nhập trọng lượng';
+            final num = int.tryParse(v!.trim());
+            if (num == null || num <= 0) return 'Nhập số hợp lệ';
+            return null;
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Hệ thống sẽ tự tạo 2 đơn vị: "Bao" (${_bagWeightController.text}kg) và "kg" (1kg)',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Pesticide: Complex package config (qty, unit type, volume, base unit)
+  Widget _buildPesticideUnitConfig() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quy cách đóng gói',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // First row: Quantity + Unit Type
+        Row(
+          children: [
+            // Quantity input
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Mỗi thùng chứa',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: _packageQtyController,
+                    decoration: _buildInputDecoration(label: 'Số lượng'),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v?.trim().isEmpty ?? true) return 'Nhập số lượng';
+                      final num = int.tryParse(v!.trim());
+                      if (num == null || num <= 0) return 'Số hợp lệ';
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // Unit type dropdown
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Đơn vị con',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    value: _packageUnitType,
+                    decoration: _buildInputDecoration(label: 'Loại'),
+                    items: ['Chai', 'Gói', 'Lọ'].map((type) {
+                      return DropdownMenuItem(value: type, child: Text(type));
+                    }).toList(),
+                    onChanged: (v) => setState(() {
+                      _packageUnitType = v ?? 'Chai';
+                      _hasChanges = true;
+                    }),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Second row: Volume + Base Unit
+        Row(
+          children: [
+            // Volume input
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dung tích',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: _packageVolumeController,
+                    decoration: _buildInputDecoration(label: 'VD: 500'),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v?.trim().isEmpty ?? true) return 'Nhập dung tích';
+                      final num = int.tryParse(v!.trim());
+                      if (num == null || num <= 0) return 'Số hợp lệ';
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // Base unit dropdown
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Đơn vị cơ sở',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    value: _baseUnitType,
+                    decoration: _buildInputDecoration(label: 'Đơn vị'),
+                    items: ['ml', 'lít'].map((unit) {
+                      return DropdownMenuItem(value: unit, child: Text(unit));
+                    }).toList(),
+                    onChanged: (v) => setState(() {
+                      _baseUnitType = v ?? 'ml';
+                      _hasChanges = true;
+                    }),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 8),
+
+        // Helper text
+        Text(
+          'Hệ thống sẽ tự tạo 2 đơn vị: '
+          '"$_packageUnitType ${_packageVolumeController.text}$_baseUnitType" và "$_baseUnitType"',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontStyle: FontStyle.italic,
+          ),
         ),
       ],
     );

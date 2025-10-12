@@ -7,6 +7,9 @@ import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../products/models/product.dart';
+import '../../../products/models/product_unit.dart';
+import '../../../products/services/product_unit_service.dart';
+import '../../../products/widgets/unit_selection_sheet.dart';
 import '../../models/payment_method.dart';
 import '../../../products/providers/product_provider.dart';
 import '../../../customers/providers/customer_provider.dart';
@@ -379,10 +382,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     final bool isLowStock = stock <= (product.minStockLevel ?? 10);
 
     return GestureDetector(
-      onTap: () {
-        _viewModel?.updateCartItemQuantity(product, quantityInCart + 1);
-        HapticFeedback.lightImpact();
-      },
+      onTap: () => _handleProductTap(product, quantityInCart),
       onLongPress: () {
         if (inCart) {
           _viewModel?.updateCartItemQuantity(product, 0);
@@ -464,6 +464,75 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
         ),
       ),
     );
+  }
+
+  /// Handle product tap with Multi-UoM support
+  /// Shows unit selector if product has multiple units, otherwise adds directly
+  Future<void> _handleProductTap(Product product, int quantityInCart) async {
+    final unitService = ProductUnitService();
+    final stock = _viewModel!.productProvider.getProductStock(product.id);
+
+    try {
+      // Load available units for this product
+      final units = await unitService.getProductUnits(product.id);
+
+      if (units.isEmpty) {
+        // No units configured, add with default behavior (quantity only)
+        _viewModel?.updateCartItemQuantity(product, quantityInCart + 1);
+        HapticFeedback.lightImpact();
+        return;
+      }
+
+      if (units.length == 1) {
+        // Only one unit, add directly with that unit
+        final unit = units.first;
+        await context.read<ProductProvider>().addToCart(
+          product,
+          quantityInCart + 1,
+          selectedUnit: unit,
+        );
+        HapticFeedback.lightImpact();
+        return;
+      }
+
+      // Multiple units available, show selector sheet
+      HapticFeedback.selectionClick();
+
+      if (!mounted) return;
+
+      final selectedUnit = await showModalBottomSheet<ProductUnit>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (context) => UnitSelectionSheet(
+          product: product,
+          units: units,
+          availableStockInBaseUnit: stock.toDouble(),
+        ),
+      );
+
+      if (selectedUnit != null && mounted) {
+        // Add to cart with selected unit
+        await context.read<ProductProvider>().addToCart(
+          product,
+          quantityInCart + 1,
+          selectedUnit: selectedUnit,
+        );
+        HapticFeedback.lightImpact();
+      }
+    } catch (e) {
+      // Error loading units, fallback to default behavior
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi tải đơn vị: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      _viewModel?.updateCartItemQuantity(product, quantityInCart + 1);
+      HapticFeedback.lightImpact();
+    }
   }
 
   Widget _buildInvoiceColumn() {
@@ -594,6 +663,18 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                 Text(item.productName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 Text(AppFormatter.formatCurrency(item.priceAtSale), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                // Multi-UoM: Display unit name if available
+                if (item.selectedUnitName != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Đơn vị: ${item.selectedUnitName}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[500],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

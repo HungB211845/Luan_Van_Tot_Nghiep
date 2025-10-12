@@ -289,6 +289,7 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
             companyId: widget.companyId,
             imageUrl: widget.imageUrl,
             category: _selectedCategory!,
+            baseUnit: 'kg', // Default base unit, will be customizable in Step 3
           ),
         ),
       );

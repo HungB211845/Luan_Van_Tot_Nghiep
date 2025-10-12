@@ -47,179 +47,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     super.dispose();
   }
 
-  void _showQuickConfirmDialog(BuildContext context, PurchaseOrder po) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.flash_on, color: Colors.orange[600], size: 28),
-            const SizedBox(width: 8),
-            const Text(
-              'Xác Nhận Nhanh',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Bạn có muốn xác nhận nhận hàng ngay cho đơn hàng này không?',
-              style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue[600], size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Đơn hàng: ${po.poNumber}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blue[700],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Để sau', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.check_circle, size: 20),
-            label: const Text('XÁC NHẬN NGAY'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () async {
-              // Capture dependencies before closing dialog
-              final poProvider = context.read<PurchaseOrderProvider>();
-              final productProvider = context.read<ProductProvider>();
-              final navigator = Navigator.of(context);
-              final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-              // Close dialog first
-              navigator.pop();
-
-              // Show loading indicator
-              scaffoldMessenger.showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text('Đang xác nhận nhận hàng...'),
-                    ],
-                  ),
-                  backgroundColor: Colors.blue,
-                  duration: const Duration(seconds: 3),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-
-              final success = await poProvider.receivePO(po.id);
-
-              if (success) {
-                // Refresh inventory
-                final productIds = poProvider.getProductIdsFromPO(po.id);
-                await productProvider.refreshInventoryAfterGoodsReceipt(
-                  productIds,
-                );
-                await productProvider.refreshAllInventoryData();
-                // Force refresh cache with fresh data after PO completion
-                await productProvider.refreshAllCache();
-
-                // Show success message
-                scaffoldMessenger.hideCurrentSnackBar();
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(
-                          Icons.check_circle,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '✅ Đã xác nhận nhận hàng ${po.poNumber} thành công!',
-                        ),
-                      ],
-                    ),
-                    backgroundColor: Colors.green,
-                    duration: const Duration(seconds: 4),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                );
-
-                // Navigate to success screen
-                navigator.pushNamed(
-                  RouteNames.purchaseOrderReceiveSuccess,
-                  arguments: po.poNumber,
-                );
-              } else {
-                // Show error
-                scaffoldMessenger.hideCurrentSnackBar();
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.error, color: Colors.white),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            poProvider.errorMessage.isNotEmpty
-                                ? poProvider.errorMessage
-                                : 'Có lỗi xảy ra khi xác nhận nhận hàng',
-                          ),
-                        ),
-                      ],
-                    ),
-                    backgroundColor: Colors.red,
-                    duration: const Duration(seconds: 4),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  // 🔥 REMOVED: _showQuickConfirmDialog method - not needed anymore
 
   void _navigateToProductSelection(BuildContext context) {
     final poProvider = context.read<PurchaseOrderProvider>();
@@ -256,15 +84,84 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     );
   }
 
-  List<String> _getUnitListForCategory(ProductCategory category) {
-    switch (category) {
-      case ProductCategory.FERTILIZER:
-        return ['kg', 'tấn', 'bao'];
-      case ProductCategory.PESTICIDE:
-        return ['ml', 'lít', 'chai', 'gói', 'lọ'];
-      case ProductCategory.SEED:
-        return ['kg', 'bao'];
-    }
+  /// 🔥 NEW: Build dynamic unit dropdown using actual product units
+  Widget _buildUnitDropdown(POCartItem item, PurchaseOrderProvider poProvider) {
+    return FutureBuilder<List<dynamic>>(
+      future: context.read<ProductProvider>().getProductUnits(item.product.id),
+      builder: (context, snapshot) {
+        List<String> unitOptions = [];
+        
+        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+          // Use actual product units
+          unitOptions = snapshot.data!.map((unit) => unit.unitName as String).toList();
+          
+          // Ensure current unit is in the list (fallback)
+          if (item.unit != null && !unitOptions.contains(item.unit)) {
+            unitOptions.add(item.unit!);
+          }
+        } else {
+          // Fallback to category-based units
+          unitOptions = _getUnitListForCategory(item.product.category);
+        }
+
+        // Set default unit if not set
+        if (item.unit == null || !unitOptions.contains(item.unit)) {
+          final defaultUnit = unitOptions.isNotEmpty ? unitOptions.first : 'đơn vị';
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            poProvider.updatePOCartItem(item.product.id, newUnit: defaultUnit);
+          });
+        }
+
+        return DropdownButtonFormField<String>(
+          value: unitOptions.contains(item.unit) ? item.unit : unitOptions.first,
+          decoration: InputDecoration(
+            labelText: 'Đơn vị',
+            border: const OutlineInputBorder(),
+            helperText: snapshot.connectionState == ConnectionState.waiting 
+                ? 'Đang tải đơn vị...' 
+                : null,
+          ),
+          items: unitOptions.map((String unit) {
+            String displayText = unit;
+            
+            // Add conversion factor if available
+            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+              final unitObj = snapshot.data!.firstWhere(
+                (u) => u.unitName == unit,
+                orElse: () => null,
+              );
+              if (unitObj != null && unitObj.conversionFactor != 1.0) {
+                displayText = '$unit (×${unitObj.conversionFactor})';
+              }
+            }
+            
+            return DropdownMenuItem<String>(
+              value: unit,
+              child: Text(displayText),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              // Update unitId for conversion tracking
+              String? unitId;
+              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                final unitObj = snapshot.data!.firstWhere(
+                  (u) => u.unitName == newValue,
+                  orElse: () => null,
+                );
+                unitId = unitObj?.id;
+              }
+              
+              poProvider.updatePOCartItem(
+                item.product.id,
+                newUnit: newValue,
+                newUnitId: unitId, // 🔥 NEW: Pass unitId for conversion
+              );
+            }
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -489,7 +386,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   }
 
   Widget _buildCartItem(POCartItem item, PurchaseOrderProvider poProvider) {
-    final unitList = _getUnitListForCategory(item.product.category);
+    // 🔥 FIXED: Get actual product units instead of hard-coded list
     final isZeroQuantity = item.quantity == 0;
 
     return Card(
@@ -530,32 +427,14 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 2,
-                  child: DropdownButtonFormField<String>(
-                    value: item.unit,
-                    decoration: const InputDecoration(
-                      labelText: 'Đơn vị',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: unitList.map((String unit) {
-                      return DropdownMenuItem<String>(
-                        value: unit,
-                        child: Text(unit),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      poProvider.updatePOCartItem(
-                        item.product.id,
-                        newUnit: newValue,
-                      );
-                    },
-                  ),
+                  child: _buildUnitDropdown(item, poProvider), // 🔥 NEW: Use dynamic unit dropdown
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16), // 🔥 INCREASED: More spacing for new layout
             _buildSmartPriceField(item, poProvider),
-            const SizedBox(height: 12), // ADDED
-            _buildSellingPriceField(item, poProvider), // ADDED
+            const SizedBox(height: 16), // 🔥 INCREASED: More spacing for new layout
+            _buildSellingPriceField(item, poProvider),
             if (isZeroQuantity)
               Container(
                 margin: const EdgeInsets.only(top: 8),
@@ -612,19 +491,39 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     );
   }
 
+  /// 🔥 NEW: Keep fallback method for compatibility
+  List<String> _getUnitListForCategory(ProductCategory category) {
+    switch (category) {
+      case ProductCategory.FERTILIZER:
+        return ['kg', 'tấn', 'bao'];
+      case ProductCategory.PESTICIDE:
+        return ['ml', 'lít', 'chai', 'gói', 'lọ'];
+      case ProductCategory.SEED:
+        return ['kg', 'bao'];
+    }
+  }
+
   Widget _buildSellingPriceField(
     POCartItem item,
     PurchaseOrderProvider poProvider,
   ) {
+    // 🔥 FIXED: Remove redundant label, just use InputDecoration
+    String unitName = item.unit ?? 'đơn vị';
+    
     return TextFormField(
       controller: item.sellingPriceController,
       decoration: InputDecoration(
-        labelText: 'Giá bán mới (tùy chọn)',
-        hintText: 'Để trống để giữ nguyên',
+        labelText: 'Giá bán / ${unitName} (tùy chọn)', // Clear and concise
+        hintText: 'Ví dụ: 55.000',
         border: const OutlineInputBorder(),
         prefixIcon: const Icon(Icons.sell_outlined),
+        suffixText: 'VNĐ',
+        helperText: 'Để trống để giữ nguyên giá hiện tại', // Keep helper for clarity
       ),
       keyboardType: TextInputType.number,
+      inputFormatters: [
+        CurrencyInputFormatter(maxValue: 999999999), // 🔥 FIXED: Proper currency formatter
+      ],
       onTap: () {
         if (item.sellingPriceController.text == '0') {
           item.sellingPriceController.clear();
@@ -640,23 +539,14 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           poProvider.updatePOCartItem(item.product.id, newSellingPrice: price ?? 0.0);
         }
 
-        if (price != null) {
-          String formattedValue = AppFormatter.formatNumber(price);
-          if (formattedValue != value) {
-            item.sellingPriceController.value = TextEditingValue(
-              text: formattedValue,
-              selection: TextSelection.fromPosition(
-                TextPosition(offset: formattedValue.length),
-              ),
-            );
-          }
-        }
+        // 🔥 FIXED: Let CurrencyInputFormatter handle formatting automatically
       },
       validator: (value) {
         if (value == null || value.isEmpty) {
           return null; // Optional field
         }
-        final price = double.tryParse(value.replaceAll(RegExp(r'[^0-9]'), ''));
+        final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+        final price = double.tryParse(cleanValue);
         if (price == null) {
           return 'Vui lòng nhập số hợp lệ';
         }
@@ -737,41 +627,43 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     POCartItem item,
     PurchaseOrderProvider poProvider,
   ) {
+    // 🔥 FIXED: Remove redundant label, just use InputDecoration
+    String unitName = item.unit ?? 'đơn vị';
+    
     return TextFormField(
       controller: item.unitCostController,
       decoration: InputDecoration(
-        labelText: 'Giá nhập / đơn vị',
-        hintText: 'Nhập giá nhập',
+        labelText: 'Giá nhập / ${unitName}', // Clear and concise
+        hintText: 'Ví dụ: 50.000',
         border: const OutlineInputBorder(),
         prefixIcon: const Icon(Icons.attach_money),
+        suffixText: 'VNĐ',
+        helperText: 'Giá cho 1 ${unitName}', // Keep helper for clarity
       ),
       keyboardType: TextInputType.number,
+      inputFormatters: [
+        CurrencyInputFormatter(maxValue: 999999999), // 🔥 FIXED: Proper currency formatter
+      ],
       onTap: () {
         if (item.unitCostController.text == '0') {
           item.unitCostController.clear();
         }
       },
       onChanged: (value) {
+        // 🔥 FIXED: Use proper currency parsing
         String numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
         double cost = double.tryParse(numericValue) ?? 0.0;
 
         poProvider.updatePOCartItem(item.product.id, newUnitCost: cost);
 
-        String formattedValue = AppFormatter.formatNumber(cost);
-        if (formattedValue != value) {
-          item.unitCostController.value = TextEditingValue(
-            text: formattedValue,
-            selection: TextSelection.fromPosition(
-              TextPosition(offset: formattedValue.length),
-            ),
-          );
-        }
+        // 🔥 FIXED: Let CurrencyInputFormatter handle formatting automatically
       },
       validator: (value) {
         if (value == null || value.isEmpty) {
           return null; // Allow empty, will be treated as 0
         }
-        final cost = double.tryParse(value.replaceAll(RegExp(r'[^0-9]'), ''));
+        final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+        final cost = double.tryParse(cleanValue);
         if (cost == null) {
           return 'Vui lòng nhập số hợp lệ';
         }
@@ -932,7 +824,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                         RouteNames.purchaseOrderDetail,
                         arguments: newPO,
                       );
-                      // Show success with quick confirm action
+                      // Show success message (simplified - no quick confirm action)
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Row(
@@ -953,18 +845,11 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                           ),
                           backgroundColor: Colors.green,
                           behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 5),
+                          duration: const Duration(seconds: 3), // 🔥 REDUCED: Shorter duration
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          action: SnackBarAction(
-                            label: 'XÁC NHẬN NHANH',
-                            textColor: Colors.white,
-                            backgroundColor: Colors.green[700],
-                            onPressed: () {
-                              _showQuickConfirmDialog(context, newPO);
-                            },
-                          ),
+                          // 🔥 REMOVED: action SnackBarAction with "XÁC NHẬN NHANH"
                         ),
                       );
                     }

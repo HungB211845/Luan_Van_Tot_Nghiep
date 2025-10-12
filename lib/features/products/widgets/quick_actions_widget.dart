@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // 🔥 ADD: Missing import for context.read()
 import '../../../core/routing/route_names.dart';
 import '../models/product.dart';
+import '../providers/product_provider.dart'; // 🔥 ADD: Missing import for ProductProvider
 import 'quick_add_batch_sheet.dart';
 
 class QuickActionsWidget extends StatelessWidget {
@@ -103,7 +105,13 @@ class QuickActionsWidget extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (context) => QuickAddBatchSheet(
         product: product,
-        onBatchAdded: onBatchAdded,
+        onBatchAdded: () {
+          // 🔥 ENHANCED: Trigger comprehensive refresh after batch added
+          onBatchAdded?.call();
+          
+          // Also refresh product units cache to ensure consistency
+          context.read<ProductProvider>().refreshProductUnitsCache(product.id);
+        },
       ),
     );
   }

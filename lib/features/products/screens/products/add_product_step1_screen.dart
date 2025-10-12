@@ -10,6 +10,8 @@ import '../../widgets/product_image_widget.dart';
 import 'add_product_step2_screen.dart';
 import '../company/company_picker_screen.dart';
 
+// Base units moved to Step 3 (after category selection)
+
 class AddProductStep1Screen extends StatefulWidget {
   const AddProductStep1Screen({super.key});
 
@@ -360,6 +362,7 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         storeId: BaseService.getDefaultStoreId(),
+        baseUnit: 'kg', // Default base unit for minimal save
       );
 
       final provider = context.read<ProductProvider>();

@@ -99,9 +99,11 @@ class TransactionService extends BaseService {
       final stopwatch = Stopwatch()..start();
 
       // Prepare items for batch processing
+      // Multi-UoM: Pass base_unit_quantity to RPC for FIFO calculation
       final itemsJson = items.map((item) => {
         'product_id': item.productId,
         'quantity': item.quantity,
+        'base_unit_quantity': item.baseUnitQuantity ?? item.quantity.toDouble(),
       }).toList();
 
       final response = await _supabase.rpc(

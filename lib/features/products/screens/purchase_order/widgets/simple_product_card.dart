@@ -4,6 +4,7 @@ import '../../../models/product.dart';
 class SimpleProductCard extends StatelessWidget {
   final Product product;
   final int currentStock;
+  final String stockUnit; // 🔥 NEW: Unit name for display (Bao, kg, etc.)
   final double? lastPrice;
   final bool isInCart;
   final int cartQuantity;
@@ -13,6 +14,7 @@ class SimpleProductCard extends StatelessWidget {
     Key? key,
     required this.product,
     required this.currentStock,
+    required this.stockUnit, // 🔥 NEW: Required parameter
     this.lastPrice,
     required this.isInCart,
     required this.cartQuantity,
@@ -189,7 +191,7 @@ class SimpleProductCard extends StatelessWidget {
                         Row(
                           children: [
                             Text(
-                              '$currentStock',
+                              '$currentStock $stockUnit', // 🔥 FIXED: Display with unit name (e.g., "53 Bao")
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,

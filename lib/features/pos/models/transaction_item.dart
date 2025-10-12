@@ -10,6 +10,12 @@ class TransactionItem {
   final String storeId; // Add storeId
   final DateTime createdAt;
 
+  // Multi-UoM support (nullable for backward compatibility)
+  final String? unitId;
+  final String? unitName;
+  final double? unitConversionFactor;
+  final double? baseUnitQuantity;
+
   TransactionItem({
     required this.id,
     required this.transactionId,
@@ -21,6 +27,10 @@ class TransactionItem {
     this.discountAmount = 0,
     required this.storeId, // Add storeId
     required this.createdAt,
+    this.unitId,
+    this.unitName,
+    this.unitConversionFactor,
+    this.baseUnitQuantity,
   });
 
   factory TransactionItem.fromJson(Map<String, dynamic> json) {
@@ -35,6 +45,10 @@ class TransactionItem {
       discountAmount: (json['discount_amount'] ?? 0).toDouble(),
       storeId: json['store_id'], // Add storeId
       createdAt: DateTime.parse(json['created_at']),
+      unitId: json['unit_id'],
+      unitName: json['unit_name'],
+      unitConversionFactor: (json['unit_conversion_factor'] as num?)?.toDouble(),
+      baseUnitQuantity: (json['base_unit_quantity'] as num?)?.toDouble(),
     );
   }
 
@@ -48,6 +62,10 @@ class TransactionItem {
       'sub_total': subTotal,
       'discount_amount': discountAmount,
       'store_id': storeId, // Add storeId
+      'unit_id': unitId,
+      'unit_name': unitName,
+      'unit_conversion_factor': unitConversionFactor,
+      'base_unit_quantity': baseUnitQuantity,
     };
   }
 
@@ -70,6 +88,10 @@ class TransactionItem {
     double? subTotal,
     double? discountAmount,
     String? storeId, // Add storeId
+    String? unitId,
+    String? unitName,
+    double? unitConversionFactor,
+    double? baseUnitQuantity,
   }) {
     return TransactionItem(
       id: id,
@@ -82,6 +104,10 @@ class TransactionItem {
       discountAmount: discountAmount ?? this.discountAmount,
       storeId: storeId ?? this.storeId, // Add storeId
       createdAt: createdAt,
+      unitId: unitId ?? this.unitId,
+      unitName: unitName ?? this.unitName,
+      unitConversionFactor: unitConversionFactor ?? this.unitConversionFactor,
+      baseUnitQuantity: baseUnitQuantity ?? this.baseUnitQuantity,
     );
   }
 }

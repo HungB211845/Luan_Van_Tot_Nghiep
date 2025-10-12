@@ -7,6 +7,20 @@ import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../../../shared/widgets/loading_overlay.dart';
 
+/// Base unit options for products
+const List<String> kBaseUnits = [
+  'kg',
+  'g',
+  'lít',
+  'ml',
+  'cây',
+  'hộp',
+  'bao',
+  'chai',
+  'viên',
+  'đơn vị',
+];
+
 class BulkProductAddScreen extends StatefulWidget {
   final Company company;
 
@@ -100,6 +114,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
           unit: 'kg',
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
+          baseUnit: entry.selectedBaseUnit,
         );
 
         final success = await productProvider.addProduct(product);
@@ -378,6 +393,29 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
                 });
               },
             ),
+
+            SizedBox(height: context.sectionPadding),
+
+            // Đơn vị cơ sở
+            DropdownButtonFormField<String>(
+              value: entry.selectedBaseUnit,
+              decoration: const InputDecoration(
+                labelText: 'Đơn vị cơ sở *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.straighten),
+              ),
+              items: kBaseUnits.map((unit) {
+                return DropdownMenuItem<String>(
+                  value: unit,
+                  child: Text(unit),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  entry.selectedBaseUnit = value!;
+                });
+              },
+            ),
           ],
         ),
       ),
@@ -419,6 +457,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
 class ProductEntry {
   final TextEditingController nameController = TextEditingController();
   ProductCategory selectedCategory = ProductCategory.FERTILIZER;
+  String selectedBaseUnit = kBaseUnits.first; // Default to 'kg'
 
   void dispose() {
     nameController.dispose();

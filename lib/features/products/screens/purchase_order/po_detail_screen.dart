@@ -421,12 +421,9 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
             color: Colors.blue.shade600,
             isLoading: provider.isLoading,
             onPressed: () async {
-              final success = await provider.updatePOStatus(po.id, PurchaseOrderStatus.confirmed);
-              if (success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Đã xác nhận đơn hàng.'), backgroundColor: Colors.green),
-                );
-              }
+              await provider.updatePOStatus(po.id, PurchaseOrderStatus.confirmed);
+              // 🔥 REMOVED: Success SnackBar - UI will automatically update to show confirmed status
+              // Button will change from blue "Xác nhận Đơn Hàng" to green "Xác Nhận Nhận Hàng"
             },
           );
         }
@@ -596,26 +593,8 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 // Optional: reload products list to refresh available_stock from view
                 await productProvider.loadProductsPaginated();
 
-                // Check mounted again before showing SnackBar
-                if (!mounted) return;
-
-                // Show temporary success SnackBar (HIG Guideline #4)
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.white),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text('Đã nhận hàng thành công cho đơn ${po.poNumber}'),
-                        ),
-                      ],
-                    ),
-                    backgroundColor: Colors.green,
-                    duration: const Duration(seconds: 3), // 3 seconds as per HIG
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                // 🔥 REMOVED: Success SnackBar - UI will automatically update to show delivered status
+                // No need for additional success message since status change is visible
               } else {
                 // Check mounted before showing SnackBar
                 if (!mounted) return;

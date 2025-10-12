@@ -6,6 +6,7 @@ import '../models/product_batch.dart';
 import '../models/seasonal_price.dart';
 import '../models/banned_substance.dart';
 import '../models/company.dart';
+import '../services/product_unit_service.dart'; // Add this import
 import '../../../shared/models/paginated_result.dart';
 
 class ProductService extends BaseService {
@@ -901,30 +902,57 @@ class ProductService extends BaseService {
   }
 
   /// Quick add batch with automatic price update
+  /// FIXED: Now properly converts to base unit before saving
   Future<String> quickAddBatch({
     required String productId,
     required int quantity,
     required double costPrice,
     required double newSellingPrice,
+    String? unitId, // Allow specifying unit ID for conversion
     String? batchNumber,
     DateTime? expiryDate,
   }) async {
     try {
       ensureAuthenticated();
 
+      // 🔥 CRITICAL FIX: Convert quantity to base unit if unitId is provided
+      int baseQuantity = quantity; // Default to input quantity
+      
+      if (unitId != null) {
+        // Get unit conversion factor from ProductUnitService
+        final unitService = ProductUnitService(); // Create instance
+        final units = await unitService.getProductUnits(productId);
+        final selectedUnit = units.firstWhere(
+          (u) => u.id == unitId,
+          orElse: () => units.firstWhere(
+            (u) => u.isDefaultSellingUnit,
+            orElse: () => throw Exception('No valid unit found for conversion'),
+          ),
+        );
+
+        // Convert: input quantity × conversion factor = base quantity
+        // Example: 50 Bao × 50 kg/Bao = 2500 kg (base unit)
+        baseQuantity = (quantity * selectedUnit.conversionFactor).toInt();
+        
+        print('DEBUG: Quick Add Batch Conversion - ${quantity} ${selectedUnit.unitName} → ${baseQuantity} base units');
+      }
+
       // Generate batch number if not provided
       final finalBatchNumber = batchNumber ?? _generateBatchNumber();
 
-      // Create the batch
+      // Create the batch with converted base quantity
       final batchData = addStoreId({
         'product_id': productId,
         'batch_number': finalBatchNumber,
-        'quantity': quantity,
+        'quantity': baseQuantity, // 🔥 CRITICAL: Use converted base quantity
         'cost_price': costPrice,
         'received_date': DateTime.now().toIso8601String(),
         'expiry_date': expiryDate?.toIso8601String(),
         'sales_count': 0,
         'is_deleted': false,
+        'notes': unitId != null 
+            ? 'Quick Add: ${quantity} units → ${baseQuantity} base units' 
+            : 'Quick Add: ${quantity} units (no conversion)',
       });
 
       final batchResponse = await _supabase

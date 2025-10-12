@@ -126,6 +126,7 @@ class AppRouter {
           child: AddProductStep2Screen(
             productName: args['productName'],
             companyId: args['companyId'],
+            imageUrl: args['imageUrl'],
           ),
           settings: settings,
         );
@@ -136,7 +137,9 @@ class AppRouter {
           child: AddProductStep3Screen(
             productName: args['productName'],
             companyId: args['companyId'],
+            imageUrl: args['imageUrl'],
             category: args['category'],
+            baseUnit: args['baseUnit'],
           ),
           settings: settings,
         );

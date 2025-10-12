@@ -1,0 +1,326 @@
+import 'package:flutter/material.dart';
+import '../../../shared/utils/formatter.dart';
+import '../models/product_unit.dart';
+import '../models/product.dart';
+import '../services/product_unit_service.dart';
+
+/// Bottom sheet for selecting a unit when adding product to cart
+/// Follows Apple HIG principles: Clear, Efficient, Non-disruptive
+///
+/// Design Philosophy:
+/// - Shows unit name prominently (large text)
+/// - Displays price and stock for each unit
+/// - Highlights default unit
+/// - Quick tap to select (2-tap flow: product → unit)
+class UnitSelectionSheet extends StatefulWidget {
+  final Product product;
+  final List<ProductUnit> units;
+  final double availableStockInBaseUnit;
+
+  const UnitSelectionSheet({
+    Key? key,
+    required this.product,
+    required this.units,
+    required this.availableStockInBaseUnit,
+  }) : super(key: key);
+
+  @override
+  State<UnitSelectionSheet> createState() => _UnitSelectionSheetState();
+}
+
+class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
+  final _unitService = ProductUnitService();
+
+  /// 🔥 HELPER: Calculate unit price on-the-fly if database unit_price is 0
+  double _getCalculatedUnitPrice(ProductUnit unit) {
+    // If unit already has price set in database, use it
+    if (unit.unitPrice > 0) {
+      return unit.unitPrice;
+    }
+    
+    // Otherwise, calculate from product's currentSellingPrice
+    final productPrice = widget.product.currentSellingPrice;
+    if (productPrice <= 0) {
+      return 0; // No product price set
+    }
+    
+    // Find default unit to use as price base
+    final defaultUnit = widget.units.firstWhere(
+      (u) => u.isDefaultSellingUnit,
+      orElse: () => widget.units.first,
+    );
+    
+    if (unit.id == defaultUnit.id) {
+      // This IS the default unit (Bao) → full product price
+      return productPrice; // 660K ✅
+    } else {
+      // This is NOT default unit (kg) → calculate from default unit's conversion factor
+      // Price per kg = Product price ÷ Bao's conversion factor
+      return productPrice / defaultUnit.conversionFactor; // 660K ÷ 50 = 13.2K ✅
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHandle(),
+            const SizedBox(height: 16),
+            _buildHeader(),
+            const SizedBox(height: 8),
+            _buildSubtitle(),
+            const SizedBox(height: 16),
+            _buildUnitList(),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHandle() {
+    return Center(
+      child: Container(
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          Icon(
+            Icons.straighten,
+            size: 48,
+            color: Colors.green[600],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Chọn đơn vị',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.green[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubtitle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          Text(
+            widget.product.name,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tồn kho: ${widget.availableStockInBaseUnit.toInt()} ${widget.product.effectiveBaseUnit}',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnitList() {
+    if (widget.units.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Icon(
+              Icons.info_outline,
+              size: 48,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Không có đơn vị nào được thiết lập',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: widget.units.map((unit) => _buildUnitItem(unit)).toList(),
+    );
+  }
+
+  Widget _buildUnitItem(ProductUnit unit) {
+    // Calculate stock in this unit
+    final stockInThisUnit = _unitService.convertFromBaseUnit(
+      baseQuantity: widget.availableStockInBaseUnit,
+      conversionFactor: unit.conversionFactor,
+    );
+
+    final isLowStock = stockInThisUnit < 10;
+    final isOutOfStock = stockInThisUnit <= 0;
+
+    return InkWell(
+      onTap: isOutOfStock
+          ? null
+          : () {
+              Navigator.pop(context, unit);
+            },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: Colors.grey[200]!,
+              width: 1,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Icon container
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: isOutOfStock
+                    ? Colors.grey[100]
+                    : Colors.green[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.inventory_2,
+                color: isOutOfStock ? Colors.grey[400] : Colors.green[600],
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Unit details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        unit.unitName,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isOutOfStock ? Colors.grey[400] : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (unit.isDefaultSellingUnit)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[100],
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Mặc định',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue[700],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        AppFormatter.formatCurrency(_getCalculatedUnitPrice(unit)), // 🔥 FIXED: Use calculated price
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isOutOfStock ? Colors.grey[400] : Colors.green[600],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '•',
+                        style: TextStyle(color: Colors.grey[400]),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isOutOfStock
+                            ? 'Hết hàng'
+                            : 'Còn: ${stockInThisUnit.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isOutOfStock
+                              ? Colors.red[600]
+                              : isLowStock
+                                  ? Colors.orange[600]
+                                  : Colors.grey[600],
+                          fontWeight: isLowStock || isOutOfStock
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (unit.conversionFactor != 1.0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '1 ${unit.unitName} = ${unit.conversionFactor} ${widget.product.effectiveBaseUnit}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Arrow indicator
+            if (!isOutOfStock)
+              Icon(
+                Icons.chevron_right,
+                color: Colors.grey[400],
+                size: 24,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

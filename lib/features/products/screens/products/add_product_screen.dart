@@ -32,8 +32,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   // Fertilizer
   final _npkRatioController = TextEditingController();
   final _fertilizerTypeController = TextEditingController();
-  final _weightController = TextEditingController();
-  final _weightUnitController = TextEditingController();
+  // 🔥 REMOVED: _weightController and _weightUnitController - now configured in Multi-UoM system
 
   // Pesticide
   final _activeIngredientController = TextEditingController();
@@ -64,8 +63,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _descriptionController.dispose();
     _npkRatioController.dispose();
     _fertilizerTypeController.dispose();
-    _weightController.dispose();
-    _weightUnitController.dispose();
+    // 🔥 REMOVED: _weightController and _weightUnitController disposal
     _activeIngredientController.dispose();
     _concentrationController.dispose();
     _volumeController.dispose();
@@ -313,56 +311,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
           },
         ),
 
-        const SizedBox(height: 16),
-
-        // Khối lượng và Đơn vị
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _weightController,
-                decoration: _buildInputDecoration(
-                  label: 'Khối lượng (Tùy chọn)',
-                  hint: 'Để trống nếu chưa có',
-                ),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  // Weight is now optional - only validate if provided
-                  if (value != null &&
-                      value.trim().isNotEmpty &&
-                      double.tryParse(value) == null) {
-                    return 'Khối lượng phải là số';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _weightUnitController.text.isEmpty
-                    ? 'kg'
-                    : _weightUnitController.text,
-                decoration: _buildInputDecoration(label: 'Đơn vị'),
-                items: ['kg', 'tấn', 'bao'].map((unit) {
-                  return DropdownMenuItem<String>(
-                    value: unit,
-                    child: Text(unit),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  _weightUnitController.text = value ?? 'kg';
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Chọn đơn vị';
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
-        ),
+        // 🔥 REMOVED: Weight/Unit fields - will be configured in Multi-UoM system later
+        // This eliminates confusion and creates single source of truth
       ],
     );
   }
@@ -649,8 +599,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     // Clear tất cả controllers của attributes
     _npkRatioController.clear();
     _fertilizerTypeController.clear();
-    _weightController.clear();
-    _weightUnitController.clear();
+    // 🔥 REMOVED: _weightController and _weightUnitController clear calls
     _activeIngredientController.clear();
     _concentrationController.clear();
     _volumeController.clear();
@@ -667,8 +616,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
         return FertilizerAttributes(
           npkRatio: _npkRatioController.text.trim(),
           type: _fertilizerTypeController.text.trim(),
-          weight: int.tryParse(_weightController.text.trim()) ?? 0,
-          unit: _weightUnitController.text.trim(),
+          weight: 1, // 🔥 FIXED: Default value (not displayed to user)
+          unit: 'bao', // 🔥 FIXED: Default unit (actual unit comes from ProductUnit table)
         ).toJson();
 
       case ProductCategory.PESTICIDE:

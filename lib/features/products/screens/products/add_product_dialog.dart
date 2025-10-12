@@ -8,6 +8,20 @@ import '../../../../shared/services/base_service.dart';
 import '../../../../shared/services/image_service.dart';
 import '../../widgets/product_image_widget.dart';
 
+/// Base unit options for products
+const List<String> kBaseUnits = [
+  'kg',
+  'g',
+  'lít',
+  'ml',
+  'cây',
+  'hộp',
+  'bao',
+  'chai',
+  'viên',
+  'đơn vị',
+];
+
 class AddProductDialog extends StatefulWidget {
   const AddProductDialog({super.key});
 
@@ -31,11 +45,13 @@ class _AddProductDialogState extends State<AddProductDialog> {
   final _skuController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _npkRatioController = TextEditingController();
+  String? _selectedBaseUnit;
   // ... other controllers for pesticide, seed etc.
 
   @override
   void initState() {
     super.initState();
+    _selectedBaseUnit = kBaseUnits.first; // Default to 'kg'
     // Load companies for the dropdown
     context.read<CompanyProvider>().loadCompanies();
   }
@@ -75,6 +91,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
       storeId: BaseService.getDefaultStoreId(),
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      baseUnit: _selectedBaseUnit!,
     );
 
     final success = await context.read<ProductProvider>().addProduct(newProduct);
@@ -126,6 +143,30 @@ class _AddProductDialogState extends State<AddProductDialog> {
                 TextFormField(
                   controller: _skuController,
                   decoration: const InputDecoration(labelText: 'Mã SKU/Barcode'),
+                ),
+                const SizedBox(height: 16),
+
+                // Base Unit Dropdown
+                DropdownButtonFormField<String>(
+                  value: _selectedBaseUnit,
+                  decoration: const InputDecoration(
+                    labelText: 'Đơn vị cơ sở',
+                    prefixIcon: Icon(Icons.straighten),
+                  ),
+                  items: kBaseUnits.map((String unit) {
+                    return DropdownMenuItem<String>(
+                      value: unit,
+                      child: Text(unit),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _selectedBaseUnit = newValue;
+                      });
+                    }
+                  },
+                  validator: (v) => (v == null) ? 'Vui lòng chọn' : null,
                 ),
                 const SizedBox(height: 16),
 

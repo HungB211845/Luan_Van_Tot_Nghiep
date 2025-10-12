@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart'; // Add this import
 import '../../../shared/utils/formatter.dart';
 import '../../../shared/utils/input_formatters.dart';
 
@@ -10,6 +11,7 @@ class KeyMetricsWidget extends StatelessWidget {
   final double grossProfitPercentage;
   final bool isEditMode;
   final bool isMetricsLoading; // 🚀 NEW: Loading state for metrics
+  final List<ProductUnit> productUnits; // 🔥 NEW: Product units for conversion
   final TextEditingController? priceController;
   final VoidCallback? onPriceTap;
   final VoidCallback? onEnterEditMode;
@@ -24,6 +26,7 @@ class KeyMetricsWidget extends StatelessWidget {
     required this.grossProfitPercentage,
     this.isEditMode = false,
     this.isMetricsLoading = false, // 🚀 NEW: Default to not loading
+    this.productUnits = const [], // 🔥 NEW: Default empty list
     this.priceController,
     this.onPriceTap,
     this.onEnterEditMode,
@@ -55,11 +58,12 @@ class KeyMetricsWidget extends StatelessWidget {
                     Expanded(
                       child: _buildMetricCard(
                         'Tồn Kho',
-                        '${AppFormatter.formatNumber(totalStock.toInt())}',
-                        product.unit.isNotEmpty ? product.unit : 'đơn vị',
+                        _getStockDisplayValue(),
+                        _getStockDisplayUnit(),
                         Icons.inventory_2,
                         Colors.grey[300]!, // Neutral background
                         Colors.grey[800]!, // Dark text
+                        subtitle: _getStockSubtitle(), // 🔥 NEW: Show base unit conversion
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -104,6 +108,88 @@ class KeyMetricsWidget extends StatelessWidget {
     );
   }
 
+  /// Get stock display value (converted to selling units)
+  String _getStockDisplayValue() {
+    if (productUnits.isEmpty) {
+      // No units configured, show base stock
+      return AppFormatter.formatNumber(totalStock.toInt());
+    }
+
+    // Find default selling unit
+    final defaultUnit = productUnits.firstWhere(
+      (u) => u.isDefaultSellingUnit,
+      orElse: () => productUnits.first,
+    );
+
+    if (defaultUnit.conversionFactor <= 0) {
+      // Invalid conversion factor, fallback to base stock
+      return AppFormatter.formatNumber(totalStock.toInt());
+    }
+
+    // Convert base stock to selling units
+    // Example: 2682 kg ÷ 50 kg/bag = 53.64 → "53" bags
+    final sellingUnitStock = totalStock / defaultUnit.conversionFactor;
+    final wholeParts = sellingUnitStock.floor();
+    final remainder = totalStock - (wholeParts * defaultUnit.conversionFactor);
+
+    if (wholeParts == 0) {
+      // Not enough for even one selling unit - show base stock
+      return AppFormatter.formatNumber(totalStock.toInt());
+    }
+
+    if (remainder > 0.1) { // Small tolerance for floating point
+      // Mixed display: show main unit count only, remainder in subtitle
+      return AppFormatter.formatNumber(wholeParts);
+    }
+
+    // Exact match: show selling unit count
+    return AppFormatter.formatNumber(wholeParts);
+  }
+
+  /// Get stock display unit name
+  String _getStockDisplayUnit() {
+    if (productUnits.isEmpty) {
+      return product.unit.isNotEmpty ? product.unit : 'đơn vị';
+    }
+
+    final defaultUnit = productUnits.firstWhere(
+      (u) => u.isDefaultSellingUnit,
+      orElse: () => productUnits.first,
+    );
+
+    return defaultUnit.unitName;
+  }
+
+  /// Get stock subtitle showing remainder or base unit conversion
+  String? _getStockSubtitle() {
+    if (productUnits.isEmpty) {
+      return null; // No subtitle needed
+    }
+
+    // Find default selling unit
+    final defaultUnit = productUnits.firstWhere(
+      (u) => u.isDefaultSellingUnit,
+      orElse: () => productUnits.first,
+    );
+
+    if (defaultUnit.conversionFactor <= 0) {
+      return null;
+    }
+
+    // Calculate remainder
+    final sellingUnitStock = totalStock / defaultUnit.conversionFactor;
+    final wholeParts = sellingUnitStock.floor();
+    final remainder = totalStock - (wholeParts * defaultUnit.conversionFactor);
+
+    if (remainder > 0.1) { // Small tolerance
+      // Show remainder: "và 32 kg"
+      return 'và ${remainder.toInt()} ${product.effectiveBaseUnit}';
+    }
+
+    // Show base unit conversion: "(2682 kg)"
+    return '(${totalStock.toInt()} ${product.effectiveBaseUnit})';
+  }
+
   Widget _buildMetricCard(
     String title,
     String value,
@@ -112,6 +198,7 @@ class KeyMetricsWidget extends StatelessWidget {
     Color backgroundColor,
     Color textColor, {
     bool isLoading = false, // 🚀 ADD: Named parameter for loading state
+    String? subtitle, // 🔥 NEW: Optional subtitle for additional info
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -192,6 +279,20 @@ class KeyMetricsWidget extends StatelessWidget {
                 ],
               ],
             ),
+          // 🔥 NEW: Show subtitle if provided (for stock conversion info)
+          if (subtitle != null && subtitle.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[500],
+                fontStyle: FontStyle.italic,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ],
       ),
     );

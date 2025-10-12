@@ -39,6 +39,7 @@ class Product {
   final double? currentPrice;
   final double currentSellingPrice;
   final String unit;
+  final String? baseUnit; // Base unit for inventory tracking (kg, ml, unit) - nullable for backward compatibility
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? npkRatio;
@@ -62,6 +63,7 @@ class Product {
     this.currentPrice,
     this.currentSellingPrice = 0,
     this.unit = '',
+    this.baseUnit,
     required this.createdAt,
     required this.updatedAt,
     this.npkRatio,
@@ -91,6 +93,7 @@ class Product {
       currentPrice: (json['current_price'] as num?)?.toDouble(),
       currentSellingPrice: (json['current_selling_price'] as num?)?.toDouble() ?? 0.0,
       unit: json['unit'] as String? ?? '',
+      baseUnit: json['base_unit'] as String?,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
       npkRatio: json['npk_ratio'],
@@ -113,6 +116,7 @@ class Product {
       'description': description,
       'min_stock_level': minStockLevel,
       'current_selling_price': currentSellingPrice,
+      'base_unit': baseUnit,
       'store_id': storeId,
       'attributes': attributes,
     };
@@ -120,6 +124,9 @@ class Product {
 
   // Category display name
   String get categoryDisplayName => category.displayName;
+
+  // Get effective base unit with fallback for backward compatibility
+  String get effectiveBaseUnit => baseUnit ?? 'đơn vị';
 
   // Getter methods cho attributes theo category
   FertilizerAttributes? get fertilizerAttributes {
@@ -149,6 +156,58 @@ class Product {
     }
   }
 
+  /// Helper method to convert base stock to default selling unit
+  /// Used for display purposes - shows stock in user-friendly units  
+  double getStockInDefaultUnit(List<dynamic> units) {
+    if (units.isEmpty) {
+      // No units configured, return current stock as-is
+      return (availableStock ?? 0).toDouble();
+    }
+
+    // Find default selling unit - use try/catch to handle not found case
+    dynamic defaultUnit;
+    try {
+      defaultUnit = units.firstWhere(
+        (u) => u.isDefaultSellingUnit == true,
+      );
+    } catch (e) {
+      // No default unit found, use first unit as fallback
+      defaultUnit = units.isNotEmpty ? units.first : null;
+    }
+
+    if (defaultUnit == null) {
+      // No units available, return stock as-is
+      return (availableStock ?? 0).toDouble();
+    }
+
+    final conversionFactor = defaultUnit.conversionFactor ?? 1.0;
+    if (conversionFactor <= 0) return (availableStock ?? 0).toDouble();
+
+    // Convert: base stock ÷ conversion factor = display stock
+    // Example: 2500 kg ÷ 50 kg/bag = 50 bags
+    return (availableStock ?? 0) / conversionFactor;
+  }
+
+  /// Helper method to get default selling unit name
+  String getDefaultUnitName(List<dynamic> units) {
+    if (units.isEmpty) {
+      return effectiveBaseUnit; // Fallback to base unit
+    }
+
+    // Find default selling unit - use try/catch to handle not found case
+    dynamic defaultUnit;
+    try {
+      defaultUnit = units.firstWhere(
+        (u) => u.isDefaultSellingUnit == true,
+      );
+    } catch (e) {
+      // No default unit found, use first unit as fallback
+      defaultUnit = units.isNotEmpty ? units.first : null;
+    }
+
+    return defaultUnit?.unitName ?? effectiveBaseUnit;
+  }
+
   Product copyWith({
     String? id,
     String? sku,
@@ -166,6 +225,7 @@ class Product {
     double? currentPrice,
     double? currentSellingPrice,
     String? unit,
+    String? baseUnit,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? npkRatio,
@@ -189,6 +249,7 @@ class Product {
       currentPrice: currentPrice ?? this.currentPrice,
       currentSellingPrice: currentSellingPrice ?? this.currentSellingPrice,
       unit: unit ?? this.unit,
+      baseUnit: baseUnit ?? this.baseUnit,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       npkRatio: npkRatio ?? this.npkRatio,

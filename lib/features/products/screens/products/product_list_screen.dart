@@ -463,15 +463,15 @@ class _ProductListScreenState extends State<ProductListScreen> {
     // Khi search, products đã được filter bởi search query rồi
     if (_stockFilter != StockFilterOption.all && !isSearching) {
       filteredList = filteredList.where((product) {
-        final stock = provider.getProductStock(product.id);
+        final baseStock = provider.getProductStock(product.id); // Use base stock for filtering logic
         switch (_stockFilter) {
           case StockFilterOption.inStock:
-            return stock > (product.minStockLevel ?? 0);
+            return baseStock > (product.minStockLevel ?? 0);
           case StockFilterOption.lowStock:
             final minStock = product.minStockLevel ?? 0;
-            return stock > 0 && stock <= minStock;
+            return baseStock > 0 && baseStock <= minStock;
           case StockFilterOption.outOfStock:
-            return stock == 0;
+            return baseStock == 0;
           default:
             return true;
         }
@@ -501,16 +501,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
         break;
       case ProductSortOption.stockHighToLow:
         filteredList.sort((a, b) {
-          final stockA = provider.getProductStock(a.id);
-          final stockB = provider.getProductStock(b.id);
-          return stockB.compareTo(stockA);
+          final baseStockA = provider.getProductStock(a.id); // Use base stock for sorting
+          final baseStockB = provider.getProductStock(b.id);
+          return baseStockB.compareTo(baseStockA);
         });
         break;
       case ProductSortOption.stockLowToHigh:
         filteredList.sort((a, b) {
-          final stockA = provider.getProductStock(a.id);
-          final stockB = provider.getProductStock(b.id);
-          return stockA.compareTo(stockB);
+          final baseStockA = provider.getProductStock(a.id); // Use base stock for sorting  
+          final baseStockB = provider.getProductStock(b.id);
+          return baseStockA.compareTo(baseStockB);
         });
         break;
     }
@@ -560,8 +560,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   void _updateCategoryFilter(ProductCategory? category) {
     setState(() => _selectedCategory = category);
-    // Cache will be automatically used if available
-    context.read<ProductProvider>().loadProductsPaginated(category: category, useCache: true);
+    // 🔥 FIXED: Force refresh when switching categories, especially "Tất cả"
+    final provider = context.read<ProductProvider>();
+    
+    // Clear any existing search when switching categories
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+      provider.clearSearch();
+    }
+    
+    // Force reload with new category filter
+    provider.loadProductsPaginated(
+      category: category, 
+      useCache: false, // 🔥 CRITICAL: Don't use cache when switching categories
+    );
   }
 
   Widget _buildProductList({required bool isMasterDetail}) {
@@ -654,7 +666,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Widget _buildProductListItem(Product product, ProductProvider provider, bool isMasterDetail) {
-    final stock = provider.getProductStock(product.id);
+    final baseStock = provider.getProductStock(product.id);
     final price = provider.getCurrentPrice(product.id);
     final isSelected = isMasterDetail && provider.selectedProduct?.id == product.id;
     final isChecked = _selectedProductIds.contains(product.id);
@@ -729,15 +741,22 @@ class _ProductListScreenState extends State<ProductListScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 3),
-                          Text(
-                            'Tồn kho: $stock • ${AppFormatter.formatCurrency(price)}',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: isSelected 
-                                ? CupertinoColors.systemGrey.withOpacity(1.0)
-                                : CupertinoColors.systemGrey.withOpacity(0.9),
-                              fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-                            ),
+                          // 🔥 FIXED: Display stock in selling units instead of base units
+                          FutureBuilder<String>(
+                            future: _getStockDisplayString(product, baseStock, provider),
+                            builder: (context, snapshot) {
+                              final stockDisplay = snapshot.data ?? '$baseStock ${product.unit}';
+                              return Text(
+                                'Tồn kho: $stockDisplay • ${AppFormatter.formatCurrency(price)}',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: isSelected 
+                                    ? CupertinoColors.systemGrey.withOpacity(1.0)
+                                    : CupertinoColors.systemGrey.withOpacity(0.9),
+                                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -765,6 +784,51 @@ class _ProductListScreenState extends State<ProductListScreen> {
         ],
       ),
     );
+  }
+
+  /// 🔥 NEW: Convert base stock to selling units for display
+  Future<String> _getStockDisplayString(Product product, int baseStock, ProductProvider provider) async {
+    try {
+      final units = await provider.getProductUnits(product.id);
+      
+      if (units.isEmpty) {
+        // No units configured, use base unit
+        return '$baseStock ${product.effectiveBaseUnit}';
+      }
+      
+      // Find default selling unit
+      final defaultUnit = units.firstWhere(
+        (u) => u.isDefaultSellingUnit,
+        orElse: () => units.first,
+      );
+      
+      if (defaultUnit.conversionFactor <= 0) {
+        // Invalid conversion factor, fallback
+        return '$baseStock ${product.effectiveBaseUnit}';
+      }
+      
+      // Convert base stock to selling units
+      final sellingUnitStock = baseStock / defaultUnit.conversionFactor;
+      final wholeParts = sellingUnitStock.floor();
+      final remainder = baseStock - (wholeParts * defaultUnit.conversionFactor.toInt());
+      
+      if (wholeParts == 0) {
+        // Less than one selling unit
+        return '$baseStock ${product.effectiveBaseUnit}';
+      }
+      
+      if (remainder > 0) { // No tolerance needed for int
+        // Mixed display: "53 Bao và 32 kg"
+        return '$wholeParts ${defaultUnit.unitName} và $remainder ${product.effectiveBaseUnit}';
+      }
+      
+      // Exact match: "50 Bao"
+      return '$wholeParts ${defaultUnit.unitName}';
+      
+    } catch (e) {
+      // Error loading units, fallback to base display
+      return '$baseStock ${product.effectiveBaseUnit}';
+    }
   }
 
   // 🔥 REMOVED: Unused performance methods since performance button was removed

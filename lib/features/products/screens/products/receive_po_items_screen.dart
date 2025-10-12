@@ -6,6 +6,7 @@ import '../../models/purchase_order.dart';
 import '../../models/purchase_order_status.dart';
 import '../../models/purchase_order_item.dart';
 import '../../models/product_batch.dart';
+import '../../models/product_unit.dart'; // Add this import
 import '../../models/company.dart';
 import '../../providers/purchase_order_provider.dart';
 import '../../providers/product_provider.dart';
@@ -152,17 +153,62 @@ class _ReceivePOItemsScreenState extends State<ReceivePOItemsScreen> {
       final batches = <ProductBatch>[];
 
       for (final data in _itemDataMap.values) {
+        // 🔥 CRITICAL FIX: Convert quantity to base unit before saving
+        // Get product units to determine conversion factor
+        final product = productProvider.products.firstWhere(
+          (p) => p.id == data.poItem.productId,
+          orElse: () => throw Exception('Product not found: ${data.poItem.productId}'),
+        );
+
+        // Get product units for conversion
+        final units = await productProvider.getProductUnits(product.id);
+        
+        // Find the unit used in PO (or default to base unit)
+        final poUnit = data.poItem.unit ?? product.effectiveBaseUnit;
+        final selectedUnit = units.firstWhere(
+          (u) => u.unitName.toLowerCase() == poUnit.toLowerCase(),
+          orElse: () => units.isNotEmpty 
+              ? units.firstWhere(
+                  (u) => u.isDefaultSellingUnit,
+                  orElse: () => units.first,
+                )
+              : ProductUnit( // Fallback ProductUnit
+                  id: '',
+                  productId: product.id,
+                  unitName: product.effectiveBaseUnit,
+                  conversionFactor: 1.0,
+                  unitPrice: 0,
+                  isDefaultSellingUnit: false,
+                  isActive: true,
+                  storeId: '',
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                ),
+        );
+
+        // Calculate base quantity
+        int baseQuantity;
+        if (selectedUnit.conversionFactor > 0) {
+          // Convert: input quantity × conversion factor = base quantity
+          // Example: 50 Bao × 50 kg/Bao = 2500 kg (base unit)
+          baseQuantity = (data.receivedQuantity * selectedUnit.conversionFactor).toInt();
+        } else {
+          // Invalid conversion factor, use direct quantity
+          baseQuantity = data.receivedQuantity;
+          print('Warning: Invalid conversion factor for ${product.name}, using direct quantity');
+        }
+
         final batch = ProductBatch(
           id: '', // Will be generated
           productId: data.poItem.productId,
           batchNumber: data.batchNumber,
-          quantity: data.receivedQuantity,
+          quantity: baseQuantity, // 🔥 CRITICAL: Use converted base quantity
           costPrice: data.costPrice,
           receivedDate: DateTime.now(),
           expiryDate: data.expiryDate,
           supplierId: widget.purchaseOrder.supplierId,
           purchaseOrderId: widget.purchaseOrder.id,
-          notes: 'Nhập từ ${widget.purchaseOrder.poNumber}',
+          notes: 'Nhập từ ${widget.purchaseOrder.poNumber} (${data.receivedQuantity} ${poUnit} → ${baseQuantity} ${product.effectiveBaseUnit})',
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
           storeId: BaseService.getDefaultStoreId() ?? '',
@@ -196,13 +242,13 @@ class _ReceivePOItemsScreenState extends State<ReceivePOItemsScreen> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Đã nhận hàng thành công!'),
+              content: Text('Đã nhận hàng thành công với chuyển đổi đơn vị!'),
               backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
+              duration: Duration(seconds: 3),
             ),
           );
 
-          // Refresh product batches
+          // Refresh product batches to show updated stock
           final selectedProduct = productProvider.selectedProduct;
           if (selectedProduct != null) {
             await productProvider.loadProductBatches(selectedProduct.id);
