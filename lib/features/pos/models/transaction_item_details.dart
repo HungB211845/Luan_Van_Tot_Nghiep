@@ -9,6 +9,13 @@ class TransactionItemDetails {
   final int quantity;
   final double priceAtSale;
   final double subTotal;
+  final String? unitId;
+  final String? unitName;
+  final double? unitConversionFactor;
+  final double? baseUnitQuantity;
+  final String unitLabel;
+  final double pricePerDisplayUnit;
+  final String priceUnitName;
 
   TransactionItemDetails({
     required this.productId,
@@ -17,5 +24,12 @@ class TransactionItemDetails {
     required this.quantity,
     required this.priceAtSale,
     required this.subTotal,
+    this.unitId,
+    this.unitName,
+    this.unitConversionFactor,
+    this.baseUnitQuantity,
+    required this.unitLabel,
+    required this.pricePerDisplayUnit,
+    required this.priceUnitName,
   });
 }

@@ -18,6 +18,7 @@ class ProductUnitService extends BaseService {
 
       return response
           .map((json) => ProductUnit.fromJson(json as Map<String, dynamic>))
+          .where((unit) => unit.id.isNotEmpty && unit.productId.isNotEmpty)
           .toList();
     } catch (e) {
       throw Exception('Failed to load product units: $e');

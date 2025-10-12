@@ -290,6 +290,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.green,
+                          side: const BorderSide(color: Colors.green, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                         icon: const Icon(Icons.print),
                         label: const Text('In hóa đơn'),
                         onPressed: () {
@@ -303,6 +312,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                         icon: const Icon(Icons.content_copy),
                         label: const Text('Sao chép'),
                         onPressed: () => _copyToClipboard(
@@ -356,8 +373,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.withOpacity(0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,14 +394,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'SKU: ${item.productSku}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                    if (item.productSku?.isNotEmpty == true) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'SKU: ${item.productSku}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -403,13 +423,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.green.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'SL: ${item.quantity}',
+                  'SL: ${item.quantity} ${item.unitLabel}',
                   style: TextStyle(
-                    color: Colors.blue[700],
+                    color: Colors.green[700],
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -419,13 +439,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.green.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${AppFormatter.formatCurrency(item.priceAtSale)}/cái',
+                  '${AppFormatter.formatCurrency(item.pricePerDisplayUnit)}/${item.priceUnitName}',
                   style: TextStyle(
-                    color: Colors.orange[700],
+                    color: Colors.green[700],
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),

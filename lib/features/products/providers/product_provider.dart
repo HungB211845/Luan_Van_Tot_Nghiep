@@ -12,6 +12,7 @@ import '../../pos/models/transaction_item_details.dart';
 import '../../pos/models/payment_method.dart';
 import '../services/product_service.dart';
 import '../services/product_unit_service.dart'; // Multi-UoM support
+import '../utils/unit_display_formatter.dart';
 import '../../../shared/models/paginated_result.dart';
 import '../../../shared/services/base_service.dart';
 import '../../../shared/providers/memory_managed_provider.dart';
@@ -1276,6 +1277,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
       // Bước B: "Làm giàu" dữ liệu (Enrichment)
       final List<TransactionItemDetails> enrichedItems = [];
+      final Map<String, List<ProductUnit>> unitCache = {};
       for (final item in rawItems) {
         // Tìm sản phẩm tương ứng trong danh sách sản phẩm tổng mà Provider đang có
         final product = _products.firstWhere(
@@ -1294,6 +1296,105 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
           ),
         );
 
+        // Load product units for Multi-UoM display (with simple cache per product)
+        List<ProductUnit> productUnits = unitCache[product.id] ?? const <ProductUnit>[];
+        if (!unitCache.containsKey(product.id)) {
+          try {
+            productUnits = await _unitService.getProductUnits(product.id);
+          } catch (e) {
+            productUnits = [];
+            debugPrint('⚠️ Failed to load units for product ${product.name}: $e');
+          }
+          unitCache[product.id] = productUnits;
+        }
+
+        ProductUnit? matchedUnit;
+        if (productUnits.isNotEmpty) {
+          if (item.unitId != null) {
+            try {
+              matchedUnit = productUnits.firstWhere(
+                (u) => u.id == item.unitId,
+              );
+            } catch (_) {
+              matchedUnit = null;
+            }
+          }
+          if (matchedUnit == null && item.unitName != null) {
+            try {
+              matchedUnit = productUnits.firstWhere(
+                (u) => u.unitName.toLowerCase() == item.unitName!.toLowerCase(),
+              );
+            } catch (_) {
+              matchedUnit = null;
+            }
+          }
+        }
+
+        ProductUnit? defaultUnit;
+        if (productUnits.isNotEmpty) {
+          try {
+            defaultUnit = productUnits.firstWhere((u) => u.isDefaultSellingUnit);
+          } catch (_) {
+            defaultUnit = productUnits.first;
+          }
+        }
+
+        final baseUnitName = product.effectiveBaseUnit;
+
+        String unitLabel;
+        if (matchedUnit != null && productUnits.isNotEmpty) {
+          unitLabel = UnitDisplayFormatter.label(
+            unit: matchedUnit,
+            units: productUnits,
+            baseUnitName: baseUnitName,
+          );
+        } else if (defaultUnit != null && productUnits.isNotEmpty) {
+          unitLabel = UnitDisplayFormatter.label(
+            unit: defaultUnit,
+            units: productUnits,
+            baseUnitName: baseUnitName,
+          );
+        } else {
+          unitLabel = item.unitName ?? baseUnitName;
+        }
+
+        double? selectedConversion =
+            item.unitConversionFactor ?? matchedUnit?.conversionFactor;
+        if ((selectedConversion == null || selectedConversion <= 0) &&
+            item.baseUnitQuantity != null &&
+            item.quantity > 0) {
+          selectedConversion = item.baseUnitQuantity! / item.quantity;
+        }
+        if (selectedConversion != null && selectedConversion <= 0) {
+          selectedConversion = null;
+        }
+
+        String priceUnitName =
+            defaultUnit?.unitName ?? matchedUnit?.unitName ?? item.unitName ?? baseUnitName;
+        double pricePerDisplayUnit = item.priceAtSale;
+
+        if (defaultUnit != null) {
+          final double defaultConversion = defaultUnit.conversionFactor;
+          double ratio = 1.0;
+          if (selectedConversion != null && defaultConversion > 0) {
+            ratio = selectedConversion / defaultConversion;
+          }
+          if (ratio <= 0) {
+            ratio = 1.0;
+          }
+          priceUnitName = defaultUnit.unitName;
+          pricePerDisplayUnit = item.priceAtSale / ratio;
+        }
+
+        if (!pricePerDisplayUnit.isFinite || pricePerDisplayUnit <= 0) {
+          pricePerDisplayUnit = item.priceAtSale;
+        }
+
+        final double? baseUnitQuantity = item.baseUnitQuantity ??
+            (selectedConversion != null
+                ? selectedConversion * item.quantity
+                : null);
+
         // Tạo object "ảo" đã gộp đủ thông tin
         enrichedItems.add(
           TransactionItemDetails(
@@ -1303,6 +1404,13 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
             quantity: item.quantity,
             priceAtSale: item.priceAtSale,
             subTotal: item.subTotal,
+            unitId: item.unitId ?? matchedUnit?.id,
+            unitName: item.unitName ?? matchedUnit?.unitName,
+            unitConversionFactor: selectedConversion,
+            baseUnitQuantity: baseUnitQuantity,
+            unitLabel: unitLabel,
+            pricePerDisplayUnit: pricePerDisplayUnit,
+            priceUnitName: priceUnitName,
           ),
         );
       }

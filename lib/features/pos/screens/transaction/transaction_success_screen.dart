@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../products/providers/product_provider.dart';
 import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../shared/utils/formatter.dart';
 
 class TransactionSuccessScreen extends StatefulWidget {
   final String transactionId;
@@ -32,9 +33,7 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
     });
   }
 
-  String _formatCurrency(double amount) {
-    return '${amount.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}₫';
-  }
+  String _formatCurrency(num amount) => AppFormatter.formatCurrency(amount);
 
   @override
   Widget build(BuildContext context) {
@@ -136,12 +135,24 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
                   child: ListView.builder(
                     itemCount: items.length,
                     itemBuilder: (context, index) {
-                      final item =
-                          items[index]; // 'item' bây giờ là một TransactionItemDetails
+                      final item = items[index];
+                      final quantityText = '${item.quantity} ${item.unitLabel}';
+                      final priceText =
+                          '${_formatCurrency(item.pricePerDisplayUnit)}/${item.priceUnitName}';
+
                       return ListTile(
-                        title: Text(item.productName), // <-- Dùng productName
-                        subtitle: Text(
-                          'SKU: ${item.productSku} - Số lượng: ${item.quantity}',
+                        title: Text(item.productName),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (item.productSku?.isNotEmpty == true) ...[
+                              Text('SKU: ${item.productSku}'),
+                              const SizedBox(height: 4),
+                            ],
+                            Text('Số lượng: $quantityText'),
+                            const SizedBox(height: 2),
+                            Text('Đơn giá: $priceText'),
+                          ],
                         ),
                         trailing: Text(_formatCurrency(item.subTotal)),
                       );

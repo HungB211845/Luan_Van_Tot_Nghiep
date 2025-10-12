@@ -26,17 +26,25 @@ class ProductUnit {
   });
 
   factory ProductUnit.fromJson(Map<String, dynamic> json) {
+    final rawUnitName = (json['unit_name'] as String?)?.trim();
+    final rawProductId = json['product_id'] as String?;
+    final rawStoreId = json['store_id'] as String?;
+    final String unitName =
+        (rawUnitName == null || rawUnitName.isEmpty) ? 'Đơn vị' : rawUnitName;
+
     return ProductUnit(
-      id: json['id'] as String,
-      productId: json['product_id'] as String,
-      unitName: json['unit_name'] as String,
-      conversionFactor: (json['conversion_factor'] as num).toDouble(),
-      unitPrice: (json['unit_price'] as num).toDouble(),
+      id: (json['id'] as String?) ?? '',
+      productId: rawProductId ?? '',
+      unitName: unitName,
+      conversionFactor: (json['conversion_factor'] as num?)?.toDouble() ?? 1.0,
+      unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0.0,
       isDefaultSellingUnit: json['is_default_selling_unit'] as bool? ?? false,
       isActive: json['is_active'] as bool? ?? true,
-      storeId: json['store_id'] as String,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      storeId: rawStoreId ?? '',
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 
