@@ -9,6 +9,7 @@ import '../../widgets/product_image_widget.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/responsive.dart';
+import '../../utils/unit_display_formatter.dart';
 import '../../../../core/config/cache_config.dart';
 import '../../../../core/tools/performance_benchmark.dart';
 import 'add_product_dialog.dart';
@@ -793,43 +794,102 @@ class _ProductListScreenState extends State<ProductListScreen> {
       
       if (units.isEmpty) {
         // No units configured, use base unit
-        return '$baseStock ${product.effectiveBaseUnit}';
+        final baseUnitName = product.effectiveBaseUnit == 'đơn vị'
+            ? ''
+            : product.effectiveBaseUnit;
+        return baseUnitName.isEmpty
+            ? AppFormatter.formatNumber(baseStock)
+            : '$baseStock ${_normalizeBaseUnit(baseUnitName)}';
       }
       
       // Find default selling unit
-      final defaultUnit = units.firstWhere(
-        (u) => u.isDefaultSellingUnit,
-        orElse: () => units.first,
+      final defaultUnit = UnitDisplayFormatter.defaultUnit(units) ?? units.first;
+      final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+        units: units,
+        fallback: product.effectiveBaseUnit,
       );
-      
+      final defaultLabel = UnitDisplayFormatter.label(
+        unit: defaultUnit,
+        units: units,
+        baseUnitName: baseUnitName,
+      );
+      final displayLabel = _simplifyUnitLabel(defaultLabel, baseUnitName);
+
       if (defaultUnit.conversionFactor <= 0) {
         // Invalid conversion factor, fallback
-        return '$baseStock ${product.effectiveBaseUnit}';
+        return baseUnitName.isNotEmpty
+            ? '$baseStock ${_normalizeBaseUnit(baseUnitName)}'
+            : AppFormatter.formatNumber(baseStock);
       }
       
       // Convert base stock to selling units
-      final sellingUnitStock = baseStock / defaultUnit.conversionFactor;
+      final conversion = defaultUnit.conversionFactor;
+      final sellingUnitStock = baseStock / conversion;
       final wholeParts = sellingUnitStock.floor();
-      final remainder = baseStock - (wholeParts * defaultUnit.conversionFactor.toInt());
-      
+
       if (wholeParts == 0) {
         // Less than one selling unit
-        return '$baseStock ${product.effectiveBaseUnit}';
+        return baseUnitName.isNotEmpty
+            ? '$baseStock ${_normalizeBaseUnit(baseUnitName)}'
+            : AppFormatter.formatNumber(baseStock);
       }
+
+      final remainder = baseStock - (wholeParts * conversion).round();
+      final normalizedRemainder = remainder < 0 ? 0 : remainder;
+      final hasMeaningfulBase = baseUnitName.isNotEmpty && baseUnitName.toLowerCase() != 'đơn vị';
+      final hideRemainder = _shouldHideRemainder(defaultLabel, baseUnitName);
       
-      if (remainder > 0) { // No tolerance needed for int
+      if (!hideRemainder && normalizedRemainder > 0 && hasMeaningfulBase) {
         // Mixed display: "53 Bao và 32 kg"
-        return '$wholeParts ${defaultUnit.unitName} và $remainder ${product.effectiveBaseUnit}';
+        return '${AppFormatter.formatNumber(wholeParts)} $displayLabel và ${AppFormatter.formatNumber(normalizedRemainder)} ${_normalizeBaseUnit(baseUnitName)}';
       }
       
       // Exact match: "50 Bao"
-      return '$wholeParts ${defaultUnit.unitName}';
-      
+      return '${AppFormatter.formatNumber(wholeParts)} $displayLabel';
     } catch (e) {
       // Error loading units, fallback to base display
-      return '$baseStock ${product.effectiveBaseUnit}';
+      final baseUnitName = product.effectiveBaseUnit == 'đơn vị'
+          ? ''
+          : product.effectiveBaseUnit;
+      return baseUnitName.isEmpty
+          ? AppFormatter.formatNumber(baseStock)
+          : '$baseStock ${_normalizeBaseUnit(baseUnitName)}';
     }
   }
 
+
+  String _normalizeBaseUnit(String baseUnitName) {
+    if (baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị') {
+      return '';
+    }
+    return baseUnitName;
+  }
+
+  bool _shouldHideRemainder(String defaultLabel, String baseUnitName) {
+    if (baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị') {
+      return false;
+    }
+    final lowerBase = baseUnitName.toLowerCase();
+    final lowerLabel = defaultLabel.toLowerCase();
+    return lowerLabel.contains(lowerBase);
+  }
+
+  String _simplifyUnitLabel(String label, String baseUnitName) {
+    if (baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị') {
+      return label;
+    }
+
+    final lowerBase = baseUnitName.toLowerCase();
+    var result = label;
+
+    final pattern = RegExp(r'\s*\d+(?:[\.,]\d+)?\s*' + RegExp.escape(lowerBase), caseSensitive: false);
+    result = result.replaceAll(pattern, '');
+    result = result.replaceAll(RegExp(r'\b' + RegExp.escape(lowerBase) + r'\b', caseSensitive: false), '');
+    result = result.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    if (result.isEmpty) {
+      return label;
+    }
+    return result;
+  }
   // 🔥 REMOVED: Unused performance methods since performance button was removed
 }

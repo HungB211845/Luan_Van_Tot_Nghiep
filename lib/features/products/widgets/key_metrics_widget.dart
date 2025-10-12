@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart'; // Add this import
+import '../utils/unit_display_formatter.dart';
 import '../../../shared/utils/formatter.dart';
 import '../../../shared/utils/input_formatters.dart';
 
@@ -108,86 +109,111 @@ class KeyMetricsWidget extends StatelessWidget {
     );
   }
 
-  /// Get stock display value (converted to selling units)
-  String _getStockDisplayValue() {
+  _StockBreakdown? _calculateStockBreakdown() {
     if (productUnits.isEmpty) {
-      // No units configured, show base stock
-      return AppFormatter.formatNumber(totalStock.toInt());
+      return null;
     }
 
-    // Find default selling unit
-    final defaultUnit = productUnits.firstWhere(
-      (u) => u.isDefaultSellingUnit,
-      orElse: () => productUnits.first,
-    );
-
-    if (defaultUnit.conversionFactor <= 0) {
-      // Invalid conversion factor, fallback to base stock
-      return AppFormatter.formatNumber(totalStock.toInt());
-    }
-
-    // Convert base stock to selling units
-    // Example: 2682 kg ÷ 50 kg/bag = 53.64 → "53" bags
-    final sellingUnitStock = totalStock / defaultUnit.conversionFactor;
-    final wholeParts = sellingUnitStock.floor();
-    final remainder = totalStock - (wholeParts * defaultUnit.conversionFactor);
-
-    if (wholeParts == 0) {
-      // Not enough for even one selling unit - show base stock
-      return AppFormatter.formatNumber(totalStock.toInt());
-    }
-
-    if (remainder > 0.1) { // Small tolerance for floating point
-      // Mixed display: show main unit count only, remainder in subtitle
-      return AppFormatter.formatNumber(wholeParts);
-    }
-
-    // Exact match: show selling unit count
-    return AppFormatter.formatNumber(wholeParts);
-  }
-
-  /// Get stock display unit name
-  String _getStockDisplayUnit() {
-    if (productUnits.isEmpty) {
-      return product.unit.isNotEmpty ? product.unit : 'đơn vị';
-    }
-
-    final defaultUnit = productUnits.firstWhere(
-      (u) => u.isDefaultSellingUnit,
-      orElse: () => productUnits.first,
-    );
-
-    return defaultUnit.unitName;
-  }
-
-  /// Get stock subtitle showing remainder or base unit conversion
-  String? _getStockSubtitle() {
-    if (productUnits.isEmpty) {
-      return null; // No subtitle needed
-    }
-
-    // Find default selling unit
-    final defaultUnit = productUnits.firstWhere(
-      (u) => u.isDefaultSellingUnit,
-      orElse: () => productUnits.first,
+    final defaultUnit = UnitDisplayFormatter.defaultUnit(productUnits) ?? productUnits.first;
+    final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+      units: productUnits,
+      fallback: product.effectiveBaseUnit,
     );
 
     if (defaultUnit.conversionFactor <= 0) {
       return null;
     }
 
-    // Calculate remainder
     final sellingUnitStock = totalStock / defaultUnit.conversionFactor;
     final wholeParts = sellingUnitStock.floor();
-    final remainder = totalStock - (wholeParts * defaultUnit.conversionFactor);
-
-    if (remainder > 0.1) { // Small tolerance
-      // Show remainder: "và 32 kg"
-      return 'và ${remainder.toInt()} ${product.effectiveBaseUnit}';
+    if (wholeParts <= 0) {
+      return null;
     }
 
-    // Show base unit conversion: "(2682 kg)"
-    return '(${totalStock.toInt()} ${product.effectiveBaseUnit})';
+    final remainder = (totalStock - (wholeParts * defaultUnit.conversionFactor)).round();
+    final normalizedRemainder = remainder < 0 ? 0 : remainder;
+
+    final defaultLabel = UnitDisplayFormatter.label(
+      unit: defaultUnit,
+      units: productUnits,
+      baseUnitName: baseUnitName,
+    );
+    final displayLabel = _simplifyUnitLabel(defaultLabel, baseUnitName);
+    final hideRemainder = _shouldHideRemainder(defaultLabel, baseUnitName);
+
+    return _StockBreakdown(
+      wholeParts: wholeParts,
+      remainder: normalizedRemainder,
+      defaultUnitLabel: displayLabel,
+      baseUnitName: baseUnitName,
+      hideRemainder: hideRemainder,
+    );
+  }
+
+  /// Get stock display value (converted to selling units)
+
+  bool _shouldHideRemainder(String label, String baseUnit) {
+    if (baseUnit.isEmpty || baseUnit.toLowerCase() == 'đơn vị') {
+      return false;
+    }
+    return label.toLowerCase().contains(baseUnit.toLowerCase());
+  }
+
+  String _simplifyUnitLabel(String label, String baseUnit) {
+    if (baseUnit.isEmpty || baseUnit.toLowerCase() == 'đơn vị') {
+      return label;
+    }
+
+    var result = label;
+    final lowerBase = baseUnit.toLowerCase();
+    final pattern = RegExp(r'\s*\d+(?:[\.,]\d+)?\s*' + RegExp.escape(lowerBase), caseSensitive: false);
+    result = result.replaceAll(pattern, '');
+    result = result.replaceAll(RegExp(r'\b' + RegExp.escape(lowerBase) + r'\b', caseSensitive: false), '');
+    result = result.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    if (result.isEmpty) {
+      return label;
+    }
+    return result;
+  }
+  String _getStockDisplayValue() {
+    final breakdown = _calculateStockBreakdown();
+    if (breakdown == null) {
+      return AppFormatter.formatNumber(totalStock.toInt());
+    }
+    return AppFormatter.formatNumber(breakdown.wholeParts);
+  }
+
+  /// Get stock display unit name
+  String _getStockDisplayUnit() {
+    final breakdown = _calculateStockBreakdown();
+    if (breakdown == null) {
+      final fallback = product.effectiveBaseUnit;
+      return fallback == 'đơn vị' ? '' : fallback;
+    }
+    return breakdown.defaultUnitLabel;
+  }
+
+  /// Get stock subtitle showing remainder or base unit conversion
+  String? _getStockSubtitle() {
+    final breakdown = _calculateStockBreakdown();
+    if (breakdown == null) {
+      final fallback = product.effectiveBaseUnit;
+      if (fallback == 'đơn vị') {
+        return null;
+      }
+      return '(${AppFormatter.formatNumber(totalStock.toInt())} $fallback)';
+    }
+
+    final hasRemainder = breakdown.remainder > 0 && breakdown.baseUnitName.toLowerCase() != 'đơn vị';
+    if (hasRemainder) {
+      return 'và ${AppFormatter.formatNumber(breakdown.remainder)} ${breakdown.baseUnitName}';
+    }
+
+    if (breakdown.baseUnitName.toLowerCase() == 'đơn vị') {
+      return null;
+    }
+
+    return '(${AppFormatter.formatNumber(totalStock.toInt())} ${breakdown.baseUnitName})';
   }
 
   Widget _buildMetricCard(
@@ -383,4 +409,20 @@ class KeyMetricsWidget extends StatelessWidget {
       return Colors.green[600]!;
     }
   }
+}
+
+class _StockBreakdown {
+  final int wholeParts;
+  final int remainder;
+  final String defaultUnitLabel;
+  final String baseUnitName;
+  final bool hideRemainder;
+
+  _StockBreakdown({
+    required this.wholeParts,
+    required this.remainder,
+    required this.defaultUnitLabel,
+    required this.baseUnitName,
+    required this.hideRemainder,
+  });
 }

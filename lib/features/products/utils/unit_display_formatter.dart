@@ -97,6 +97,25 @@ class UnitDisplayFormatter {
     return null;
   }
 
+  static ProductUnit? defaultUnit(List<ProductUnit> units) {
+    return _findDefaultUnit(units);
+  }
+
+  static ProductUnit? baseUnit(List<ProductUnit> units) {
+    return _findBaseUnit(units);
+  }
+
+  static String resolveBaseUnitName({
+    required List<ProductUnit> units,
+    required String fallback,
+  }) {
+    final baseUnit = _findBaseUnit(units);
+    if (baseUnit != null && baseUnit.unitName.isNotEmpty) {
+      return baseUnit.unitName;
+    }
+    return fallback;
+  }
+
   static ProductUnit? _findDefaultUnit(List<ProductUnit> units) {
     for (final unit in units) {
       if (unit.isDefaultSellingUnit) {
