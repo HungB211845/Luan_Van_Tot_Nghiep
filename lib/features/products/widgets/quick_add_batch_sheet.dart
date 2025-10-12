@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart'; // Re-add this import since we need ProductUnit type
 import '../providers/product_provider.dart';
+import '../utils/unit_display_formatter.dart';
 import '../../../shared/utils/input_formatters.dart';
 import '../../../shared/utils/formatter.dart';
 
@@ -249,9 +250,14 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
               helperText: 'Chọn đơn vị để hệ thống tự chuyển đổi',
             ),
             items: _productUnits.map<DropdownMenuItem<String>>((ProductUnit unit) {
+              final label = UnitDisplayFormatter.label(
+                unit: unit,
+                units: _productUnits,
+                baseUnitName: widget.product.effectiveBaseUnit,
+              );
               return DropdownMenuItem(
                 value: unit.id,
-                child: Text('${unit.unitName} (×${unit.conversionFactor})'),
+                child: Text(label),
               );
             }).toList(),
             onChanged: (value) {
@@ -306,7 +312,7 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
             helperText: 'Ví dụ: 15.000',
           ),
           // FIXED: Use numeric keyboard and currency formatter
-          keyboardType: InputFormatterHelper.getNumericKeyboard(allowDecimal: false),
+                    keyboardType: TextInputType.number,
           inputFormatters: [
             CurrencyInputFormatter(maxValue: 999999999), // Max 999M VND
           ],

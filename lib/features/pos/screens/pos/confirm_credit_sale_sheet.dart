@@ -41,7 +41,7 @@ class _ConfirmCreditSaleSheetState extends State<ConfirmCreditSaleSheet> {
   }
 
   void _onSurchargeChanged() {
-    final value = InputFormatterHelper.extractNumber(_surchargeController.text) ?? 0.0;
+        final value = double.tryParse(_surchargeController.text.replaceAll('.', '')) ?? 0.0;
     if (value >= 0) {
       if (_surchargeAmount != value) {
         setState(() {
@@ -52,7 +52,7 @@ class _ConfirmCreditSaleSheetState extends State<ConfirmCreditSaleSheet> {
   }
 
   void _handleConfirm() {
-    final surcharge = InputFormatterHelper.extractNumber(_surchargeController.text) ?? 0.0;
+          final surcharge = double.tryParse(_surchargeController.text.replaceAll('.', '')) ?? 0.0;
     if (surcharge < 0) {
       _showError('Phụ phí không thể âm');
       return;

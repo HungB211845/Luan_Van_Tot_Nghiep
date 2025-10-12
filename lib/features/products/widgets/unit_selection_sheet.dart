@@ -3,6 +3,7 @@ import '../../../shared/utils/formatter.dart';
 import '../models/product_unit.dart';
 import '../models/product.dart';
 import '../services/product_unit_service.dart';
+import '../utils/unit_display_formatter.dart';
 
 /// Bottom sheet for selecting a unit when adding product to cart
 /// Follows Apple HIG principles: Clear, Efficient, Non-disruptive
@@ -189,6 +190,16 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
 
     final isLowStock = stockInThisUnit < 10;
     final isOutOfStock = stockInThisUnit <= 0;
+    final label = UnitDisplayFormatter.label(
+      unit: unit,
+      units: widget.units,
+      baseUnitName: widget.product.effectiveBaseUnit,
+    );
+    final conversionHint = UnitDisplayFormatter.conversionHint(
+      unit: unit,
+      units: widget.units,
+      baseUnitName: widget.product.effectiveBaseUnit,
+    );
 
     return InkWell(
       onTap: isOutOfStock
@@ -233,7 +244,7 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
                   Row(
                     children: [
                       Text(
-                        unit.unitName,
+                        label,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -297,10 +308,10 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
                       ),
                     ],
                   ),
-                  if (unit.conversionFactor != 1.0) ...[
+                  if (conversionHint != null && conversionHint.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
-                      '1 ${unit.unitName} = ${unit.conversionFactor} ${widget.product.effectiveBaseUnit}',
+                      conversionHint,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[500],

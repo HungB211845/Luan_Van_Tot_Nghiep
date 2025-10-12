@@ -3,7 +3,9 @@ import '../../../shared/services/base_service.dart';
 import '../models/purchase_order.dart';
 import '../models/purchase_order_item.dart';
 import '../models/purchase_order_status.dart';
-import '../models/product_batch.dart'; // Thêm import
+import '../models/product_batch.dart';
+import '../models/product.dart'; // 🔥 FIX: Add missing import
+import './product_service.dart'; // 🔥 FIX: Add missing import
 
 class PurchaseOrderService extends BaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -132,24 +134,44 @@ class PurchaseOrderService extends BaseService {
     }
   }
 
-  // Nhận hàng cho một PO
-  Future<PurchaseOrder> receivePurchaseOrder(String poId) async {
+  // Nhận hàng cho một PO và trả về cả PO và danh sách sản phẩm đã được cập nhật
+  Future<Map<String, dynamic>> receivePurchaseOrder(String poId) async {
     try {
       ensureAuthenticated();
 
-      // 1. Gọi RPC để xử lý toàn bộ logic nghiệp vụ một cách nguyên tử.
-      // Hàm RPC này đã bao gồm việc tạo lô, cập nhật giá bán, và cập nhật trạng thái PO.
+      // 1. Gọi RPC để xử lý nghiệp vụ chính (tạo batch, cập nhật giá)
       await _supabase.rpc('create_batches_from_po', params: {'po_id': poId});
 
-      // 2. Sau khi RPC chạy xong, lấy lại dữ liệu PO mới nhất để trả về cho UI.
-      // Dùng view 'purchase_orders_with_details' để có đầy đủ thông tin.
+      // 2. Lấy lại thông tin PO mới nhất
       final updatedPoResponse = await addStoreFilter(
         _supabase.from('purchase_orders_with_details').select('*'),
       )
           .eq('id', poId)
           .single();
+      final updatedPO = PurchaseOrder.fromMap(updatedPoResponse);
 
-      return PurchaseOrder.fromMap(updatedPoResponse);
+      // 3. Lấy danh sách các sản phẩm bị ảnh hưởng từ PO
+      final poItems = await addStoreFilter(
+        _supabase.from('purchase_order_items').select('product_id'),
+      ).eq('purchase_order_id', poId);
+
+      final productIds = (poItems as List).map((item) => item['product_id'] as String).toSet().toList();
+
+      // 4. Chủ động lấy lại dữ liệu mới nhất của các sản phẩm đó
+      final productService = ProductService();
+      final updatedProducts = <Product>[];
+      for (final productId in productIds) {
+        final product = await productService.getProductById(productId);
+        if (product != null) {
+          updatedProducts.add(product);
+        }
+      }
+
+      // 5. Trả về một object chứa tất cả dữ liệu đã được làm mới
+      return {
+        'po': updatedPO,
+        'products': updatedProducts,
+      };
     } catch (e) {
       throw Exception('Lỗi khi nhận hàng cho đơn nhập: $e');
     }

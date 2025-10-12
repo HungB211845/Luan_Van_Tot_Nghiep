@@ -8,8 +8,10 @@ import '../../providers/purchase_order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../models/company.dart';
 import '../../models/product.dart';
+import '../../models/product_unit.dart';
 import '../../models/purchase_order.dart';
 import '../../models/purchase_order_status.dart';
+import '../../utils/unit_display_formatter.dart';
 import '../../../../core/routing/route_names.dart';
 import '../company/company_picker_screen.dart';
 import 'bulk_product_selection_screen.dart';
@@ -26,14 +28,14 @@ class CreatePurchaseOrderScreen extends StatefulWidget {
 
 class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   final _notesController = TextEditingController();
+  // 🔥 FIX: Cache the futures to prevent re-fetching in build method
+  final Map<String, Future<List<dynamic>>> _unitFutures = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CompanyProvider>().loadCompanies();
-      // Don't clear PO cart here - preserve existing state
-      // Only clear if this is a truly fresh start (no supplier selected)
       final poProvider = context.read<PurchaseOrderProvider>();
       if (poProvider.selectedSupplierId == null) {
         poProvider.clearPOCart();
@@ -47,8 +49,6 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     super.dispose();
   }
 
-  // 🔥 REMOVED: _showQuickConfirmDialog method - not needed anymore
-
   void _navigateToProductSelection(BuildContext context) {
     final poProvider = context.read<PurchaseOrderProvider>();
     final companyProvider = context.read<CompanyProvider>();
@@ -60,7 +60,6 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       return;
     }
 
-    // Find supplier name from company provider
     final supplier = companyProvider.companies.firstWhere(
       (company) => company.id == poProvider.selectedSupplierId,
       orElse: () => Company(
@@ -68,7 +67,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         name: 'Unknown Supplier',
         phone: '',
         address: '',
-        storeId: '', // Empty store ID for fallback
+        storeId: '',
       ),
     );
 
@@ -84,36 +83,42 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     );
   }
 
-  /// 🔥 NEW: Build dynamic unit dropdown using actual product units
   Widget _buildUnitDropdown(POCartItem item, PurchaseOrderProvider poProvider) {
     return FutureBuilder<List<dynamic>>(
       future: context.read<ProductProvider>().getProductUnits(item.product.id),
       builder: (context, snapshot) {
-        List<String> unitOptions = [];
-        
-        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-          // Use actual product units
+        List<String> unitOptions;
+        String? currentUnit = item.unit;
+
+        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData && snapshot.data!.isNotEmpty) {
+          // Đã có dữ liệu thật từ database
           unitOptions = snapshot.data!.map((unit) => unit.unitName as String).toList();
-          
-          // Ensure current unit is in the list (fallback)
-          if (item.unit != null && !unitOptions.contains(item.unit)) {
-            unitOptions.add(item.unit!);
+          // Nếu unit hiện tại của item không có trong danh sách (trường hợp hiếm), thêm nó vào để không bị lỗi
+          if (currentUnit != null && !unitOptions.contains(currentUnit)) {
+            unitOptions.insert(0, currentUnit);
           }
         } else {
-          // Fallback to category-based units
+          // Đang tải hoặc lỗi, dùng danh sách tạm thời
           unitOptions = _getUnitListForCategory(item.product.category);
+          if (currentUnit != null && !unitOptions.contains(currentUnit)) {
+            unitOptions.insert(0, currentUnit);
+          }
         }
 
-        // Set default unit if not set
-        if (item.unit == null || !unitOptions.contains(item.unit)) {
-          final defaultUnit = unitOptions.isNotEmpty ? unitOptions.first : 'đơn vị';
+        // Chỉ đặt giá trị mặc định nếu item chưa có unit
+        if (currentUnit == null && unitOptions.isNotEmpty) {
+          currentUnit = unitOptions.first;
+          // Cập nhật lại state của provider trong frame tiếp theo
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            poProvider.updatePOCartItem(item.product.id, newUnit: defaultUnit);
+            if (mounted) {
+               poProvider.updatePOCartItem(item.product.id, newUnit: currentUnit);
+            }
           });
         }
 
         return DropdownButtonFormField<String>(
-          value: unitOptions.contains(item.unit) ? item.unit : unitOptions.first,
+          value: currentUnit,
+          isExpanded: true, // 🔥 FIX: Force dropdown to expand and prevent overflow
           decoration: InputDecoration(
             labelText: 'Đơn vị',
             border: const OutlineInputBorder(),
@@ -121,49 +126,52 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 ? 'Đang tải đơn vị...' 
                 : null,
           ),
-          items: unitOptions.map((String unit) {
-            String displayText = unit;
+          items: unitOptions.map((String unitName) {
+            String displayText = unitName;
 
-            // Add conversion factor if available
             if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-              dynamic unitObj;
+              final units = snapshot.data! as List<ProductUnit>;
+              ProductUnit? unitObj;
               try {
-                unitObj = snapshot.data!.firstWhere((u) => u.unitName == unit);
+                unitObj = units.firstWhere((u) => u.unitName == unitName);
               } catch (e) {
-                unitObj = null; // Not found
+                unitObj = null;
               }
 
-              if (unitObj != null && unitObj.conversionFactor != 1.0) {
-                displayText = '$unit (×${unitObj.conversionFactor})';
+              if (unitObj != null) {
+                displayText = UnitDisplayFormatter.label(
+                  unit: unitObj,
+                  units: units,
+                  baseUnitName: item.product.effectiveBaseUnit,
+                );
               }
             }
 
             return DropdownMenuItem<String>(
-              value: unit,
-              child: Text(displayText),
+              value: unitName,
+              child: Text(displayText, overflow: TextOverflow.ellipsis), // Add overflow protection
             );
           }).toList(),
-                        onChanged: (String? newValue) {
-                          if (newValue != null) {
-                            String? unitId;
-                            dynamic unitObj; // Use dynamic type to match snapshot
-                            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                              try {
-                                unitObj = snapshot.data!.firstWhere((u) => u.unitName == newValue);
-                                unitId = unitObj?.id;
-                              } catch (e) {
-                                // Handle case where unit is not found, unitId remains null
-                                unitObj = null;
-                              }
-                            }
-                            
-                            poProvider.updatePOCartItem(
-                              item.product.id,
-                              newUnit: newValue,
-                              newUnitId: unitId, // 🔥 NEW: Pass unitId for conversion
-                            );
-                          }
-                        },        );
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              String? unitId;
+              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                final units = snapshot.data! as List<ProductUnit>;
+                try {
+                  final unitObj = units.firstWhere((u) => u.unitName == newValue);
+                  unitId = unitObj.id;
+                } catch (e) {
+                  unitId = null;
+                }
+              }
+              poProvider.updatePOCartItem(
+                item.product.id,
+                newUnit: newValue,
+                newUnitId: unitId,
+              );
+            }
+          },
+        );
       },
     );
   }
@@ -430,8 +438,8 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  flex: 2,
-                  child: _buildUnitDropdown(item, poProvider), // 🔥 NEW: Use dynamic unit dropdown
+                  flex: 3, // Give more space to the unit dropdown
+                  child: _buildUnitDropdown(item, poProvider),
                 ),
               ],
             ),

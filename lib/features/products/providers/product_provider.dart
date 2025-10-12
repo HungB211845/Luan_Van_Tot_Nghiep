@@ -1971,6 +1971,25 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
+  /// 🔥 NEW: Directly update products from PO receiving flow
+  void updateProductsFromPO(List<Product> updatedProducts) {
+    for (final product in updatedProducts) {
+      final index = _products.indexWhere((p) => p.id == product.id);
+      if (index != -1) {
+        _products[index] = product;
+      }
+      // Also update the selected product if it matches
+      if (_selectedProduct?.id == product.id) {
+        _selectedProduct = product;
+      }
+      // Update caches
+      _stockMap[product.id] = product.availableStock ?? 0;
+      _currentPrices[product.id] = product.currentSellingPrice;
+    }
+    // Notify listeners after all updates are done
+    notifyListeners();
+  }
+
   /// Quick add batch with unit conversion support
   /// 🔥 FIXED: Service returns Product, not String. Database RPC handles unit price sync atomically.
   Future<bool> quickAddBatchWithUnit({

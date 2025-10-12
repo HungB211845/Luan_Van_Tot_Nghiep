@@ -1,51 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart'; // Add this import
+import 'package:provider/provider.dart';
 import '../../../models/product.dart';
-import '../../../models/product_unit.dart'; // Add this import
-import '../../../providers/product_provider.dart'; // Add this import
-
-class CurrencyInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    // Remove all non-digit characters except commas (for decimals)
-    String newText = newValue.text.replaceAll(RegExp(r'[^\d,]'), '');
-
-    // Handle decimal part (after comma)
-    List<String> parts = newText.split(',');
-    if (parts.length > 2) {
-      newText = '${parts[0]},${parts.sublist(1).join('')}';
-    }
-
-    // Limit decimal places to 2
-    if (parts.length == 2 && parts[1].length > 2) {
-      newText = '${parts[0]},${parts[1].substring(0, 2)}';
-    }
-
-    // Add thousand separators (dots) to integer part
-    if (parts.isNotEmpty && parts[0].isNotEmpty) {
-      String integerPart = parts[0];
-      String formattedInteger = integerPart.replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-        (Match m) => '${m[1]}.',
-      );
-
-      if (parts.length == 2) {
-        newText = '$formattedInteger,${parts[1]}';
-      } else {
-        newText = formattedInteger;
-      }
-    }
-
-    return TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: newText.length),
-    );
-  }
-}
+import '../../../models/product_unit.dart';
+import '../../../utils/unit_display_formatter.dart';
+import '../../../providers/product_provider.dart';
+import '../../../../../shared/utils/formatter.dart';
+import '../../../../../shared/utils/input_formatters.dart';
 
 class ProductEntryBottomSheet extends StatefulWidget {
   final Product product;
@@ -86,7 +47,7 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     // Initialize with existing values or defaults
     _quantityController.text = widget.existingQuantity?.toString() ?? '1';
     if (widget.existingPrice != null && widget.existingPrice! > 0) {
-      _priceController.text = _formatInputPrice(widget.existingPrice!);
+      _priceController.text = AppFormatter.formatNumber(widget.existingPrice!);
     }
     
     // 🔥 NEW: Load product units and set default selection
@@ -179,27 +140,53 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     }
   }
 
-  /// 🔥 NEW: Get conversion info for display
-  String _getConversionInfo() {
+  String? _getConversionHint() {
     if (_productUnits.isEmpty || _selectedUnitId == null) {
-      return '';
+      return null;
     }
-    
+
     final selectedUnit = _productUnits.firstWhere(
       (u) => u.id == _selectedUnitId,
       orElse: () => _productUnits.first,
     );
-    
-    if (selectedUnit.conversionFactor != 1.0) {
-      return '(×${selectedUnit.conversionFactor} ${widget.product.effectiveBaseUnit})';
-    }
-    
-    return '';
+
+    return UnitDisplayFormatter.conversionHint(
+      unit: selectedUnit,
+      units: _productUnits,
+      baseUnitName: widget.product.effectiveBaseUnit,
+    );
+  }
+
+  Widget _buildUnitLabelRow() {
+    final conversionHint = _getConversionHint();
+    return Row(
+      children: [
+        const Text(
+          'Đơn vị',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        if (conversionHint != null && conversionHint.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Text(
+            conversionHint,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   void _handleAdd() {
     final quantity = int.tryParse(_quantityController.text) ?? 0;
-    final price = _parseCurrency(_priceController.text);
+    final price = double.tryParse(_priceController.text.replaceAll('.', '')) ?? 0.0;
 
     if (quantity > 0 && price >= 0) {
       // 🔥 NEW: Pass unitId for conversion tracking
@@ -215,37 +202,6 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     }
   }
 
-  double _parseCurrency(String text) {
-    // Remove thousand separators (dots) and replace decimal comma with dot
-    String cleanText = text.replaceAll(
-      RegExp(r'\.(?=\d{3})'),
-      '',
-    ); // Remove thousand dots
-    cleanText = cleanText.replaceAll(
-      ',',
-      '.',
-    ); // Replace decimal comma with dot
-    return double.tryParse(cleanText) ?? 0.0;
-  }
-
-  String _formatInputPrice(double price) {
-    // Format price with Vietnamese standard: dots for thousands, comma for decimals
-    String priceStr = price.toString();
-    List<String> parts = priceStr.split('.');
-
-    // Format integer part with thousand separators (dots)
-    String integerPart = parts[0].replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]}.',
-    );
-
-    // Handle decimal part
-    if (parts.length == 2 && parts[1] != '0') {
-      return '$integerPart,${parts[1]}';
-    } else {
-      return integerPart;
-    }
-  }
 
   Color _getCategoryColor() {
     switch (widget.product.category) {
@@ -415,29 +371,7 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
                   const SizedBox(height: 20),
 
                   // Unit selector
-                  Row(
-                    children: [
-                      const Text(
-                        'Đơn vị',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      if (_getConversionInfo().isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          _getConversionInfo(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                  _buildUnitLabelRow(),
                   const SizedBox(height: 8),
                   if (_isLoadingUnits)
                     Container(
@@ -478,18 +412,19 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
                         ),
                       ),
                       items: _getUnitOptions().map((unit) {
-                        // Find conversion factor for display
                         String displayText = unit;
                         if (_productUnits.isNotEmpty) {
                           final unitObj = _productUnits.firstWhere(
                             (u) => u.unitName == unit,
                             orElse: () => _productUnits.first,
                           );
-                          if (unitObj.conversionFactor != 1.0) {
-                            displayText = '$unit (×${unitObj.conversionFactor})';
-                          }
+                          displayText = UnitDisplayFormatter.label(
+                            unit: unitObj,
+                            units: _productUnits,
+                            baseUnitName: widget.product.effectiveBaseUnit,
+                          );
                         }
-                        
+
                         return DropdownMenuItem(
                           value: unit,
                           child: Text(displayText, style: const TextStyle(fontSize: 16)),

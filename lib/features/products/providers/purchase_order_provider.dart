@@ -368,12 +368,16 @@ class PurchaseOrderProvider extends ChangeNotifier {
     _setStatus(POStatus.loading);
     try {
       final details = await _poService.getPurchaseOrderDetails(poId);
+      // Gán giá trị sau khi đã có dữ liệu để tránh lỗi
       _selectedPO = details['order'];
       _selectedPOItems = details['items'];
-      await loadBatchesForPO(poId); // Tải luôn batch khi xem chi tiết
+      await loadBatchesForPO(poId);
       _setStatus(POStatus.success);
     } catch (e) {
       _setError(e.toString());
+    } finally {
+      // Đảm bảo notify dù thành công hay thất bại
+      notifyListeners();
     }
   }
 
@@ -392,30 +396,23 @@ class PurchaseOrderProvider extends ChangeNotifier {
   Future<bool> receivePO(String poId) async {
     _setStatus(POStatus.loading);
     try {
-      final updatedPO = await _poService.receivePurchaseOrder(poId);
+      // 1. Gọi service để thực hiện nghiệp vụ chính dưới DB
+      await _poService.receivePurchaseOrder(poId);
 
-      // Cập nhật lại PO trong list và trong state selected
-      final index = _purchaseOrders.indexWhere((po) => po.id == poId);
-      if (index != -1) {
-        _purchaseOrders[index] = updatedPO;
-      }
-      if (_selectedPO?.id == poId) {
-        _selectedPO = updatedPO;
-        // Tải lại danh sách batch sau khi nhận hàng
-        await loadBatchesForPO(poId);
+      // 2. Tải lại toàn bộ danh sách PO để cập nhật trạng thái trên màn hình danh sách
+      await loadPurchaseOrders();
 
-        // Lấy danh sách product IDs từ các item của PO này
-        // Cần đảm bảo _selectedPOItems đã được load hoặc load lại
-        await loadPODetails(poId); // Ensure _selectedPOItems is updated
-        final productIds = _selectedPOItems
-            .map((item) => item.productId)
-            .toList();
+      // 3. Tải lại chi tiết của chính PO này để cập nhật màn hình chi tiết
+      await loadPODetails(poId);
 
-        // Yêu cầu ProductProvider làm mới tồn kho và giá cho các sản phẩm này
+      // 4. Yêu cầu ProductProvider làm mới tồn kho
+      final productIds = _selectedPOItems.map((item) => item.productId).toList();
+      if (productIds.isNotEmpty) {
         await _productProvider.refreshInventoryAfterGoodsReceipt(productIds);
       }
 
-      _setStatus(POStatus.success);
+      // 5. Không cần setStatus(success) vì loadPODetails đã làm điều đó
+      // và không cần trả về giá trị vì UI sẽ tự cập nhật qua Consumer
       return true;
     } catch (e) {
       _setError(e.toString());
@@ -721,6 +718,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
       if (_selectedPO?.id == poId) {
         _selectedPO = updatedPO;
       }
+      notifyListeners(); // Notify UI of all changes
       _setStatus(POStatus.success);
       return true;
     } catch (e) {

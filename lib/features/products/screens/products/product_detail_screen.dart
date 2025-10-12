@@ -241,7 +241,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _savePrice() async {
-    final newPrice = InputFormatterHelper.extractNumber(_priceController.text);
+          final newPrice = double.tryParse(_priceController.text.replaceAll('.', '')) ?? 0.0;
     if (newPrice == null || newPrice <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
