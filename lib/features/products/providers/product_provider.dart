@@ -34,6 +34,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
   // Products with memory management
   List<Product> _products = [];
+  final Map<ProductCategory?, List<Product>> _productsByCategory = {};
   List<Product> _filteredProducts = [];
   Product? _selectedProduct;
   ProductCategory? _selectedCategory;
@@ -93,16 +94,35 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // =====================================================
 
   List<Product> get products {
-    // 🔥 UX FIX: Only show search results for meaningful queries (>= 2 chars)
-    if (_searchQuery.isNotEmpty && _searchQuery.length >= 2) {
-      return _filteredProducts;
-    }
-    // For queries < 2 chars or no query, show the main paginated list
-    return _paginatedProducts?.items ?? _products;
+    return getProductsForCategory(_selectedCategory);
   }
 
   Product? get selectedProduct => _selectedProduct;
   ProductCategory? get selectedCategory => _selectedCategory;
+
+  void resetSelectedCategory() {
+    _selectedCategory = null;
+    notifyListeners();
+  }
+
+  List<Product> getProductsForCategory(ProductCategory? category) {
+    if (_searchQuery.isNotEmpty && _searchQuery.length >= 2) {
+      final results = List<Product>.from(_filteredProducts);
+      if (category == null) return results;
+      return results.where((product) => product.category == category).toList();
+    }
+
+    if (category == null) {
+      return _productsByCategory[null] ?? _products;
+    }
+
+    if (_productsByCategory.containsKey(category)) {
+      return _productsByCategory[category]!;
+    }
+
+    final allProducts = _productsByCategory[null] ?? _products;
+    return allProducts.where((product) => product.category == category).toList();
+  }
   List<ProductBatch> get productBatches => _productBatches;
   List<SeasonalPrice> get seasonalPrices => _seasonalPrices;
   List<BannedSubstance> get bannedSubstances => _bannedSubstances;
@@ -190,8 +210,15 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         useCache: useCache, // Use the parameter value
       );
 
-      // Update legacy _products list for backward compatibility
-      _products = _paginatedProducts!.items;
+      // Cache products per category for shared access
+      final items = _paginatedProducts!.items;
+      _productsByCategory[category] = List<Product>.from(items);
+
+      // Update legacy list for backward compatibility (all products cache)
+      if (category == null) {
+        _products = items;
+      }
+
       _selectedCategory = category;
 
       // 🔥 CRITICAL: Perform ONE-TIME price sync if products have 0 price
@@ -598,12 +625,15 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     notifyListeners();
   }
 
-  Future<void> filterByCategory(ProductCategory? category) async {
-    _selectedCategory = category;
-    if (category == null) {
-      await loadProducts();
-    } else {
-      await loadProducts(category: category);
+  Future<void> filterByCategory(
+    ProductCategory? category, {
+    bool persistSelection = true,
+  }) async {
+    final previousCategory = _selectedCategory;
+    await loadProductsPaginated(category: category, useCache: true);
+    if (!persistSelection) {
+      _selectedCategory = previousCategory;
+      notifyListeners();
     }
   }
 
@@ -1539,6 +1569,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     await _cachedService.invalidateProductCache();
     await _cachedService.invalidateSearchCache();
     await _cachedService.invalidateDashboardCache();
+    _productsByCategory.clear();
   }
 
   /// Force refresh dashboard stats with cache support

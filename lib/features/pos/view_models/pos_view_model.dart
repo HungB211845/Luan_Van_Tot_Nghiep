@@ -25,12 +25,14 @@ class POSViewModel {
   Future<void> initialize({bool forceRefresh = false}) async {
     // 🔥 CRITICAL FIX: Always use cache to prevent infinite loops
     // Cache invalidation should be handled separately if needed
-    if (productProvider.products.isEmpty || forceRefresh) {
+    final shouldReload = productProvider.products.isEmpty || forceRefresh;
+    if (shouldReload) {
       if (forceRefresh) {
         // Clear cache first if force refresh is requested
         await productProvider.invalidateCache();
       }
-      await productProvider.loadProductsPaginated(useCache: true); // Always use cache
+      await productProvider.loadProductsPaginated(category: null, useCache: !forceRefresh);
+      productProvider.resetSelectedCategory();
     }
     if (customerProvider.customers.isEmpty) {
       await customerProvider.loadCustomers();

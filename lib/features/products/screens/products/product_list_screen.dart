@@ -460,6 +460,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
     
     var filteredList = List<Product>.from(products);
 
+    if (_selectedCategory != null) {
+      filteredList = filteredList
+          .where((product) => product.category == _selectedCategory)
+          .toList();
+    }
+
     // ⚠️ CHỈ APPLY STOCK FILTER KHI KHÔNG ĐANG SEARCH
     // Khi search, products đã được filter bởi search query rồi
     if (_stockFilter != StockFilterOption.all && !isSearching) {
@@ -547,34 +553,33 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   Widget _buildSegmentItem(String text, bool isSelected) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Text(
         text,
         style: TextStyle(
           color: isSelected ? Colors.white : CupertinoColors.black,
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
         ),
+        maxLines: 2,
+        textAlign: TextAlign.center,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
   void _updateCategoryFilter(ProductCategory? category) {
-    setState(() => _selectedCategory = category);
-    // 🔥 FIXED: Force refresh when switching categories, especially "Tất cả"
     final provider = context.read<ProductProvider>();
-    
-    // Clear any existing search when switching categories
+    setState(() => _selectedCategory = category);
+
     if (_searchController.text.isNotEmpty) {
       _searchController.clear();
       provider.clearSearch();
     }
-    
-    // Force reload with new category filter
-    provider.loadProductsPaginated(
-      category: category, 
-      useCache: false, // 🔥 CRITICAL: Don't use cache when switching categories
-    );
+
+    if (category == null) {
+      provider.resetSelectedCategory();
+    }
   }
 
   Widget _buildProductList({required bool isMasterDetail}) {
@@ -584,9 +589,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
           return const Center(child: LoadingWidget());
         }
         
-        // 🔥 CRITICAL FIX: ProductProvider.products already handles search vs all products
-        // It automatically returns search results when searching, all products when not
-        final filteredAndSortedProducts = _filterAndSortProducts(provider.products, provider);
+        final baseProducts = provider.getProductsForCategory(null);
+        final filteredAndSortedProducts = _filterAndSortProducts(baseProducts, provider);
 
         if (filteredAndSortedProducts.isEmpty) {
           final isSearching = _searchController.text.trim().isNotEmpty && _searchController.text.trim().length >= 2;

@@ -136,6 +136,8 @@ class AgriBottomNavWrapper extends StatelessWidget {
           onTap: () {
             if (!isActive) {
               _navigateToRoute(context, route);
+            } else {
+              Navigator.of(context).popUntil((route) => route.isFirst);
             }
           },
           borderRadius: BorderRadius.circular(8),
