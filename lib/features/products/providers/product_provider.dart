@@ -544,19 +544,21 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     _setStatus(ProductStatus.loading);
 
     try {
+      // Service call now returns the fully updated product from the DB
+      // The RPC called by the service has already recalculated all unit prices atomically
       final updatedProduct = await _productService.updateProduct(product);
 
-      // Invalidate cache after product update
+      // Invalidate cache to force reload of fresh data on next access
       await invalidateSearchCache();
       await invalidateDashboardCache();
 
-      // Update in list
+      // Update product in the main list
       final index = _products.indexWhere((p) => p.id == product.id);
       if (index != -1) {
         _products[index] = updatedProduct;
       }
 
-      // Update selected product if it's the same
+      // Update selected product if it's the same one being edited
       if (_selectedProduct?.id == product.id) {
         _selectedProduct = updatedProduct;
       }
@@ -1915,6 +1917,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   }
 
   /// Quick add batch with new selling price
+  /// 🔥 FIXED: Service returns Product, not String. Database RPC handles unit price sync.
   Future<bool> quickAddBatch({
     required String productId,
     required int quantity,
@@ -1924,39 +1927,36 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     try {
       _setStatus(ProductStatus.loading);
 
-      final batchId = await _productService.quickAddBatch(
+      final updatedProduct = await _productService.quickAddBatch(
         productId: productId,
         quantity: quantity,
         costPrice: costPrice,
         newSellingPrice: newSellingPrice,
       );
 
-      if (batchId.isNotEmpty) {
+      if (updatedProduct != null) {
         // Reload batches for this product
         await loadProductBatches(productId);
 
         // FIXED: Update stock after adding batch
         await _updateProductStock(productId);
 
-        // Update selling price in local cache
+        // 🔥 FIXED: Use updated product from service (already has latest price from RPC)
         final productIndex = _products.indexWhere((p) => p.id == productId);
         if (productIndex != -1) {
-          _products[productIndex] = _products[productIndex].copyWith(
-            currentSellingPrice: newSellingPrice,
-            // FIXED: Also update availableStock in the model if available
-            availableStock: _stockMap[productId],
+          _products[productIndex] = updatedProduct.copyWith(
+            availableStock: _stockMap[productId], // Use refreshed stock
           );
         }
 
         if (_selectedProduct?.id == productId) {
-          _selectedProduct = _selectedProduct!.copyWith(
-            currentSellingPrice: newSellingPrice,
+          _selectedProduct = updatedProduct.copyWith(
             availableStock: _stockMap[productId],
           );
         }
 
-        // FIXED: Update _currentPrices cache for POS
-        _currentPrices[productId] = newSellingPrice;
+        // FIXED: Update _currentPrices cache for POS from returned product
+        _currentPrices[productId] = updatedProduct.currentSellingPrice;
 
         _setStatus(ProductStatus.success);
         notifyListeners();
@@ -1972,7 +1972,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   }
 
   /// Quick add batch with unit conversion support
-  /// 🔥 NEW: Multi-UoM version of quickAddBatch with proper unit conversion
+  /// 🔥 FIXED: Service returns Product, not String. Database RPC handles unit price sync atomically.
   Future<bool> quickAddBatchWithUnit({
     required String productId,
     required int quantity,
@@ -1983,7 +1983,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     try {
       _setStatus(ProductStatus.loading);
 
-      final batchId = await _productService.quickAddBatch(
+      final updatedProduct = await _productService.quickAddBatch(
         productId: productId,
         quantity: quantity,
         costPrice: costPrice,
@@ -1991,32 +1991,29 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         unitId: unitId, // Pass unit ID for conversion
       );
 
-      if (batchId.isNotEmpty) {
+      if (updatedProduct != null) {
         // Reload batches for this product
         await loadProductBatches(productId);
 
         // FIXED: Update stock after adding batch
         await _updateProductStock(productId);
 
-        // Update selling price in local cache
+        // 🔥 FIXED: Use updated product from service (RPC has already updated all unit prices atomically)
         final productIndex = _products.indexWhere((p) => p.id == productId);
         if (productIndex != -1) {
-          _products[productIndex] = _products[productIndex].copyWith(
-            currentSellingPrice: newSellingPrice,
-            // FIXED: Also update availableStock in the model if available
-            availableStock: _stockMap[productId],
+          _products[productIndex] = updatedProduct.copyWith(
+            availableStock: _stockMap[productId], // Use refreshed stock
           );
         }
 
         if (_selectedProduct?.id == productId) {
-          _selectedProduct = _selectedProduct!.copyWith(
-            currentSellingPrice: newSellingPrice,
+          _selectedProduct = updatedProduct.copyWith(
             availableStock: _stockMap[productId],
           );
         }
 
-        // FIXED: Update _currentPrices cache for POS
-        _currentPrices[productId] = newSellingPrice;
+        // FIXED: Update _currentPrices cache for POS from returned product
+        _currentPrices[productId] = updatedProduct.currentSellingPrice;
 
         _setStatus(ProductStatus.success);
         notifyListeners();
@@ -2143,6 +2140,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       return null;
     }
   }
+
 }
 
 // =====================================================
