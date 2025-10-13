@@ -621,12 +621,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
         ).toJson();
 
       case ProductCategory.PESTICIDE:
+        final activeIngredient = _activeIngredientController.text.trim();
+        final concentration = _concentrationController.text.trim();
+        final volumeText = _volumeController.text.trim();
+        final unitText = _volumeUnitController.text.trim();
         return PesticideAttributes(
-          activeIngredient: _activeIngredientController.text.trim(),
-          concentration: _concentrationController.text.trim(),
-          volume: double.tryParse(_volumeController.text.trim()) ?? 0.0,
-          unit: _volumeUnitController.text.trim(),
-          targetPests: [], // Có thể mở rộng thêm field cho target pests
+          activeIngredient: activeIngredient.isEmpty ? null : activeIngredient,
+          concentration: concentration.isEmpty ? null : concentration,
+          volume: volumeText.isEmpty ? null : double.tryParse(volumeText),
+          unit: unitText.isEmpty ? null : unitText,
+          targetPests: const [],
         ).toJson();
 
       case ProductCategory.SEED:
@@ -673,9 +677,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       // Gọi ProductProvider để lưu
       final provider = context.read<ProductProvider>();
-      final success = await provider.addProduct(newProduct);
+      final createdProduct = await provider.addProduct(newProduct);
 
-      if (success) {
+      if (createdProduct != null) {
         // Thành công
         if (mounted) {
           Navigator.pop(context);

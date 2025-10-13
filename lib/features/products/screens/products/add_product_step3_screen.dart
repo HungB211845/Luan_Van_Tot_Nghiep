@@ -5,7 +5,51 @@ import '../../models/fertilizer_attributes.dart';
 import '../../models/pesticide_attributes.dart';
 import '../../models/seed_attributes.dart';
 import '../../providers/product_provider.dart';
+import '../../models/product_unit.dart';
+import '../../services/product_unit_service.dart';
 import '../../../../shared/services/base_service.dart';
+
+enum PesticidePackagingType { bottle, pack, jar }
+
+class DefaultPackagingConfig {
+  final String displayName;
+  final double defaultVolume;
+  final List<String> baseUnits;
+  final String defaultBaseUnit;
+  final int defaultQuantity;
+
+  const DefaultPackagingConfig({
+    required this.displayName,
+    required this.defaultVolume,
+    required this.baseUnits,
+    required this.defaultBaseUnit,
+    required this.defaultQuantity,
+  });
+}
+
+const Map<PesticidePackagingType, DefaultPackagingConfig> _packagingDefaults = {
+  PesticidePackagingType.bottle: DefaultPackagingConfig(
+    displayName: 'Chai',
+    defaultVolume: 500,
+    baseUnits: ['ml', 'lít'],
+    defaultBaseUnit: 'ml',
+    defaultQuantity: 20,
+  ),
+  PesticidePackagingType.pack: DefaultPackagingConfig(
+    displayName: 'Gói',
+    defaultVolume: 50,
+    baseUnits: ['g', 'kg'],
+    defaultBaseUnit: 'g',
+    defaultQuantity: 20,
+  ),
+  PesticidePackagingType.jar: DefaultPackagingConfig(
+    displayName: 'Lọ',
+    defaultVolume: 100,
+    baseUnits: ['ml', 'lít'],
+    defaultBaseUnit: 'ml',
+    defaultQuantity: 20,
+  ),
+};
 
 class AddProductStep3Screen extends StatefulWidget {
   final String productName;
@@ -32,6 +76,8 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
   bool _isLoading = false;
   bool _productCreated = false; // Track if product has been created
 
+  final ProductUnitService _unitService = ProductUnitService();
+
   // Optional fields
   final _skuController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -45,8 +91,10 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
   // Pesticide
   final _activeIngredientController = TextEditingController();
   final _concentrationController = TextEditingController();
-  final _volumeController = TextEditingController();
-  String _volumeUnit = 'ml';
+  final _packageVolumeController = TextEditingController();
+  final _packageQtyController = TextEditingController();
+  PesticidePackagingType _selectedPackagingType = PesticidePackagingType.bottle;
+  String? _selectedBaseUnit;
 
   // Seed
   final _strainController = TextEditingController();
@@ -55,7 +103,17 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
   final _purityController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _selectedBaseUnit = _packagingDefaults[_selectedPackagingType]!.defaultBaseUnit;
+    _packageVolumeController.addListener(_onPackagingFieldChanged);
+    _packageQtyController.addListener(_onPackagingFieldChanged);
+  }
+
+  @override
   void dispose() {
+    _packageVolumeController.removeListener(_onPackagingFieldChanged);
+    _packageQtyController.removeListener(_onPackagingFieldChanged);
     _skuController.dispose();
     _descriptionController.dispose();
     _npkRatioController.dispose();
@@ -63,7 +121,8 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
     // 🔥 REMOVED: _weightController disposal
     _activeIngredientController.dispose();
     _concentrationController.dispose();
-    _volumeController.dispose();
+    _packageVolumeController.dispose();
+    _packageQtyController.dispose();
     _strainController.dispose();
     _originController.dispose();
     _germinationRateController.dispose();
@@ -351,11 +410,106 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
   }
 
   Widget _buildPesticideForm() {
+    final defaults = _currentPackagingDefaults;
+    final unitLabel = defaults.displayName;
+    final baseUnitOptions = defaults.baseUnits;
+    final previewText = _buildPackagingPreviewText();
+    final baseUnitValue = _selectedBaseUnit ?? defaults.defaultBaseUnit;
+    final volumeHint =
+        '${_formatNumber(_defaultVolumeForBaseUnit(baseUnitValue))} $baseUnitValue (mặc định)';
+    final quantityHint = '${defaults.defaultQuantity} (mặc định)';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Thông số thuốc BVTV',
+          'Quy cách đóng gói',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: _getCategoryColor(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          children: PesticidePackagingType.values.map((type) {
+            final config = _packagingDefaults[type]!;
+            return ChoiceChip(
+              label: Text(config.displayName),
+              selected: _selectedPackagingType == type,
+              onSelected: (selected) {
+                if (selected) {
+                  _onPackagingTypeChanged(type);
+                }
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        TextFormField(
+          controller: _packageVolumeController,
+          decoration: _buildInputDecoration(
+            label: 'Dung tích/Khối lượng mỗi ${unitLabel.toLowerCase()}',
+            hint: volumeHint,
+          ),
+          keyboardType: TextInputType.number,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return null;
+            return double.tryParse(value.trim()) == null ? 'Nhập số hợp lệ' : null;
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: baseUnitValue,
+          decoration: _buildInputDecoration(
+            label: 'Đơn vị cơ sở',
+            hint: 'Chọn đơn vị',
+          ),
+          items: baseUnitOptions
+              .map(
+                (unit) => DropdownMenuItem<String>(
+                  value: unit,
+                  child: Text(unit),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedBaseUnit = value;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _packageQtyController,
+          decoration: _buildInputDecoration(
+            label: 'Số lượng ${unitLabel.toLowerCase()} trong thùng',
+            hint: quantityHint,
+          ),
+          keyboardType: TextInputType.number,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return null;
+            final parsed = int.tryParse(value.trim());
+            if (parsed == null || parsed <= 0) {
+              return 'Nhập số nguyên dương';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildPackagingPreview(previewText),
+        const SizedBox(height: 8),
+        Text(
+          'Các đơn vị này sẽ dùng cho Nhập Lô Nhanh và Đơn nhập hàng.',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+        ),
+        const SizedBox(height: 32),
+        Text(
+          'Thông số thuốc BVTV (tùy chọn)',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -363,57 +517,21 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
           ),
         ),
         const SizedBox(height: 16),
-
         TextFormField(
           controller: _activeIngredientController,
           decoration: _buildInputDecoration(
-            label: 'Hoạt chất chính',
+            label: 'Hoạt chất chính (tùy chọn)',
             hint: 'Ví dụ: Imidacloprid',
             icon: Icons.biotech,
           ),
         ),
-
         const SizedBox(height: 16),
-
         TextFormField(
           controller: _concentrationController,
           decoration: _buildInputDecoration(
-            label: 'Nồng độ',
+            label: 'Nồng độ (tùy chọn)',
             hint: 'Ví dụ: 4SC, 25EC',
           ),
-        ),
-
-        const SizedBox(height: 16),
-
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: TextFormField(
-                controller: _volumeController,
-                decoration: _buildInputDecoration(label: 'Thể tích', hint: '0'),
-                keyboardType: TextInputType.number,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _volumeUnit,
-                decoration: _buildInputDecoration(label: 'Đơn vị'),
-                items: ['ml', 'lít', 'chai', 'gói', 'lọ'].map((unit) {
-                  return DropdownMenuItem<String>(
-                    value: unit,
-                    child: Text(unit),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _volumeUnit = value ?? 'ml';
-                  });
-                },
-              ),
-            ),
-          ],
         ),
       ],
     );
@@ -481,6 +599,178 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
           ],
         ),
       ],
+    );
+  }
+
+  void _onPackagingTypeChanged(PesticidePackagingType type) {
+    if (_selectedPackagingType == type) return;
+    setState(() {
+      _selectedPackagingType = type;
+      final defaults = _packagingDefaults[type]!;
+      _selectedBaseUnit = defaults.defaultBaseUnit;
+      _packageVolumeController.clear();
+      _packageQtyController.clear();
+    });
+  }
+
+  void _onPackagingFieldChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  DefaultPackagingConfig get _currentPackagingDefaults =>
+      _packagingDefaults[_selectedPackagingType]!;
+
+  double _defaultVolumeForBaseUnit(String baseUnit) {
+    final defaults = _currentPackagingDefaults;
+    return _convertValue(
+      defaults.defaultVolume,
+      defaults.defaultBaseUnit,
+      baseUnit,
+    );
+  }
+
+  double _effectivePackageVolume() {
+    final baseUnit = _effectiveBaseUnit();
+    final raw = _packageVolumeController.text.trim();
+    if (raw.isEmpty) return _defaultVolumeForBaseUnit(baseUnit);
+    final parsed = double.tryParse(raw);
+    if (parsed == null || parsed <= 0) {
+      return _defaultVolumeForBaseUnit(baseUnit);
+    }
+    return parsed;
+  }
+
+  int _effectivePackageQuantity() {
+    final raw = _packageQtyController.text.trim();
+    if (raw.isEmpty) return _currentPackagingDefaults.defaultQuantity;
+    final parsed = int.tryParse(raw);
+    return (parsed == null || parsed <= 0)
+        ? _currentPackagingDefaults.defaultQuantity
+        : parsed;
+  }
+
+  String _effectiveBaseUnit() {
+    final base = _selectedBaseUnit ?? _currentPackagingDefaults.defaultBaseUnit;
+    if (_currentPackagingDefaults.baseUnits.contains(base)) {
+      return base;
+    }
+    return _currentPackagingDefaults.defaultBaseUnit;
+  }
+
+  String _buildPackagingPreviewText() {
+    final unitLabel = _currentPackagingDefaults.displayName;
+    final volume = _formatNumber(_effectivePackageVolume());
+    final baseUnit = _effectiveBaseUnit();
+    final quantity = _effectivePackageQuantity();
+    return '• "$unitLabel $volume$baseUnit" (bán lẻ)\n'
+        '• "Thùng" (×$quantity $unitLabel)\n'
+        '• "$baseUnit" (đơn vị cơ sở)';
+  }
+
+  Widget _buildPackagingPreview(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Hệ thống sẽ tạo:',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatNumber(num value) {
+    if (value % 1 == 0) {
+      return value.toInt().toString();
+    }
+    return value.toStringAsFixed(1).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+  }
+
+  double _convertValue(double value, String fromUnit, String toUnit) {
+    if (fromUnit == toUnit) return value;
+    if (fromUnit == 'ml' && toUnit == 'lít') return value / 1000;
+    if (fromUnit == 'lít' && toUnit == 'ml') return value * 1000;
+    if (fromUnit == 'g' && toUnit == 'kg') return value / 1000;
+    if (fromUnit == 'kg' && toUnit == 'g') return value * 1000;
+    return value;
+  }
+
+  Future<void> _createDefaultPesticideUnits(String productId) async {
+    final unitLabel = _currentPackagingDefaults.displayName;
+    final baseUnit = _effectiveBaseUnit();
+    final volumeValue = _effectivePackageVolume();
+    final quantityPerBox = _effectivePackageQuantity();
+    final retailUnitName = '$unitLabel ${_formatNumber(volumeValue)}$baseUnit';
+    final conversionFactor = volumeValue;
+    final boxConversionFactor = quantityPerBox * conversionFactor;
+    final now = DateTime.now();
+
+    await _unitService.createProductUnit(
+      ProductUnit(
+        id: '',
+        productId: productId,
+        unitName: baseUnit,
+        conversionFactor: 1.0,
+        unitPrice: 0,
+        isDefaultSellingUnit: false,
+        isActive: true,
+        storeId: '',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    await _unitService.createProductUnit(
+      ProductUnit(
+        id: '',
+        productId: productId,
+        unitName: retailUnitName,
+        conversionFactor: conversionFactor,
+        unitPrice: 0,
+        isDefaultSellingUnit: true,
+        isActive: true,
+        storeId: '',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    await _unitService.createProductUnit(
+      ProductUnit(
+        id: '',
+        productId: productId,
+        unitName: 'Thùng',
+        conversionFactor: boxConversionFactor,
+        unitPrice: 0,
+        isDefaultSellingUnit: false,
+        isActive: true,
+        storeId: '',
+        createdAt: now,
+        updatedAt: now,
+      ),
     );
   }
 
@@ -554,11 +844,13 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
 
       case ProductCategory.PESTICIDE:
         return PesticideAttributes(
-          activeIngredient: _activeIngredientController.text.trim(),
-          concentration: _concentrationController.text.trim(),
-          volume: double.tryParse(_volumeController.text.trim()) ?? 0.0,
-          unit: _volumeUnit,
-          targetPests: [],
+          activeIngredient: _activeIngredientController.text.trim().isEmpty
+              ? null
+              : _activeIngredientController.text.trim(),
+          concentration: _concentrationController.text.trim().isEmpty
+              ? null
+              : _concentrationController.text.trim(),
+          targetPests: const [],
         ).toJson();
 
       case ProductCategory.SEED:
@@ -577,6 +869,10 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
     });
 
     try {
+      final baseUnit = widget.category == ProductCategory.PESTICIDE
+          ? _effectiveBaseUnit()
+          : widget.baseUnit;
+
       final newProduct = Product(
         id: '',
         sku: _skuController.text.trim().isEmpty
@@ -595,13 +891,24 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         storeId: BaseService.getDefaultStoreId(),
-        baseUnit: widget.baseUnit,
+        baseUnit: baseUnit,
       );
 
       final provider = context.read<ProductProvider>();
-      final success = await provider.addProduct(newProduct);
+      final createdProduct = await provider.addProduct(newProduct);
 
-      if (success) {
+      if (createdProduct != null) {
+        String? unitSetupError;
+        if (widget.category == ProductCategory.PESTICIDE) {
+          try {
+            await _createDefaultPesticideUnits(createdProduct.id);
+            await provider.refreshProductUnitsCache(createdProduct.id);
+          } catch (e) {
+            debugPrint('Failed to create default units for pesticide: $e');
+            unitSetupError = e.toString();
+          }
+        }
+
         if (mounted) {
           setState(() {
             _productCreated = true; // Mark as created to prevent duplicate
@@ -610,6 +917,18 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
           final message = isComplete
               ? 'Đã tạo sản phẩm với đầy đủ thông tin!'
               : 'Đã tạo sản phẩm thành công!';
+
+          if (unitSetupError != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Đã tạo sản phẩm, vui lòng kiểm tra lại đơn vị bán hàng trong màn hình chỉnh sửa.',
+                ),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
 
           // Show success dialog
           await _showSuccessDialog(message);

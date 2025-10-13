@@ -161,10 +161,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
         break;
       case ProductCategory.PESTICIDE:
         final pesticideAttrs = PesticideAttributes.fromJson(attrs);
-        _activeIngredientController.text = pesticideAttrs.activeIngredient;
-        _concentrationController.text = pesticideAttrs.concentration;
-        _volumeController.text = pesticideAttrs.volume.toString();
-        _volumeUnitController.text = pesticideAttrs.unit;
+        _activeIngredientController.text = pesticideAttrs.activeIngredient ?? '';
+        _concentrationController.text = pesticideAttrs.concentration ?? '';
+        _volumeController.text = pesticideAttrs.volume != null ? pesticideAttrs.volume!.toString() : '';
+        _volumeUnitController.text = pesticideAttrs.unit ?? '';
         break;
       case ProductCategory.SEED:
         final seedAttrs = SeedAttributes.fromJson(attrs);
@@ -594,12 +594,16 @@ class _EditProductScreenState extends State<EditProductScreen> {
           unit: 'bao', // 🔥 FIXED: Default unit (actual unit comes from ProductUnit table)
         ).toJson();
       case ProductCategory.PESTICIDE:
+        final activeIngredient = _activeIngredientController.text.trim();
+        final concentration = _concentrationController.text.trim();
+        final volumeText = _volumeController.text.trim();
+        final unitText = _volumeUnitController.text.trim();
         return PesticideAttributes(
-          activeIngredient: _activeIngredientController.text.trim(),
-          concentration: _concentrationController.text.trim(),
-          volume: double.tryParse(_volumeController.text.trim()) ?? 0.0,
-          unit: _volumeUnitController.text.trim(),
-          targetPests: [],
+          activeIngredient: activeIngredient.isEmpty ? null : activeIngredient,
+          concentration: concentration.isEmpty ? null : concentration,
+          volume: volumeText.isEmpty ? null : double.tryParse(volumeText),
+          unit: unitText.isEmpty ? null : unitText,
+          targetPests: const [],
         ).toJson();
       case ProductCategory.SEED:
         return SeedAttributes(
@@ -1006,14 +1010,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
       children: [
         TextFormField(
           controller: _activeIngredientController,
-          decoration: _buildInputDecoration(label: 'Hoạt chất chính *', icon: Icons.biotech),
-          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập hoạt chất' : null,
+          decoration: _buildInputDecoration(label: 'Hoạt chất chính (Tùy chọn)', icon: Icons.biotech),
+          validator: (_) => null,
         ),
         const SizedBox(height: 16),
         TextFormField(
           controller: _concentrationController,
-          decoration: _buildInputDecoration(label: 'Nồng độ *'),
-          validator: (v) => (v?.isEmpty ?? true) ? 'Nhập nồng độ' : null,
+          decoration: _buildInputDecoration(label: 'Nồng độ (Tùy chọn)'),
+          validator: (_) => null,
         ),
         const SizedBox(height: 16),
         Row(
@@ -1021,22 +1025,34 @@ class _EditProductScreenState extends State<EditProductScreen> {
             Expanded(
               child: TextFormField(
                 controller: _volumeController,
-                decoration: _buildInputDecoration(label: 'Thể tích *'),
+                decoration: _buildInputDecoration(label: 'Thể tích (Tùy chọn)'),
                 keyboardType: TextInputType.number,
-                validator: (v) => (v?.isEmpty ?? true) ? 'Nhập thể tích' : null,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) return null;
+                  return double.tryParse(value.trim()) == null ? 'Nhập số hợp lệ' : null;
+                },
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String>(
                 value: selectedVolumeUnit,
-                decoration: _buildInputDecoration(label: 'Đơn vị *'),
+                decoration: _buildInputDecoration(label: 'Đơn vị (Tùy chọn)'),
                 items: volumeUnitOptions.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
                 onChanged: (v) => setState(() {
                   _volumeUnitController.text = v?.trim() ?? '';
                   _hasChanges = true;
                 }),
-                validator: (v) => (v?.isEmpty ?? true) ? 'Chọn đơn vị' : null,
+                validator: (value) {
+                  final volumeText = _volumeController.text.trim();
+                  if (volumeText.isEmpty) {
+                    return null;
+                  }
+                  if ((value ?? '').isEmpty) {
+                    return 'Chọn đơn vị';
+                  }
+                  return null;
+                },
               ),
             ),
           ],

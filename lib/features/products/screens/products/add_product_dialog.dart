@@ -94,11 +94,11 @@ class _AddProductDialogState extends State<AddProductDialog> {
       baseUnit: _selectedBaseUnit!,
     );
 
-    final success = await context.read<ProductProvider>().addProduct(newProduct);
+    final createdProduct = await context.read<ProductProvider>().addProduct(newProduct);
 
     if (mounted) {
       setState(() => _isLoading = false);
-      if (success) {
+      if (createdProduct != null) {
         Navigator.of(context).pop(true); // Pop with success
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -61,6 +61,17 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
     }
   }
 
+  List<ProductUnit> _visibleUnits() {
+    if (widget.product.category == ProductCategory.PESTICIDE && widget.units.length > 1) {
+      final baseUnit = UnitDisplayFormatter.baseUnit(widget.units);
+      if (baseUnit != null) {
+        final filtered = widget.units.where((u) => u.id != baseUnit.id).toList();
+        if (filtered.isNotEmpty) return filtered;
+      }
+    }
+    return widget.units;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -152,7 +163,9 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
   }
 
   Widget _buildUnitList() {
-    if (widget.units.isEmpty) {
+    final visibleUnits = _visibleUnits();
+
+    if (visibleUnits.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
@@ -177,7 +190,7 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
     }
 
     return Column(
-      children: widget.units.map((unit) => _buildUnitItem(unit)).toList(),
+      children: visibleUnits.map((unit) => _buildUnitItem(unit)).toList(),
     );
   }
 

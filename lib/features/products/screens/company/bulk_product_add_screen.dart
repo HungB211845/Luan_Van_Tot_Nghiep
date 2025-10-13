@@ -117,8 +117,8 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
           baseUnit: entry.selectedBaseUnit,
         );
 
-        final success = await productProvider.addProduct(product);
-        if (success) {
+        final createdProduct = await productProvider.addProduct(product);
+        if (createdProduct != null) {
           successCount++;
         } else {
           errorCount++;

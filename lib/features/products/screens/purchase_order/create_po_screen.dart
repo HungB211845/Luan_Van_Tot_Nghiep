@@ -84,18 +84,38 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   }
 
   Widget _buildUnitDropdown(POCartItem item, PurchaseOrderProvider poProvider) {
-    return FutureBuilder<List<dynamic>>(
+    return FutureBuilder<List<ProductUnit>>(
       future: context.read<ProductProvider>().getProductUnits(item.product.id),
       builder: (context, snapshot) {
         List<String> unitOptions;
         String? currentUnit = item.unit;
+        final units = snapshot.data ?? const <ProductUnit>[];
+        final bool hideBaseUnit = item.product.category == ProductCategory.PESTICIDE && units.length > 1;
+        final baseUnit = hideBaseUnit ? UnitDisplayFormatter.baseUnit(units) : null;
+        List<ProductUnit> filteredUnits = units;
+        if (baseUnit != null) {
+          final tmp = units.where((u) => u.id != baseUnit.id).toList();
+          if (tmp.isNotEmpty) {
+            filteredUnits = tmp;
+          }
+        }
 
-        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData && snapshot.data!.isNotEmpty) {
+        if (snapshot.connectionState == ConnectionState.done && filteredUnits.isNotEmpty) {
           // Đã có dữ liệu thật từ database
-          unitOptions = snapshot.data!.map((unit) => unit.unitName as String).toList();
-          // Nếu unit hiện tại của item không có trong danh sách (trường hợp hiếm), thêm nó vào để không bị lỗi
+          unitOptions = filteredUnits.map((unit) => unit.unitName).toList();
           if (currentUnit != null && !unitOptions.contains(currentUnit)) {
-            unitOptions.insert(0, currentUnit);
+            final fallbackUnit = filteredUnits.first;
+            final fallbackName = fallbackUnit.unitName;
+            currentUnit = fallbackName;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                poProvider.updatePOCartItem(
+                  item.product.id,
+                  newUnit: fallbackName,
+                  newUnitId: fallbackUnit.id,
+                );
+              }
+            });
           }
         } else {
           // Đang tải hoặc lỗi, dùng danh sách tạm thời
@@ -116,6 +136,13 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           });
         }
 
+        final baseUnitLabel = units.isNotEmpty
+            ? UnitDisplayFormatter.resolveBaseUnitName(
+                units: units,
+                fallback: item.product.effectiveBaseUnit,
+              )
+            : item.product.effectiveBaseUnit;
+
         return DropdownButtonFormField<String>(
           value: currentUnit,
           isExpanded: true, // 🔥 FIX: Force dropdown to expand and prevent overflow
@@ -124,25 +151,23 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             border: const OutlineInputBorder(),
             helperText: snapshot.connectionState == ConnectionState.waiting 
                 ? 'Đang tải đơn vị...' 
-                : null,
+                : 'Hệ thống sẽ tự chuyển đổi sang $baseUnitLabel',
           ),
           items: unitOptions.map((String unitName) {
             String displayText = unitName;
 
-            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-              final units = snapshot.data! as List<ProductUnit>;
+            if (units.isNotEmpty) {
               ProductUnit? unitObj;
               try {
                 unitObj = units.firstWhere((u) => u.unitName == unitName);
-              } catch (e) {
+              } catch (_) {
                 unitObj = null;
               }
-
               if (unitObj != null) {
                 displayText = UnitDisplayFormatter.label(
                   unit: unitObj,
                   units: units,
-                  baseUnitName: item.product.effectiveBaseUnit,
+                  baseUnitName: baseUnitLabel,
                 );
               }
             }
@@ -155,12 +180,11 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           onChanged: (String? newValue) {
             if (newValue != null) {
               String? unitId;
-              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                final units = snapshot.data! as List<ProductUnit>;
+              if (units.isNotEmpty) {
                 try {
                   final unitObj = units.firstWhere((u) => u.unitName == newValue);
                   unitId = unitObj.id;
-                } catch (e) {
+                } catch (_) {
                   unitId = null;
                 }
               }
@@ -509,7 +533,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       case ProductCategory.FERTILIZER:
         return ['kg', 'tấn', 'bao'];
       case ProductCategory.PESTICIDE:
-        return ['ml', 'lít', 'chai', 'gói', 'lọ'];
+        return ['Đơn vị'];
       case ProductCategory.SEED:
         return ['kg', 'bao'];
     }

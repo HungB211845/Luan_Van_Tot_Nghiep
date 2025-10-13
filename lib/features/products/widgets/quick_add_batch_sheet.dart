@@ -135,6 +135,7 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
             for (final unit in units) {
               print('DEBUG: Unit: ${unit.unitName}, isDefault: ${unit.isDefaultSellingUnit}, factor: ${unit.conversionFactor}');
             }
+            _ensureVisibleSelection();
           } else {
             _selectedUnitId = null;
             print('DEBUG: No units found for ${widget.product.name}');
@@ -160,6 +161,45 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
     _costPriceController.dispose();
     _newSellingPriceController.dispose();
     super.dispose();
+  }
+
+  List<ProductUnit> _visibleUnits() {
+    if (widget.product.category == ProductCategory.PESTICIDE && _productUnits.length > 1) {
+      final baseUnit = UnitDisplayFormatter.baseUnit(_productUnits);
+      if (baseUnit != null) {
+        return _productUnits.where((u) => u.id != baseUnit.id).toList();
+      }
+    }
+    return _productUnits;
+  }
+
+  void _ensureVisibleSelection() {
+    if (_selectedUnitId == null) return;
+    final visible = _visibleUnits();
+    if (visible.isEmpty) return;
+    final isSelectedVisible = visible.any((u) => u.id == _selectedUnitId);
+    if (!isSelectedVisible) {
+      _selectedUnitId = visible.first.id;
+    }
+  }
+
+  bool _isBoxUnitSelected() {
+    if (_selectedUnitId == null) return false;
+    try {
+      final unit = _productUnits.firstWhere((u) => u.id == _selectedUnitId);
+      return unit.unitName.toLowerCase() == 'thùng';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _retailUnitLabel() {
+    try {
+      final retailUnit = _productUnits.firstWhere((u) => u.isDefaultSellingUnit);
+      return retailUnit.unitName;
+    } catch (_) {
+      return widget.product.effectiveBaseUnit;
+    }
   }
 
   @override
@@ -249,7 +289,7 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
               prefixIcon: const Icon(Icons.straighten),
               helperText: 'Chọn đơn vị để hệ thống tự chuyển đổi',
             ),
-            items: _productUnits.map<DropdownMenuItem<String>>((ProductUnit unit) {
+            items: _visibleUnits().map<DropdownMenuItem<String>>((ProductUnit unit) {
               final label = UnitDisplayFormatter.label(
                 unit: unit,
                 units: _productUnits,
@@ -357,6 +397,18 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
         ),
         const SizedBox(height: 8),
         _buildProfitIndicator(),
+        if (_isBoxUnitSelected()) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Lưu ý: Giá vốn và giá bán nhập ở đây áp dụng cho mỗi ${_retailUnitLabel()}. Hệ thống sẽ tự quy đổi khi nhập thùng.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              height: 1.3,
+            ),
+            textAlign: TextAlign.left,
+          ),
+        ],
       ],
     );
   }
@@ -371,7 +423,15 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
       (ProductUnit u) => u.id == _selectedUnitId,
       orElse: () => _productUnits.first, // 🔥 CRITICAL: Always provide fallback
     );
-    return selectedUnit.unitName;
+    final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+      units: _productUnits,
+      fallback: widget.product.effectiveBaseUnit,
+    );
+    return UnitDisplayFormatter.label(
+      unit: selectedUnit,
+      units: _productUnits,
+      baseUnitName: baseUnitName,
+    );
   }
 
   String _getQuantityHelperText() {
@@ -380,7 +440,11 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
     }
     
     // Use direct reference instead of creating unused variable
-    return 'Hệ thống sẽ tự chuyển đổi sang ${widget.product.effectiveBaseUnit}';
+    final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+      units: _productUnits,
+      fallback: widget.product.effectiveBaseUnit,
+    );
+    return 'Hệ thống sẽ tự chuyển đổi sang $baseUnitName';
   }
 
   Widget _buildProfitIndicator() {

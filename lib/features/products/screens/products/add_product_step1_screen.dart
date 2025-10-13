@@ -366,9 +366,9 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
       );
 
       final provider = context.read<ProductProvider>();
-      final success = await provider.addProduct(newProduct);
+      final createdProduct = await provider.addProduct(newProduct);
 
-      if (success && mounted) {
+      if (createdProduct != null && mounted) {
         await _showSuccessDialog('Đã lưu sản phẩm với thông tin cơ bản!');
         Navigator.popUntil(
           context,

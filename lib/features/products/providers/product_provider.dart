@@ -544,7 +544,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     notifyListeners();
   }
 
-  Future<bool> addProduct(Product product) async {
+  Future<Product?> addProduct(Product product) async {
     _setStatus(ProductStatus.loading);
 
     try {
@@ -560,10 +560,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
       _setStatus(ProductStatus.success);
       _clearError();
-      return true;
+      return newProduct;
     } catch (e) {
       _setError(e.toString());
-      return false;
+      return null;
     }
   }
 
