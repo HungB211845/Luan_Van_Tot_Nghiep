@@ -4,7 +4,9 @@ import '../../models/product.dart';
 import '../../models/product_batch.dart';
 import '../../models/product_unit.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/purchase_order_provider.dart';
 import '../../utils/unit_display_formatter.dart';
+import '../purchase_order/po_detail_screen.dart';
 import 'edit_batch_screen.dart';
 import '../../../../shared/utils/formatter.dart';
 
@@ -31,6 +33,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   List<ProductUnit> _units = [];
   String _baseUnitName = '';
   bool _isLoadingUnits = false;
+  bool _isNavigatingToPO = false;
 
   @override
   void initState() {
@@ -210,9 +213,11 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     );
   }
 
-  String _formatNotes(String raw) {
+  String? _formatNotes(ProductBatch batch) {
+    final raw = batch.notes;
+    if (raw == null) return null;
     final trimmed = raw.trim();
-    if (trimmed.isEmpty) return trimmed;
+    if (trimmed.isEmpty) return null;
 
     final withConversion = RegExp(
       r'Quick Add:\s*([\d\.]+)\s+units\s*->\s*([\d\.]+)\s+base units',
@@ -233,7 +238,13 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         );
         final fromText = _formatNumeric(inputQty);
         final baseText = _formatNumeric(baseQty);
-        return 'Thêm nhanh: $fromText $fromLabel → $baseText $baseUnitLabel';
+        final totalCost = batch.costPrice > 0 ? batch.costPrice * inputQty : null;
+        final buffer = StringBuffer('$fromText $fromLabel → $baseText $baseUnitLabel');
+        if (totalCost != null) {
+          buffer.write(' • Tổng giá vốn: ${AppFormatter.formatCurrency(totalCost)}');
+          buffer.write(' (${AppFormatter.formatCompactCurrency(batch.costPrice)} mỗi $fromLabel)');
+        }
+        return buffer.toString();
       }
     }
 
@@ -254,7 +265,11 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               )
             : baseLabel;
         final fromText = _formatNumeric(inputQty);
-        return 'Thêm nhanh: $fromText $fromLabel';
+        final totalCost = batch.costPrice > 0 ? batch.costPrice * inputQty : null;
+        if (totalCost != null) {
+          return '$fromText $fromLabel • Tổng giá vốn: ${AppFormatter.formatCurrency(totalCost)} (${AppFormatter.formatCompactCurrency(batch.costPrice)} mỗi $fromLabel)';
+        }
+        return '$fromText $fromLabel';
       }
     }
 
@@ -270,7 +285,11 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
       RegExp(r'\bunits\b', caseSensitive: false),
       baseLabel,
     );
-    return localized;
+    localized = localized.replaceFirst(
+      RegExp(r'^quick add:\s*', caseSensitive: false),
+      '',
+    );
+    return localized.trim();
   }
 
   ProductUnit? _matchUnitByRatio(double ratio) {
@@ -314,9 +333,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
 
   Widget _buildInfoSection(BuildContext context, ProductBatch batch) {
     final quantityDisplay = _formatQuantityDisplay(batch.quantity);
-    final formattedNotes = batch.notes != null && batch.notes!.isNotEmpty
-        ? _formatNotes(batch.notes!)
-        : null;
+    final formattedNotes = _formatNotes(batch);
 
     return Card(
       child: Padding(
@@ -413,15 +430,9 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               const Divider(height: 24),
             if (batch.purchaseOrderId != null)
               InkWell(
-                onTap: () {
-                  // TODO: Navigate to Purchase Order Detail Screen
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Tính năng xem đơn nhập hàng đang phát triển'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
+                onTap: _isNavigatingToPO
+                    ? null
+                    : () => _openPurchaseOrder(context, batch.purchaseOrderId!),
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -465,11 +476,17 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                           ],
                         ),
                       ),
-                      Icon(
-                        Icons.chevron_right,
-                        color: Colors.grey[400],
-                        size: 24,
-                      ),
+                      _isNavigatingToPO
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey[400],
+                              size: 24,
+                            ),
                     ],
                   ),
                 ),
@@ -478,6 +495,56 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openPurchaseOrder(BuildContext context, String poId) async {
+    if (_isNavigatingToPO) return;
+
+    if (mounted) {
+      setState(() => _isNavigatingToPO = true);
+    }
+
+    BuildContext? dialogContext;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        dialogContext = ctx;
+        return const Center(
+          child: CircularProgressIndicator(),
+        );
+      },
+    );
+
+    final poProvider = context.read<PurchaseOrderProvider>();
+    try {
+      await poProvider.loadPODetails(poId);
+    } finally {
+      if (dialogContext != null) {
+        Navigator.of(dialogContext!).pop();
+      }
+      if (mounted) {
+        setState(() => _isNavigatingToPO = false);
+      }
+    }
+
+    if (!mounted) return;
+
+    final po = poProvider.selectedPO;
+    if (po != null && po.id == poId) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PurchaseOrderDetailScreen(purchaseOrder: po),
+        ),
+      );
+    } else {
+      final message = poProvider.errorMessage.isNotEmpty
+          ? poProvider.errorMessage
+          : 'Không thể mở đơn nhập hàng.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
   }
 
   Widget _buildStatusSection(BuildContext context, ProductBatch batch) {
