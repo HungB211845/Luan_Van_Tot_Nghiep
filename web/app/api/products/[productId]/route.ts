@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
 
-// GET /api/products/[id]
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+// GET /api/products/[productId]
+export async function GET(req: NextRequest, { params }: { params: { productId: string } }) {
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
 
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       .from('products_with_details')
       .select('*')
       .eq('store_id', storeId)
-      .eq('id', params.id)
+      .eq('id', params.productId)
       .maybeSingle();
 
     if (queryError) {
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { productId: string } }) {
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
 
@@ -72,7 +72,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: 'User is not associated with a store' }, { status: 403 });
     }
 
-    const productId = params.id;
+    const productId = params.productId;
 
     const { error: updateError } = await supabaseServer
       .from('products')
@@ -91,7 +91,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: { productId: string } }) {
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
 
@@ -115,7 +115,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: 'User is not associated with a store' }, { status: 403 });
     }
 
-    const productId = params.id;
+    const productId = params.productId;
 
     const payload = await req.json();
 
