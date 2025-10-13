@@ -2,6 +2,7 @@ import '../models/product_unit.dart';
 
 class UnitDisplayFormatter {
   static const _tolerance = 0.0001;
+  static const List<String> _preferredKeywords = ['thùng', 'bao', 'chai', 'lọ'];
 
   static String label({
     required ProductUnit unit,
@@ -105,6 +106,78 @@ class UnitDisplayFormatter {
     return _findBaseUnit(units);
   }
 
+  static bool isPreferredKeywordUnit(ProductUnit unit) {
+    final lower = unit.unitName.toLowerCase();
+    return _preferredKeywords.any((keyword) => lower.contains(keyword));
+  }
+
+  static ProductUnit? preferredDisplayUnit(List<ProductUnit> units) {
+    if (units.isEmpty) return null;
+    final sorted = List<ProductUnit>.from(units)
+      ..sort((a, b) => b.conversionFactor.compareTo(a.conversionFactor));
+
+    for (final keyword in _preferredKeywords) {
+      final matches = sorted
+          .where((unit) => unit.unitName.toLowerCase().contains(keyword))
+          .toList();
+      if (matches.isNotEmpty) {
+        final match = matches.reduce((curr, next) =>
+            next.conversionFactor > curr.conversionFactor ? next : curr);
+        if (match.conversionFactor > 0) {
+          return match;
+        }
+      }
+    }
+
+    final defaultUnit = _findDefaultUnit(units);
+    if (defaultUnit != null && defaultUnit.conversionFactor > 0) {
+      return defaultUnit;
+    }
+
+    final largest = sorted.firstWhere(
+      (unit) => unit.conversionFactor > 0,
+      orElse: () => sorted.first,
+    );
+    return largest;
+  }
+
+  static PreferredQuantityDisplay? preferredQuantity({
+    required double baseQuantity,
+    required List<ProductUnit> units,
+    required String baseUnitName,
+  }) {
+    if (units.isEmpty) return null;
+    final displayUnit = preferredDisplayUnit(units) ?? _findDefaultUnit(units) ?? units.first;
+    if (displayUnit.conversionFactor <= 0) return null;
+
+    final primary = baseQuantity / displayUnit.conversionFactor;
+    final floored = primary.floor();
+    final remainder = (baseQuantity - (floored * displayUnit.conversionFactor)).round();
+
+    return PreferredQuantityDisplay(
+      primaryQuantity: primary,
+      remainder: remainder,
+      unit: displayUnit,
+      baseUnitName: baseUnitName,
+    );
+  }
+
+  static String simpleUnitName(ProductUnit unit) {
+    final name = unit.unitName.trim();
+    final index = name.indexOf('(');
+    if (index > 0) {
+      return name.substring(0, index).trim();
+    }
+    return name;
+  }
+
+  static String formatQuantityValue(double value) {
+    if (_isApproximately(value, value.roundToDouble())) {
+      return value.round().toString();
+    }
+    return _trimTrailingZeros(value.toStringAsFixed(2));
+  }
+
   static String resolveBaseUnitName({
     required List<ProductUnit> units,
     required String fallback,
@@ -162,4 +235,18 @@ class UnitDisplayFormatter {
   static String _trimTrailingZeros(String value) {
     return value.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
   }
+}
+
+class PreferredQuantityDisplay {
+  final double primaryQuantity;
+  final int remainder;
+  final ProductUnit unit;
+  final String baseUnitName;
+
+  PreferredQuantityDisplay({
+    required this.primaryQuantity,
+    required this.remainder,
+    required this.unit,
+    required this.baseUnitName,
+  });
 }

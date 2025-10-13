@@ -93,6 +93,36 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
     return units;
   }
 
+  String _formatStockLabel(List<ProductUnit> units) {
+    if (units.isEmpty) {
+      final base = widget.product.effectiveBaseUnit;
+      final baseLabel = base.toLowerCase() == 'đơn vị' ? '' : ' ${base.toLowerCase()}';
+      return '${widget.availableStockInBaseUnit.toInt()}$baseLabel';
+    }
+
+    final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+      units: units,
+      fallback: widget.product.effectiveBaseUnit,
+    );
+
+    final preferred = UnitDisplayFormatter.preferredQuantity(
+      baseQuantity: widget.availableStockInBaseUnit,
+      units: units,
+      baseUnitName: baseUnitName,
+    );
+
+    if (preferred == null) {
+      final baseLabel = baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị'
+          ? ''
+          : ' ${baseUnitName.toLowerCase()}';
+      return '${widget.availableStockInBaseUnit.toInt()}$baseLabel';
+    }
+
+    final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+    final label = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+    return '$value $label';
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<ProductUnit>>(
@@ -178,7 +208,7 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tồn kho: ${widget.availableStockInBaseUnit.toInt()} ${widget.product.effectiveBaseUnit}',
+            'Tồn kho: ${_formatStockLabel(_units)}',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],

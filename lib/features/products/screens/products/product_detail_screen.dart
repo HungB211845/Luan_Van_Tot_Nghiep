@@ -6,10 +6,12 @@ import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/responsive.dart';
 import '../../models/product.dart';
+import '../../models/product_batch.dart';
 import '../../models/product_unit.dart';
 import '../../services/product_unit_service.dart';
 import '../../providers/product_provider.dart';
 import '../../widgets/key_metrics_widget.dart';
+import '../../utils/unit_display_formatter.dart';
 import '../../widgets/quick_actions_widget.dart';
 import '../../widgets/inventory_batches_widget.dart';
 import '../../widgets/price_history_widget.dart';
@@ -291,43 +293,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   /// Get inventory display string with Multi-UoM support
-  /// Example: "10 Bao và 25 kg" or "525 kg" if no larger units
-  /// 🔥 FIXED: Now properly converts base stock to selling units
+  /// Example: "55 Thùng" when packaging units exist
   String _getInventoryDisplayString(double baseStock, String baseUnit) {
     if (_productUnits.isEmpty) {
-      // No units configured, show base stock only
       return '${baseStock.toInt()} $baseUnit';
     }
 
-    // Find default selling unit (the unit customers see)
-    final defaultUnit = _productUnits.firstWhere(
-      (u) => u.isDefaultSellingUnit,
-      orElse: () => _productUnits.first,
+    final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+      units: _productUnits,
+      fallback: baseUnit,
     );
 
-    if (defaultUnit.conversionFactor <= 0) {
-      // Invalid conversion factor, fallback to base unit
+    final preferred = UnitDisplayFormatter.preferredQuantity(
+      baseQuantity: baseStock,
+      units: _productUnits,
+      baseUnitName: baseUnitName,
+    );
+
+    if (preferred == null) {
       return '${baseStock.toInt()} $baseUnit';
     }
 
-    // Convert base stock to selling units
-    // Example: 2500 kg ÷ 50 kg/bag = 50 bags  
-    final sellingUnitStock = baseStock / defaultUnit.conversionFactor;
-    final wholeParts = sellingUnitStock.floor();
-    final remainder = baseStock - (wholeParts * defaultUnit.conversionFactor);
-
-    if (wholeParts == 0) {
-      // Not enough for even one selling unit - show base unit only
-      return '${baseStock.toInt()} $baseUnit';
-    }
-
-    if (remainder > 0.1) { // Small tolerance for floating point
-      // Mixed display: "50 Bao và 25 kg"
-      return '$wholeParts ${defaultUnit.unitName} và ${remainder.toInt()} $baseUnit';
-    }
-
-    // Exact match: "50 Bao" 
-    return '$wholeParts ${defaultUnit.unitName}';
+    final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+    final unitLabel = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+    return '$value $unitLabel';
   }
 
   Widget _buildInventoryExpansionTile() {
@@ -377,17 +366,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     fontSize: 12,
                   ),
                 ),
-                if (_productUnits.isNotEmpty && product != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    '(Quy đổi: ${totalStock.toInt()} ${product.effectiveBaseUnit})',
-                    style: TextStyle(
-                      color: Colors.grey[500],
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
               ],
             ),
             trailing: Row(
@@ -427,7 +405,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 )
               else ...[
                 // Show top 3 most recent batches
-                ...batches.take(3).map((batch) => _buildBatchPreviewItem(batch)),
+                ...batches.take(3).map((batch) => _buildBatchPreviewItem(batch, product)),
                 // "View all" button
                 ListTile(
                   leading: const Icon(Icons.list, color: Colors.green),
@@ -535,7 +513,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildBatchPreviewItem(batch) {
+  Widget _buildBatchPreviewItem(ProductBatch batch, Product? product) {
     return ListTile(
       dense: true,
       leading: Container(
@@ -556,7 +534,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
-        'SL: ${batch.quantity} | Giá vốn: ${AppFormatter.formatCompactCurrency(batch.costPrice)}',
+        'SL: ${_formatBatchPreviewQuantity(batch, product)} | Giá vốn: ${AppFormatter.formatCompactCurrency(batch.costPrice)}',
         style: const TextStyle(fontSize: 12),
       ),
       trailing: Text(
@@ -701,7 +679,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Color _getBatchColor(batch) {
+  Color _getBatchColor(ProductBatch batch) {
     if (batch.quantity <= 0) return Colors.red[600]!;
     if (batch.isExpired) return Colors.red[600]!;
     if (batch.isExpiringSoon) return Colors.orange[600]!;
@@ -709,11 +687,37 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Colors.green[600]!;
   }
 
-  IconData _getBatchIcon(batch) {
+  IconData _getBatchIcon(ProductBatch batch) {
     if (batch.quantity <= 0) return Icons.error;
     if (batch.isExpired) return Icons.event_busy;
     if (batch.isExpiringSoon || batch.quantity <= 10) return Icons.warning;
     return Icons.check_circle;
+  }
+
+  String _formatBatchPreviewQuantity(ProductBatch batch, Product? product) {
+    if (_productUnits.isEmpty) {
+      final base = product?.effectiveBaseUnit ?? 'đơn vị';
+      return '${AppFormatter.formatNumber(batch.quantity)} $base';
+    }
+
+    final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+      units: _productUnits,
+      fallback: product?.effectiveBaseUnit ?? 'đơn vị',
+    );
+
+    final preferred = UnitDisplayFormatter.preferredQuantity(
+      baseQuantity: batch.quantity.toDouble(),
+      units: _productUnits,
+      baseUnitName: baseUnitName,
+    );
+
+    if (preferred == null) {
+      return '${AppFormatter.formatNumber(batch.quantity)} ${baseUnitName.toLowerCase()}';
+    }
+
+    final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+    final label = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+    return '$value $label';
   }
 
   String _formatDate(DateTime date) {
@@ -863,6 +867,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           grossProfitPercentage: _grossProfitPercentage,
                           isEditMode: _isEditMode,
                           isMetricsLoading: _isMetricsLoading, // 🚀 ADD: Loading state
+                          productUnits: _productUnits,
                           priceController: _priceController,
                           onPriceTap: _enterEditMode,
                           onEnterEditMode: _enterEditMode,

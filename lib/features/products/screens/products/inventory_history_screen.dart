@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../models/product_batch.dart';
+import '../../models/product_unit.dart';
 import '../../providers/product_provider.dart';
 import '../../widgets/inventory_batches_widget.dart';
 import '../../../../shared/widgets/loading_widget.dart';
+import '../../../../shared/utils/formatter.dart';
+import '../../utils/unit_display_formatter.dart';
 
 class InventoryHistoryScreen extends StatefulWidget {
   final Product product;
@@ -24,6 +27,8 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
   List<ProductBatch> _allBatches = [];
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all'; // all, active, expired, low_stock
+  List<ProductUnit> _productUnits = [];
+  String _baseUnitName = '';
 
   @override
   void initState() {
@@ -47,6 +52,12 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
       await provider.loadProductBatches(widget.product.id);
 
       _allBatches = List.from(provider.productBatches);
+      final units = await provider.getProductUnits(widget.product.id);
+      _productUnits = units;
+      _baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+        units: units,
+        fallback: widget.product.effectiveBaseUnit,
+      );
       _applyFilters();
     } catch (e) {
       if (mounted) {
@@ -230,6 +241,7 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
     final totalBatches = _allBatches.length;
     final activeBatches = _allBatches.where((b) => b.quantity > 0 && !b.isExpired).length;
     final totalStock = _allBatches.fold<int>(0, (sum, batch) => sum + batch.quantity);
+    final totalStockLabel = _formatQuantity(totalStock.toDouble());
     final filteredCount = _filteredBatches.length;
 
     return Container(
@@ -251,7 +263,7 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
           ),
           _buildStatDivider(),
           Expanded(
-            child: _buildStatItem('Tổng tồn kho', '$totalStock', Icons.warehouse),
+            child: _buildStatItem('Tổng tồn kho', totalStockLabel, Icons.warehouse),
           ),
           if (filteredCount != totalBatches) ...[
             _buildStatDivider(),
@@ -311,10 +323,43 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
             batches: _filteredBatches,
             onBatchUpdated: _loadBatches,
             showTitle: false, // Don't show title in full screen mode
+            productUnits: _productUnits,
+            productBaseUnit: widget.product.effectiveBaseUnit,
           );
         },
       ),
     );
+  }
+
+  String _formatQuantity(double baseQuantity) {
+    if (_productUnits.isEmpty) {
+      final base = widget.product.effectiveBaseUnit;
+      final baseLabel = base.toLowerCase() == 'đơn vị'
+          ? ''
+          : ' ${base.toLowerCase()}';
+      return '${AppFormatter.formatNumber(baseQuantity.round())}$baseLabel';
+    }
+
+    final baseUnitName = _baseUnitName.isNotEmpty
+        ? _baseUnitName
+        : widget.product.effectiveBaseUnit;
+
+    final preferred = UnitDisplayFormatter.preferredQuantity(
+      baseQuantity: baseQuantity,
+      units: _productUnits,
+      baseUnitName: baseUnitName,
+    );
+
+    if (preferred == null) {
+      final baseLabel = baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị'
+          ? ''
+          : ' ${baseUnitName.toLowerCase()}';
+      return '${AppFormatter.formatNumber(baseQuantity.round())}$baseLabel';
+    }
+
+    final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+    final unitLabel = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+    return '$value $unitLabel';
   }
 
   Widget _buildEmptyState() {

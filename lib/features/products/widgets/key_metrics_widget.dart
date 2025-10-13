@@ -114,37 +114,30 @@ class KeyMetricsWidget extends StatelessWidget {
       return null;
     }
 
-    final defaultUnit = UnitDisplayFormatter.defaultUnit(productUnits) ?? productUnits.first;
     final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
       units: productUnits,
       fallback: product.effectiveBaseUnit,
     );
 
-    if (defaultUnit.conversionFactor <= 0) {
-      return null;
-    }
-
-    final sellingUnitStock = totalStock / defaultUnit.conversionFactor;
-    final wholeParts = sellingUnitStock.floor();
-    if (wholeParts <= 0) {
-      return null;
-    }
-
-    final remainder = (totalStock - (wholeParts * defaultUnit.conversionFactor)).round();
-    final normalizedRemainder = remainder < 0 ? 0 : remainder;
-
-    final defaultLabel = UnitDisplayFormatter.label(
-      unit: defaultUnit,
+    final preferred = UnitDisplayFormatter.preferredQuantity(
+      baseQuantity: totalStock,
       units: productUnits,
       baseUnitName: baseUnitName,
     );
-    final displayLabel = _simplifyUnitLabel(defaultLabel, baseUnitName);
-    final hideRemainder = _shouldHideRemainder(defaultLabel, baseUnitName);
+
+    if (preferred == null) {
+      return null;
+    }
+
+    final normalizedRemainder = preferred.remainder < 0 ? 0 : preferred.remainder;
+    final unitLabel = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+    final hideRemainder = UnitDisplayFormatter.isPreferredKeywordUnit(preferred.unit) ||
+        _shouldHideRemainder(unitLabel, baseUnitName);
 
     return _StockBreakdown(
-      wholeParts: wholeParts,
+      primaryQuantity: preferred.primaryQuantity,
       remainder: normalizedRemainder,
-      defaultUnitLabel: displayLabel,
+      unitLabel: unitLabel,
       baseUnitName: baseUnitName,
       hideRemainder: hideRemainder,
     );
@@ -159,28 +152,12 @@ class KeyMetricsWidget extends StatelessWidget {
     return label.toLowerCase().contains(baseUnit.toLowerCase());
   }
 
-  String _simplifyUnitLabel(String label, String baseUnit) {
-    if (baseUnit.isEmpty || baseUnit.toLowerCase() == 'đơn vị') {
-      return label;
-    }
-
-    var result = label;
-    final lowerBase = baseUnit.toLowerCase();
-    final pattern = RegExp(r'\s*\d+(?:[\.,]\d+)?\s*' + RegExp.escape(lowerBase), caseSensitive: false);
-    result = result.replaceAll(pattern, '');
-    result = result.replaceAll(RegExp(r'\b' + RegExp.escape(lowerBase) + r'\b', caseSensitive: false), '');
-    result = result.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-    if (result.isEmpty) {
-      return label;
-    }
-    return result;
-  }
   String _getStockDisplayValue() {
     final breakdown = _calculateStockBreakdown();
     if (breakdown == null) {
       return AppFormatter.formatNumber(totalStock.toInt());
     }
-    return AppFormatter.formatNumber(breakdown.wholeParts);
+    return UnitDisplayFormatter.formatQuantityValue(breakdown.primaryQuantity);
   }
 
   /// Get stock display unit name
@@ -190,30 +167,26 @@ class KeyMetricsWidget extends StatelessWidget {
       final fallback = product.effectiveBaseUnit;
       return fallback == 'đơn vị' ? '' : fallback;
     }
-    return breakdown.defaultUnitLabel;
+    return breakdown.unitLabel;
   }
 
   /// Get stock subtitle showing remainder or base unit conversion
   String? _getStockSubtitle() {
     final breakdown = _calculateStockBreakdown();
     if (breakdown == null) {
-      final fallback = product.effectiveBaseUnit;
-      if (fallback == 'đơn vị') {
-        return null;
-      }
-      return '(${AppFormatter.formatNumber(totalStock.toInt())} $fallback)';
-    }
-
-    final hasRemainder = breakdown.remainder > 0 && breakdown.baseUnitName.toLowerCase() != 'đơn vị';
-    if (hasRemainder) {
-      return 'và ${AppFormatter.formatNumber(breakdown.remainder)} ${breakdown.baseUnitName}';
-    }
-
-    if (breakdown.baseUnitName.toLowerCase() == 'đơn vị') {
       return null;
     }
 
-    return '(${AppFormatter.formatNumber(totalStock.toInt())} ${breakdown.baseUnitName})';
+    if (breakdown.hideRemainder || breakdown.remainder == 0) {
+      return null;
+    }
+
+    final baseName = breakdown.baseUnitName;
+    if (baseName.toLowerCase() == 'đơn vị') {
+      return null;
+    }
+
+    return '≈ ${AppFormatter.formatNumber(breakdown.remainder)} ${baseName.toLowerCase()}';
   }
 
   Widget _buildMetricCard(
@@ -412,16 +385,16 @@ class KeyMetricsWidget extends StatelessWidget {
 }
 
 class _StockBreakdown {
-  final int wholeParts;
+  final double primaryQuantity;
   final int remainder;
-  final String defaultUnitLabel;
+  final String unitLabel;
   final String baseUnitName;
   final bool hideRemainder;
 
   _StockBreakdown({
-    required this.wholeParts,
+    required this.primaryQuantity,
     required this.remainder,
-    required this.defaultUnitLabel,
+    required this.unitLabel,
     required this.baseUnitName,
     required this.hideRemainder,
   });

@@ -795,9 +795,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Future<String> _getStockDisplayString(Product product, int baseStock, ProductProvider provider) async {
     try {
       final units = await provider.getProductUnits(product.id);
-      
+
       if (units.isEmpty) {
-        // No units configured, use base unit
         final baseUnitName = product.effectiveBaseUnit == 'đơn vị'
             ? ''
             : product.effectiveBaseUnit;
@@ -805,53 +804,31 @@ class _ProductListScreenState extends State<ProductListScreen> {
             ? AppFormatter.formatNumber(baseStock)
             : '$baseStock ${_normalizeBaseUnit(baseUnitName)}';
       }
-      
-      // Find default selling unit
-      final defaultUnit = UnitDisplayFormatter.defaultUnit(units) ?? units.first;
+
       final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
         units: units,
         fallback: product.effectiveBaseUnit,
       );
-      final defaultLabel = UnitDisplayFormatter.label(
-        unit: defaultUnit,
+
+      final preferred = UnitDisplayFormatter.preferredQuantity(
+        baseQuantity: baseStock.toDouble(),
         units: units,
         baseUnitName: baseUnitName,
       );
-      final displayLabel = _simplifyUnitLabel(defaultLabel, baseUnitName);
 
-      if (defaultUnit.conversionFactor <= 0) {
-        // Invalid conversion factor, fallback
-        return baseUnitName.isNotEmpty
-            ? '$baseStock ${_normalizeBaseUnit(baseUnitName)}'
-            : AppFormatter.formatNumber(baseStock);
-      }
-      
-      // Convert base stock to selling units
-      final conversion = defaultUnit.conversionFactor;
-      final sellingUnitStock = baseStock / conversion;
-      final wholeParts = sellingUnitStock.floor();
-
-      if (wholeParts == 0) {
-        // Less than one selling unit
-        return baseUnitName.isNotEmpty
-            ? '$baseStock ${_normalizeBaseUnit(baseUnitName)}'
-            : AppFormatter.formatNumber(baseStock);
+      if (preferred == null) {
+        final fallbackName = baseUnitName.isNotEmpty
+            ? _normalizeBaseUnit(baseUnitName)
+            : '';
+        return fallbackName.isEmpty
+            ? AppFormatter.formatNumber(baseStock)
+            : '$baseStock $fallbackName';
       }
 
-      final remainder = baseStock - (wholeParts * conversion).round();
-      final normalizedRemainder = remainder < 0 ? 0 : remainder;
-      final hasMeaningfulBase = baseUnitName.isNotEmpty && baseUnitName.toLowerCase() != 'đơn vị';
-      final hideRemainder = _shouldHideRemainder(defaultLabel, baseUnitName);
-      
-      if (!hideRemainder && normalizedRemainder > 0 && hasMeaningfulBase) {
-        // Mixed display: "53 Bao và 32 kg"
-        return '${AppFormatter.formatNumber(wholeParts)} $displayLabel và ${AppFormatter.formatNumber(normalizedRemainder)} ${_normalizeBaseUnit(baseUnitName)}';
-      }
-      
-      // Exact match: "50 Bao"
-      return '${AppFormatter.formatNumber(wholeParts)} $displayLabel';
+      final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+      final label = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+      return '$value $label';
     } catch (e) {
-      // Error loading units, fallback to base display
       final baseUnitName = product.effectiveBaseUnit == 'đơn vị'
           ? ''
           : product.effectiveBaseUnit;
@@ -869,31 +846,5 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return baseUnitName;
   }
 
-  bool _shouldHideRemainder(String defaultLabel, String baseUnitName) {
-    if (baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị') {
-      return false;
-    }
-    final lowerBase = baseUnitName.toLowerCase();
-    final lowerLabel = defaultLabel.toLowerCase();
-    return lowerLabel.contains(lowerBase);
-  }
-
-  String _simplifyUnitLabel(String label, String baseUnitName) {
-    if (baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị') {
-      return label;
-    }
-
-    final lowerBase = baseUnitName.toLowerCase();
-    var result = label;
-
-    final pattern = RegExp(r'\s*\d+(?:[\.,]\d+)?\s*' + RegExp.escape(lowerBase), caseSensitive: false);
-    result = result.replaceAll(pattern, '');
-    result = result.replaceAll(RegExp(r'\b' + RegExp.escape(lowerBase) + r'\b', caseSensitive: false), '');
-    result = result.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-    if (result.isEmpty) {
-      return label;
-    }
-    return result;
-  }
   // 🔥 REMOVED: Unused performance methods since performance button was removed
 }

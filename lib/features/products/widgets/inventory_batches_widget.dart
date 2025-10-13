@@ -2,21 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../models/product_batch.dart';
+import '../models/product_unit.dart';
 import '../providers/product_provider.dart';
 import '../screens/products/edit_batch_screen.dart';
 import '../screens/products/batch_detail_screen.dart';
 import '../services/inventory_adjustment_service.dart';
+import '../utils/unit_display_formatter.dart';
+import '../../../shared/utils/formatter.dart';
 
 class InventoryBatchesWidget extends StatefulWidget {
   final List<ProductBatch> batches;
   final VoidCallback? onBatchUpdated;
   final bool showTitle;
+  final List<ProductUnit>? productUnits;
+  final String? productBaseUnit;
 
   const InventoryBatchesWidget({
     Key? key,
     required this.batches,
     this.onBatchUpdated,
     this.showTitle = true,
+    this.productUnits,
+    this.productBaseUnit,
   }) : super(key: key);
 
   @override
@@ -26,6 +33,53 @@ class InventoryBatchesWidget extends StatefulWidget {
 class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
   // FIXED: Add loading state to prevent multiple taps
   final Set<String> _loadingBatches = <String>{};
+  List<ProductUnit> _cachedUnits = [];
+  String _baseUnitName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeUnits();
+  }
+
+  @override
+  void didUpdateWidget(covariant InventoryBatchesWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.productUnits != widget.productUnits ||
+        oldWidget.productBaseUnit != widget.productBaseUnit ||
+        oldWidget.batches != widget.batches) {
+      _initializeUnits();
+    }
+  }
+
+  Future<void> _initializeUnits() async {
+    if (widget.productUnits != null && widget.productUnits!.isNotEmpty) {
+      _cachedUnits = widget.productUnits!;
+      _baseUnitName = widget.productBaseUnit ?? '';
+      return;
+    }
+
+    if (widget.batches.isEmpty) return;
+
+    final provider = context.read<ProductProvider>();
+    try {
+      final units = await provider.getProductUnits(widget.batches.first.productId);
+      if (!mounted) return;
+      setState(() {
+        _cachedUnits = units;
+        _baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+          units: units,
+          fallback: widget.productBaseUnit ?? '',
+        );
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _cachedUnits = [];
+        _baseUnitName = widget.productBaseUnit ?? '';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +257,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Số lượng: ${batch.quantity.toInt()} | Giá vốn: ${_formatPrice(batch.costPrice)} VNĐ',
+                      'Số lượng: ${_formatBatchQuantity(batch)} | Giá vốn: ${_formatPrice(batch.costPrice)} VNĐ',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[600],
@@ -234,7 +288,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      '${batch.quantity.toInt()}',
+                      _formatBatchQuantity(batch),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -292,6 +346,40 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
     } else {
       return price.toStringAsFixed(0);
     }
+  }
+
+  String _formatBatchQuantity(ProductBatch batch) {
+    final units = widget.productUnits ?? _cachedUnits;
+    final fallbackBase = widget.productBaseUnit ?? _baseUnitName;
+
+    if (units.isEmpty) {
+      final baseLabel = (fallbackBase.isEmpty || fallbackBase.toLowerCase() == 'đơn vị')
+          ? ''
+          : ' ${fallbackBase.toLowerCase()}';
+      return '${AppFormatter.formatNumber(batch.quantity)}$baseLabel';
+    }
+
+    final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+      units: units,
+      fallback: fallbackBase,
+    );
+
+    final preferred = UnitDisplayFormatter.preferredQuantity(
+      baseQuantity: batch.quantity.toDouble(),
+      units: units,
+      baseUnitName: baseUnitName,
+    );
+
+    if (preferred == null) {
+      final baseLabel = (baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị')
+          ? ''
+          : ' ${baseUnitName.toLowerCase()}';
+      return '${AppFormatter.formatNumber(batch.quantity)}$baseLabel';
+    }
+
+    final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+    final unitLabel = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+    return '$value $unitLabel';
   }
 
   String _formatDate(DateTime date) {
