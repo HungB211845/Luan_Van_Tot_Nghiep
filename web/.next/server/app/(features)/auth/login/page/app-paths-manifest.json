@@ -1,0 +1,3 @@
+{
+  "/(features)/auth/login/page": "app/(features)/auth/login/page.js"
+}

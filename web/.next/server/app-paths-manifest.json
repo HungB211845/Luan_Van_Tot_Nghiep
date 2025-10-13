@@ -1,0 +1,8 @@
+{
+  "/(features)/auth/login/page": "app/(features)/auth/login/page.js",
+  "/(features)/pos/page": "app/(features)/pos/page.js",
+  "/(features)/products/page": "app/(features)/products/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/page": "app/page.js"
+}

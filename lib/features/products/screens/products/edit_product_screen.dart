@@ -102,6 +102,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
           _isLoadingUnits = false;
         });
 
+        if (units.isEmpty) {
+          return;
+        }
+
         // Populate controllers from existing units
         if (_selectedCategory == ProductCategory.FERTILIZER || _selectedCategory == ProductCategory.SEED) {
           // Find "Bao" unit
@@ -1014,7 +1018,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
               child: DropdownButtonFormField<String>(
                 value: _volumeUnitController.text.isEmpty ? null : _volumeUnitController.text,
                 decoration: _buildInputDecoration(label: 'Đơn vị *'),
-                items: ['ml', 'lít', 'chai', 'lọ'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                items: ['ml', 'lít', 'chai', 'gói', 'lọ'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
                 onChanged: (v) => setState(() {
                   _volumeUnitController.text = v ?? '';
                   _hasChanges = true;
