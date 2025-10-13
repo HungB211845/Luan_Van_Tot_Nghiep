@@ -174,12 +174,68 @@ class TransactionProvider extends ChangeNotifier {
   /// Fetches a single transaction by its ID.
   /// This is useful for navigating to a detail screen when you only have the ID.
   Future<Transaction?> getTransactionById(String transactionId) async {
-    // No need to set global loading status for this single fetch
+    final lookupId = transactionId.trim();
+    if (lookupId.isEmpty) {
+      print('[TransactionProvider] lookup aborted - empty id');
+      return null;
+    }
+    print('[TransactionProvider] Resolving transaction: $lookupId');
     try {
-      final transaction = await _service.getTransactionWithItems(transactionId);
-      return transaction;
+      // Try in-memory cache first to avoid extra network calls
+      Transaction? cached;
+      for (final tx in _transactions) {
+        if (tx.id == lookupId) {
+          cached = tx;
+          break;
+        }
+      }
+      if (cached == null &&
+          _selectedTransaction != null &&
+          _selectedTransaction!.id == lookupId) {
+        cached = _selectedTransaction!;
+      }
+      if (cached != null) {
+        print('[TransactionProvider] Cache hit for $lookupId');
+        return cached;
+      }
+
+      // Prefer optimized query that preloads items
+      final transaction = await _service.getTransactionWithItems(lookupId);
+      if (transaction != null) {
+        print('[TransactionProvider] Found via getTransactionWithItems: ${transaction.id}');
+        return transaction;
+      }
+
+      // Some legacy debt records store invoice number instead of UUID
+      final invoiceMatch =
+          await _service.getTransactionWithItemsByInvoice(lookupId);
+      if (invoiceMatch != null) {
+        print('[TransactionProvider] Found via invoice number: ${invoiceMatch.invoiceNumber}');
+        return invoiceMatch;
+      }
+
+      // Fallback to legacy endpoint (defensive for older records/views)
+      final legacy = await _service.getTransactionById(lookupId);
+      if (legacy != null) {
+        print('[TransactionProvider] Found via legacy endpoint: ${legacy.id}');
+        return legacy;
+      }
+
+      // Final fallback: RPC search (handles older datasets and partial IDs)
+      final searchResult = await _service.searchTransactions(
+        searchText: lookupId,
+        includeItems: true,
+        pageSize: 1,
+      );
+      if (searchResult.items.isNotEmpty) {
+        print('[TransactionProvider] Found via RPC search: ${searchResult.items.first.id}');
+        return searchResult.items.first;
+      }
+      print('[TransactionProvider] No transaction found for $lookupId');
+      return null;
     } catch (e) {
       _errorMessage = e.toString();
+      print('[TransactionProvider] Error resolving $lookupId: $e');
       notifyListeners();
       return null;
     }

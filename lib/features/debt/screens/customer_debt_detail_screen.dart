@@ -291,6 +291,16 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
   }
 
   Future<void> _navigateToTransactionDetails(String transactionId) async {
+    final lookupId = transactionId.trim();
+    if (lookupId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mã giao dịch không hợp lệ.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -298,7 +308,7 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     );
     try {
       final tx = await context.read<TransactionProvider>().getTransactionById(
-        transactionId,
+        lookupId,
       );
       Navigator.pop(context);
       if (tx != null && mounted) {

@@ -397,46 +397,78 @@ class TransactionService extends BaseService {
   }
 
   /// Lấy transaction với items (1 query thay vì 2) - OPTIMIZED
-  Future<Transaction?> getTransactionWithItems(String transactionId) async {
+  Future<Transaction?> getTransactionWithItems(String transactionId) {
     print('[DEBUG] Service: Fetching tx with id: $transactionId for store: ${BaseService.getDefaultStoreId()}');
+    return _fetchTransactionWithItems(transactionId: transactionId);
+  }
+
+  Future<Transaction?> getTransactionWithItemsByInvoice(String invoiceNumber) {
+    print('[DEBUG] Service: Fetching tx with invoice: $invoiceNumber for store: ${BaseService.getDefaultStoreId()}');
+    return _fetchTransactionWithItems(invoiceNumber: invoiceNumber);
+  }
+
+  Future<Transaction?> _fetchTransactionWithItems({
+    String? transactionId,
+    String? invoiceNumber,
+  }) async {
+    assert(
+      (transactionId != null && invoiceNumber == null) ||
+          (transactionId == null && invoiceNumber != null),
+      'Provide either transactionId or invoiceNumber',
+    );
+
     try {
       ensureAuthenticated();
 
-      // Start performance tracking
       final stopwatch = Stopwatch()..start();
+      final storeId = BaseService.getDefaultStoreId();
 
-      // Use direct JOIN query for specific transaction ID (most efficient)
-      // RLS policy will handle store isolation, so no client-side filter is needed.
-      final response = await _supabase
+      var query = _supabase
           .from('transactions')
           .select('''
             id, created_at, store_id, customer_id, total_amount,
             payment_method, is_debt, transaction_date, notes, invoice_number,
             customers(name),
             transaction_items(
-              id, product_id, quantity, unit_price, sub_total,
+              id, product_id, batch_id, quantity,
+              price_at_sale, sub_total, discount_amount,
+              unit_id, unit_name, unit_conversion_factor, base_unit_quantity,
+              store_id, created_at,
               products(name, sku)
             )
-          ''')
-          .eq('id', transactionId)
-          .maybeSingle();
+          ''');
+
+      if (transactionId != null) {
+        query = query.eq('id', transactionId);
+      }
+      if (invoiceNumber != null) {
+        query = query.eq('invoice_number', invoiceNumber);
+      }
+      if (storeId != null) {
+        query = query.eq('store_id', storeId);
+      }
+
+      final response = await query.maybeSingle();
 
       stopwatch.stop();
-
-      // Log slow queries
       if (stopwatch.elapsedMilliseconds > 100) {
         await _logSlowQuery(
           'get_transaction_with_items',
           stopwatch.elapsedMilliseconds,
-          {'transaction_id': transactionId},
+          {
+            if (transactionId != null) 'transaction_id': transactionId,
+            if (invoiceNumber != null) 'invoice_number': invoiceNumber,
+          },
         );
       }
 
       if (response == null) {
+        final key = transactionId ?? invoiceNumber;
+        print('[TransactionService] No transaction found for key=$key');
         return null;
       }
 
-      // Convert the nested response to Transaction with items
+      print('[TransactionService] Transaction found for ${transactionId ?? invoiceNumber}');
       return _convertNestedTransactionResponse(response);
     } catch (e) {
       throw Exception('Lỗi lấy giao dịch với items: $e');
@@ -453,17 +485,28 @@ class TransactionService extends BaseService {
       final productData = itemData['products'] as Map<String, dynamic>? ?? {};
 
       // Create TransactionItem with product info
+      final unitPrice = _toDouble(itemData['price_at_sale']) ??
+          _toDouble(itemData['unit_price']) ??
+          (_toDouble(itemData['sub_total']) ?? 0.0) /
+              (itemData['quantity'] as num).clamp(1, double.infinity);
+
       final item = TransactionItem(
         id: itemData['id'] as String,
         transactionId: response['id'] as String,
         productId: itemData['product_id'] as String,
         batchId: itemData['batch_id'] as String?,
         quantity: itemData['quantity'] as int,
-        priceAtSale: (itemData['price_at_sale'] as num).toDouble(),
-        subTotal: (itemData['sub_total'] as num).toDouble(),
+        priceAtSale: unitPrice,
+        subTotal: _toDouble(itemData['sub_total']) ?? 0.0,
         discountAmount: (itemData['discount_amount'] as num?)?.toDouble() ?? 0.0,
-        storeId: response['store_id'] as String,
-        createdAt: DateTime.parse(itemData['created_at'] as String),
+        storeId: (itemData['store_id'] as String?) ?? (response['store_id'] as String),
+        createdAt: itemData['created_at'] != null
+            ? DateTime.parse(itemData['created_at'] as String)
+            : DateTime.parse(response['created_at'] as String),
+        unitId: itemData['unit_id'] as String?,
+        unitName: itemData['unit_name'] as String?,
+        unitConversionFactor: (itemData['unit_conversion_factor'] as num?)?.toDouble(),
+        baseUnitQuantity: (itemData['base_unit_quantity'] as num?)?.toDouble(),
       );
 
       items.add(item);
@@ -489,6 +532,15 @@ class TransactionService extends BaseService {
     );
 
     return transaction;
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String && value.isNotEmpty) {
+      return double.tryParse(value);
+    }
+    return null;
   }
 
   /// Lấy thông tin một giao dịch theo ID (DEPRECATED - use getTransactionWithItems for better performance)
