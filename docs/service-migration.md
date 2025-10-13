@@ -71,82 +71,82 @@ Tài liệu này liệt kê toàn bộ hàm public trong các service Flutter hi
 - [x] ✅ `getBatchesFromPO(poId)` → GET `/api/purchase-orders/{poId}/batches`
 
 ## CompanyService (`lib/features/products/services/company_service.dart`)
-- [ ] `getCompanies()` → GET `/api/companies`
-- [ ] `createCompany(company)` → POST `/api/companies`
-- [ ] `updateCompany(company)` → PUT `/api/companies/{company.id}`
-- [ ] `deleteCompany(companyId)` → DELETE `/api/companies/{companyId}`
-- [ ] `getCompanyProducts(companyId)` → GET `/api/companies/{companyId}/products`
-- [ ] `existsCompanyName(name, excludeId?)` → GET `/api/companies/exists?name=...&excludeId=...`
-- [ ] `hasProducts(companyId)` → GET `/api/companies/{companyId}/has-products`
-- [ ] `hasPurchaseOrders(companyId)` → GET `/api/companies/{companyId}/has-purchase-orders`
-- [ ] `getCompaniesWithMetadata()` → GET `/api/companies/summary`
+- [x] ✅ `getCompanies()` → GET `/api/companies`
+- [x] ✅ `createCompany(company)` → POST `/api/companies`
+- [x] ✅ `updateCompany(company)` → PUT `/api/companies/{company.id}`
+- [x] ✅ `deleteCompany(companyId)` → DELETE `/api/companies/{companyId}`
+- [x] ✅ `getCompanyProducts(companyId)` → GET `/api/companies/{companyId}/products`
+- [x] ✅ `existsCompanyName(name, excludeId?)` → GET `/api/companies/exists?name=...&excludeId=...`
+- [x] ✅ `hasProducts(companyId)` → GET `/api/companies/{companyId}/has-products`
+- [x] ✅ `hasPurchaseOrders(companyId)` → GET `/api/companies/{companyId}/has-purchase-orders`
+- [x] ✅ `getCompaniesWithMetadata()` → GET `/api/companies/summary`
 
 ## CustomerService (`lib/features/customers/services/customer_service.dart`)
-- [ ] `getCustomers()` → GET `/api/customers`
-- [ ] `searchCustomers(query)` → GET `/api/customers/search?q=`
-- [ ] `createCustomer(customer)` → POST `/api/customers`
-- [ ] `updateCustomer(customer)` → PUT `/api/customers/{customer.id}`
-- [ ] `deleteCustomer(customerId)` → DELETE `/api/customers/{customerId}`
-- [ ] `getCustomerById(customerId)` → GET `/api/customers/{customerId}`
-- [ ] `getCustomersSorted(sortBy, ascending)` → GET `/api/customers?sortBy=&ascending=`
-- [ ] `getCustomerStatistics(customerId)` → POST `/api/rpc/get_customer_statistics` (trả về thống kê)
+- [x] ✅ `getCustomers()` → GET `/api/customers`
+- [x] ✅ `searchCustomers(query)` → GET `/api/customers/search?q=`
+- [x] ✅ `createCustomer(customer)` → POST `/api/customers`
+- [x] ✅ `updateCustomer(customer)` → PUT `/api/customers/{customer.id}`
+- [x] ✅ `deleteCustomer(customerId)` → DELETE `/api/customers/{customerId}`
+- [x] ✅ `getCustomerById(customerId)` → GET `/api/customers/{customerId}`
+- [x] ✅ `getCustomersSorted(sortBy, ascending)` → GET `/api/customers?sortBy=&ascending=`
+- [x] ✅ `getCustomerStatistics(customerId)` → POST `/api/rpc/get_customer_statistics`
 
 ## DebtService (`lib/features/debt/services/debt_service.dart`)
-- [ ] `createDebtFromTransaction(transaction, ...)` → POST `/api/debts/from-transaction`
-- [ ] `createManualDebt(customerId, amount, notes?)` → POST `/api/debts/manual`
-- [ ] `getCustomerDebts(customerId)` → GET `/api/customers/{customerId}/debts`
-- [ ] `getCustomerDebtSummary(customerId)` → POST `/api/rpc/get_customer_debt_summary`
-- [ ] `getAllDebts(status?, onlyOverdue?)` → GET `/api/debts` (query: `status`, `onlyOverdue`)
-- [ ] `addPayment(customerId, amount, method, notes?)` → POST `/api/debts/payments`
-- [ ] `getDebtPayments(debtId)` → GET `/api/debts/{debtId}/payments`
-- [ ] `getCustomerPayments(customerId)` → GET `/api/customers/{customerId}/payments`
-- [ ] `adjustDebt(debtId, adjustment)` → POST `/api/debts/{debtId}/adjustments`
-- [ ] `getDebtAdjustments(debtId)` → GET `/api/debts/{debtId}/adjustments`
-- [ ] `calculateOverdueInterest(debtId, dailyRate?)` → POST `/api/rpc/calculate_overdue_interest`
-- [ ] `getDebtById(debtId)` → GET `/api/debts/{debtId}`
-- [ ] `cancelDebt(debtId, reason)` → POST `/api/debts/{debtId}/cancel`
+- [x] ✅ `createDebtFromTransaction(transaction, ...)` → POST `/api/debts/from-transaction`
+- [x] ✅ `createManualDebt(customerId, amount, notes?)` → POST `/api/debts/manual`
+- [x] ✅ `getCustomerDebts(customerId)` → GET `/api/customers/{customerId}/debts`
+- [x] ✅ `getCustomerDebtSummary(customerId)` → POST `/api/rpc/get_customer_debt_summary`
+- [x] ✅ `getAllDebts(status?, onlyOverdue?)` → GET `/api/debts`
+- [x] ✅ `addPayment(customerId, amount, method, notes?)` → POST `/api/debts/payments`
+- [x] ✅ `getDebtPayments(debtId)` → GET `/api/debts/{debtId}/payments`
+- [x] ✅ `getCustomerPayments(customerId)` → GET `/api/customers/{customerId}/payments`
+- [x] ✅ `adjustDebt(debtId, adjustment)` → POST `/api/debts/{debtId}/adjustments`
+- [x] ✅ `getDebtAdjustments(debtId)` → GET `/api/debts/{debtId}/adjustments`
+- [x] ✅ `calculateOverdueInterest(debtId, dailyRate?)` → POST `/api/rpc/calculate_overdue_interest`
+- [x] ✅ `getDebtById(debtId)` → GET `/api/debts/{debtId}`
+- [x] ✅ `cancelDebt(debtId, reason)` → POST `/api/debts/{debtId}/cancel`
 
 ## TransactionService (`lib/features/pos/services/transaction_service.dart`)
-- [ ] `createTransaction(payload)` → POST `/api/transactions`
-- [ ] `searchTransactions(filters)` → POST `/api/rpc/search_transactions_with_items`
-- [ ] `getTransactionHistoryPaginated(...)` → (Legacy) sử dụng cùng endpoint `searchTransactions`
-- [ ] `searchTransactionsPaginated(...)` → (Legacy) dùng `searchTransactions`
-- [ ] `getDebtTransactionsPaginated(...)` → (Legacy) dùng `searchTransactions` với `debtStatus=unpaid`
-- [ ] `getTodayTransactionsPaginated(...)` → (Legacy) dùng `searchTransactions` với `startDate/endDate` hôm nay
-- [ ] `getTransactionHistory(customerId?, limit)` → GET `/api/transactions/history` (legacy, cân nhắc thay thế bằng search)
-- [ ] `getTransactionItems(transactionId)` → GET `/api/transactions/{transactionId}/items`
-- [ ] `getTransactionWithItems(transactionId)` → GET `/api/transactions/{transactionId}?include=items`
-- [ ] `getTransactionById(transactionId)` → GET `/api/transactions/{transactionId}`
-- [ ] `getDebtTransactions(customerId?)` → GET `/api/transactions?isDebt=true&customerId=`
-- [ ] `getTodaySalesStats()` → GET `/api/transactions/today-summary`
+- [x] ✅ `createTransaction(payload)` → POST `/api/transactions`
+- [x] ✅ `searchTransactions(filters)` → POST `/api/rpc/search_transactions_with_items`
+- [x] ✅ `getTransactionHistoryPaginated(...)` → (Legacy) sử dụng cùng endpoint `searchTransactions`
+- [x] ✅ `searchTransactionsPaginated(...)` → (Legacy) dùng `searchTransactions`
+- [x] ✅ `getDebtTransactionsPaginated(...)` → (Legacy) dùng `searchTransactions` với `debtStatus=unpaid`
+- [x] ✅ `getTodayTransactionsPaginated(...)` → (Legacy) dùng `searchTransactions` với `startDate/endDate` hôm nay
+- [x] ✅ `getTransactionHistory(customerId?, limit)` → GET `/api/transactions/history` (legacy, cân nhắc thay thế bằng search)
+- [x] ✅ `getTransactionItems(transactionId)` → GET `/api/transactions/{transactionId}/items`
+- [x] ✅ `getTransactionWithItems(transactionId)` → GET `/api/transactions/{transactionId}?include=items`
+- [x] ✅ `getTransactionById(transactionId)` → GET `/api/transactions/{transactionId}`
+- [x] ✅ `getDebtTransactions(customerId?)` → GET `/api/transactions?isDebt=true&customerId=`
+- [x] ✅ `getTodaySalesStats()` → GET `/api/transactions/today-summary`
 
 ## ReportService (`lib/features/reports/services/report_service.dart`)
-- [ ] `getRevenueSummaryWithComparison(start, end)` → POST `/api/rpc/get_revenue_summary_with_comparison`
-- [ ] `getRevenueTrend(start, end, interval)` → POST `/api/rpc/get_revenue_trend`
-- [ ] `getRevenueForWeek(startDate)` → *Client sử dụng `getRevenueTrend` (không cần endpoint mới)*
-- [ ] `getTopPerformingProducts(filters)` → POST `/api/rpc/get_top_performing_products`
-- [ ] `getInventoryAnalytics()` → POST `/api/rpc/get_inventory_summary` + `/api/rpc/get_inventory_alerts` (hoặc hợp nhất trong một API)
-- [ ] `getInventoryAnalyticsLists()` → POST `/api/rpc/get_inventory_analytics_lists`
-- [ ] `getLowStockProducts(threshold?)` → POST `/api/rpc/get_inventory_alerts` (tham số `p_low_stock_threshold`)
-- [ ] `getSlowMovingProducts(days?)` → POST `/api/rpc/get_inventory_alerts` (tham số `p_slow_moving_days`)
-- [ ] `getTaxSummaryDirect(start, end)` → GET `/api/reports/tax-summary`
-- [ ] `exportSalesLedger(start, end)` → POST `/api/rpc/export_sales_ledger`
+- [x] ✅ `getRevenueSummaryWithComparison(start, end)` → POST `/api/rpc/get_revenue_summary_with_comparison`
+- [x] ✅ `getRevenueTrend(start, end, interval)` → POST `/api/rpc/get_revenue_trend`
+- [x] ✅ `getRevenueForWeek(startDate)` → *Client sử dụng `getRevenueTrend` (không cần endpoint mới)*
+- [x] ✅ `getTopPerformingProducts(filters)` → POST `/api/rpc/get_top_performing_products`
+- [x] ✅ `getInventoryAnalytics()` → POST `/api/rpc/get_inventory_summary` + `/api/rpc/get_inventory_alerts` (hoặc hợp nhất trong một API)
+- [x] ✅ `getInventoryAnalyticsLists()` → POST `/api/rpc/get_inventory_analytics_lists`
+- [x] ✅ `getLowStockProducts(threshold?)` → POST `/api/rpc/get_inventory_alerts` (tham số `p_low_stock_threshold`)
+- [x] ✅ `getSlowMovingProducts(days?)` → POST `/api/rpc/get_inventory_alerts` (tham số `p_slow_moving_days`)
+- [x] ✅ `getTaxSummaryDirect(start, end)` → GET `/api/reports/tax-summary`
+- [x] ✅ `exportSalesLedger(start, end)` → POST `/api/rpc/export_sales_ledger`
 
 ## TaxService (`lib/features/reports/services/tax_service.dart`)
-- [ ] `getTaxSummary(start, end)` → POST `/api/rpc/get_tax_summary`
-- [ ] `getSalesLedgerForExport(start, end)` → POST `/api/rpc/get_sales_ledger_for_export`
-- [ ] `exportSalesLedgerToCSV(start, end)` → *Client TODO, tái sử dụng dữ liệu từ endpoint phía trên*
+- [x] ✅ `getTaxSummary(start, end)` → POST `/api/rpc/get_tax_summary`
+- [x] ✅ `getSalesLedgerForExport(start, end)` → POST `/api/rpc/get_sales_ledger_for_export`
+- [x] ✅ `exportSalesLedgerToCSV(start, end)` → *Client TODO, tái sử dụng dữ liệu từ endpoint phía trên*
 
 ## CachedProductService (`lib/services/cached_product_service.dart`)
-- [ ] `getProductsPaginated(params)` → GET `/api/products` (áp dụng cache client nếu cần)
+- [x] ✅ `getProductsPaginated(params)` → GET `/api/products` (áp dụng cache client nếu cần)
 - [x] ✅ `getProductsByCategory(category)` → GET `/api/products?category=`
 - [x] ✅ `searchProducts(query, filters)` → GET `/api/products/search`
 - [x] ✅ `getLowStockProducts()` → GET `/api/inventory/low-stock`
 - [x] ✅ `getDashboardStats()` → GET `/api/products/dashboard`
-- [ ] `refreshMaterializedViews()` → POST `/api/rpc/refresh_materialized_views` (nếu vẫn cần trên backend)
-- [ ] `invalidateProductCache()` → *Client-side cache clear (không cần API)*
-- [ ] `invalidateSearchCache()` → *Client-side cache clear*
-- [ ] `invalidateDashboardCache()` → *Client-side cache clear*
+- [x] ✅ `refreshMaterializedViews()` → POST `/api/rpc/refresh_materialized_views` (nếu vẫn cần trên backend)
+- [x] ✅ `invalidateProductCache()` → *Client-side cache clear (không cần API)*
+- [x] ✅ `invalidateSearchCache()` → *Client-side cache clear*
+- [x] ✅ `invalidateDashboardCache()` → *Client-side cache clear*
 
 > Ghi chú:
 > - Những hàm đánh dấu *helper/client-side* không yêu cầu API riêng, chỉ cần được xử lý ở tầng ViewModel/Service mới.

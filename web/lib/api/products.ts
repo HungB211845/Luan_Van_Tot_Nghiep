@@ -803,4 +803,18 @@ export const productService = {
     const payload = await response.json();
     return payload.total ?? payload.totalCount ?? 0;
   },
+
+  refreshMaterializedViews: async (): Promise<void> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/rpc/refresh_materialized_views', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to refresh materialized views');
+    }
+  },
 };

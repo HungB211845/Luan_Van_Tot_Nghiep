@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { productService } from '@/lib/api/products';
+import { cachedProductService } from '@/lib/cache/cached-products';
 import { Product } from '@/types/product';
 
 type UseProductsState = {
@@ -18,8 +18,8 @@ export function useProducts(): UseProductsState {
     try {
       setLoading(true);
       setError(null);
-      const data = await productService.getAll();
-      setProducts(data);
+      const result = await cachedProductService.getPaginated({ limit: 100 });
+      setProducts(result.items);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Không thể tải sản phẩm';
       setError(message);
@@ -34,4 +34,3 @@ export function useProducts(): UseProductsState {
 
   return { products, loading, error, refetch: fetchProducts };
 }
-
