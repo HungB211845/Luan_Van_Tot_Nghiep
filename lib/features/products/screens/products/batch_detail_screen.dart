@@ -1,18 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../models/product.dart';
 import '../../models/product_batch.dart';
+import '../../models/product_unit.dart';
+import '../../providers/product_provider.dart';
+import '../../utils/unit_display_formatter.dart';
 import 'edit_batch_screen.dart';
 import '../../../../shared/utils/formatter.dart';
 
-class BatchDetailScreen extends StatelessWidget {
+class BatchDetailScreen extends StatefulWidget {
   final ProductBatch batch;
+  final Product? product;
+  final List<ProductUnit>? units;
+  final String? baseUnitName;
 
   const BatchDetailScreen({
     Key? key,
     required this.batch,
+    this.product,
+    this.units,
+    this.baseUnitName,
   }) : super(key: key);
 
   @override
+  State<BatchDetailScreen> createState() => _BatchDetailScreenState();
+}
+
+class _BatchDetailScreenState extends State<BatchDetailScreen> {
+  Product? _product;
+  List<ProductUnit> _units = [];
+  String _baseUnitName = '';
+  bool _isLoadingUnits = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _product = widget.product;
+    _units = widget.units != null ? List<ProductUnit>.from(widget.units!) : [];
+    _baseUnitName = _resolveBaseUnitName(_units);
+
+    if (_units.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadUnits();
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final batch = widget.batch;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -42,18 +79,245 @@ class BatchDetailScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildInfoSection(context),
+            _buildInfoSection(context, batch),
             const SizedBox(height: 16),
-            _buildOriginSection(context),
+            _buildOriginSection(context, batch),
             const SizedBox(height: 16),
-            _buildStatusSection(context),
+            _buildStatusSection(context, batch),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoSection(BuildContext context) {
+  Future<void> _loadUnits() async {
+    if (!mounted || _isLoadingUnits) return;
+
+    setState(() {
+      _isLoadingUnits = true;
+    });
+
+    final provider = context.read<ProductProvider>();
+    try {
+      final fetchedUnits = await provider.getProductUnits(widget.batch.productId);
+      final resolvedProduct = _product ?? _findProductById(provider);
+      if (!mounted) return;
+      setState(() {
+        _units = fetchedUnits;
+        _product = resolvedProduct;
+        _baseUnitName = _resolveBaseUnitName(fetchedUnits);
+        _isLoadingUnits = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _units = [];
+        _baseUnitName = _resolveBaseUnitName(const <ProductUnit>[]);
+        _isLoadingUnits = false;
+      });
+    }
+  }
+
+  Product? _findProductById(ProductProvider provider) {
+    final selected = provider.selectedProduct;
+    if (selected?.id == widget.batch.productId) {
+      return selected;
+    }
+
+    try {
+      for (final product in provider.products) {
+        if (product.id == widget.batch.productId) {
+          return product;
+        }
+      }
+    } catch (_) {
+      // Ignore lookup errors; will fallback to default base unit.
+    }
+    return null;
+  }
+
+  String _resolveBaseUnitName(List<ProductUnit> units) {
+    final fallback = _fallbackBaseUnit();
+    if (units.isEmpty) {
+      return fallback;
+    }
+    return UnitDisplayFormatter.resolveBaseUnitName(
+      units: units,
+      fallback: fallback,
+    );
+  }
+
+  String _fallbackBaseUnit() {
+    if (widget.baseUnitName != null && widget.baseUnitName!.trim().isNotEmpty) {
+      return widget.baseUnitName!;
+    }
+    if (_product != null) {
+      return _product!.effectiveBaseUnit;
+    }
+    return 'đơn vị';
+  }
+
+  _QuantityDisplay _formatQuantityDisplay(int baseQuantity) {
+    if (_isLoadingUnits && _units.isEmpty) {
+      final baseValue = AppFormatter.formatNumber(baseQuantity);
+      return _QuantityDisplay(
+        primary: baseValue,
+        secondary: _normalizeUnitLabel(_fallbackBaseUnit()),
+      );
+    }
+
+    final fallbackBase = _baseUnitName.isNotEmpty ? _baseUnitName : _fallbackBaseUnit();
+    if (_units.isEmpty) {
+      final baseValue = AppFormatter.formatNumber(baseQuantity);
+      return _QuantityDisplay(
+        primary: baseValue,
+        secondary: _normalizeUnitLabel(fallbackBase),
+      );
+    }
+
+    final preferred = UnitDisplayFormatter.preferredQuantity(
+      baseQuantity: baseQuantity.toDouble(),
+      units: _units,
+      baseUnitName: fallbackBase,
+    );
+
+    if (preferred == null) {
+      final baseValue = AppFormatter.formatNumber(baseQuantity);
+      return _QuantityDisplay(
+        primary: baseValue,
+        secondary: _normalizeUnitLabel(fallbackBase),
+      );
+    }
+
+    final baseUnit = UnitDisplayFormatter.baseUnit(_units);
+    final isBaseUnit = baseUnit != null && baseUnit.id == preferred.unit.id;
+    final primaryValue = _formatNumeric(preferred.primaryQuantity);
+    final primaryLabel = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+
+    if (isBaseUnit) {
+      return _QuantityDisplay(
+        primary: '$primaryValue ${_normalizeUnitLabel(primaryLabel)}',
+      );
+    }
+
+    final baseValue = AppFormatter.formatNumber(baseQuantity);
+    final baseLabel = _normalizeUnitLabel(fallbackBase);
+    final secondary = baseLabel.isEmpty ? baseValue : '≈ $baseValue $baseLabel';
+
+    return _QuantityDisplay(
+      primary: '$primaryValue ${_normalizeUnitLabel(primaryLabel)}',
+      secondary: secondary,
+    );
+  }
+
+  String _formatNotes(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return trimmed;
+
+    final withConversion = RegExp(
+      r'Quick Add:\s*([\d\.]+)\s+units\s*->\s*([\d\.]+)\s+base units',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+
+    if (withConversion != null) {
+      final inputQty = _parseNumber(withConversion.group(1));
+      final baseQty = _parseNumber(withConversion.group(2));
+      if (inputQty != null && baseQty != null && inputQty > 0) {
+        final ratio = baseQty / inputQty;
+        final matchedUnit = _matchUnitByRatio(ratio);
+        final fromLabel = matchedUnit != null
+            ? UnitDisplayFormatter.simpleUnitName(matchedUnit)
+            : _normalizeUnitLabel(_fallbackBaseUnit());
+        final baseUnitLabel = _normalizeUnitLabel(
+          _baseUnitName.isNotEmpty ? _baseUnitName : _fallbackBaseUnit(),
+        );
+        final fromText = _formatNumeric(inputQty);
+        final baseText = _formatNumeric(baseQty);
+        return 'Thêm nhanh: $fromText $fromLabel → $baseText $baseUnitLabel';
+      }
+    }
+
+    final withoutConversion = RegExp(
+      r'Quick Add:\s*([\d\.]+)\s+units\s*\(no conversion\)',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+
+    if (withoutConversion != null) {
+      final inputQty = _parseNumber(withoutConversion.group(1));
+      if (inputQty != null) {
+        final baseLabel = _normalizeUnitLabel(
+          _baseUnitName.isNotEmpty ? _baseUnitName : _fallbackBaseUnit(),
+        );
+        final fromLabel = _units.isNotEmpty
+            ? UnitDisplayFormatter.simpleUnitName(
+                UnitDisplayFormatter.baseUnit(_units) ?? _units.first,
+              )
+            : baseLabel;
+        final fromText = _formatNumeric(inputQty);
+        return 'Thêm nhanh: $fromText $fromLabel';
+      }
+    }
+
+    var localized = trimmed;
+    final baseLabel = _normalizeUnitLabel(
+      _baseUnitName.isNotEmpty ? _baseUnitName : _fallbackBaseUnit(),
+    );
+    localized = localized.replaceAll(
+      RegExp(r'\bbase units\b', caseSensitive: false),
+      baseLabel,
+    );
+    localized = localized.replaceAll(
+      RegExp(r'\bunits\b', caseSensitive: false),
+      baseLabel,
+    );
+    return localized;
+  }
+
+  ProductUnit? _matchUnitByRatio(double ratio) {
+    ProductUnit? bestMatch;
+    double smallestDiff = double.infinity;
+
+    for (final unit in _units) {
+      final diff = (unit.conversionFactor - ratio).abs();
+      if (diff < smallestDiff) {
+        smallestDiff = diff;
+        bestMatch = unit;
+      }
+    }
+
+    if (bestMatch != null && smallestDiff <= 0.001) {
+      return bestMatch;
+    }
+    return null;
+  }
+
+  double? _parseNumber(String? raw) {
+    if (raw == null) return null;
+    final normalized = raw.replaceAll(RegExp(r'[^0-9\.]'), '');
+    return double.tryParse(normalized);
+  }
+
+  String _formatNumeric(double value) {
+    final rounded = value.roundToDouble();
+    if ((value - rounded).abs() < 0.0001) {
+      return AppFormatter.formatNumber(rounded.toInt());
+    }
+    final text = value.toStringAsFixed(2)
+        .replaceAll(RegExp(r'0+$'), '')
+        .replaceAll(RegExp(r'\.$'), '');
+    return text.replaceAll('.', ',');
+  }
+
+  String _normalizeUnitLabel(String unit) {
+    return unit.trim().isEmpty ? 'đơn vị' : unit.trim();
+  }
+
+  Widget _buildInfoSection(BuildContext context, ProductBatch batch) {
+    final quantityDisplay = _formatQuantityDisplay(batch.quantity);
+    final formattedNotes = batch.notes != null && batch.notes!.isNotEmpty
+        ? _formatNotes(batch.notes!)
+        : null;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -71,8 +335,8 @@ class BatchDetailScreen extends StatelessWidget {
             _buildInfoRow(
               icon: Icons.inventory_2,
               label: 'Số lượng còn lại',
-              value: '${batch.quantity.toInt()}',
-              unit: 'đơn vị',
+              value: quantityDisplay.primary,
+              unit: quantityDisplay.secondary,
               color: _getStockColor(batch.quantity.toDouble()),
             ),
             const Divider(height: 24),
@@ -107,12 +371,12 @@ class BatchDetailScreen extends StatelessWidget {
                 color: Colors.purple[600]!,
               ),
             ],
-            if (batch.notes != null && batch.notes!.isNotEmpty) ...[
+            if (formattedNotes != null && formattedNotes.isNotEmpty) ...[
               const Divider(height: 24),
               _buildInfoRow(
                 icon: Icons.note,
                 label: 'Ghi chú',
-                value: batch.notes!,
+                value: formattedNotes,
                 color: Colors.grey[600]!,
                 isMultiLine: true,
               ),
@@ -123,7 +387,7 @@ class BatchDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOriginSection(BuildContext context) {
+  Widget _buildOriginSection(BuildContext context, ProductBatch batch) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -216,7 +480,7 @@ class BatchDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusSection(BuildContext context) {
+  Widget _buildStatusSection(BuildContext context, ProductBatch batch) {
     final isExpired = batch.isExpired;
     final isExpiringSoon = batch.isExpiringSoon;
     final isLowStock = batch.quantity <= 10;
@@ -423,4 +687,14 @@ class BatchDetailScreen extends StatelessWidget {
       return Colors.green[600]!;
     }
   }
+}
+
+class _QuantityDisplay {
+  final String primary;
+  final String? secondary;
+
+  const _QuantityDisplay({
+    required this.primary,
+    this.secondary,
+  });
 }

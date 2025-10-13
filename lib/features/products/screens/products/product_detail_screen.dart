@@ -547,7 +547,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => BatchDetailScreen(batch: batch),
+            builder: (context) => BatchDetailScreen(
+              batch: batch,
+              product: product,
+              units: _productUnits,
+              baseUnitName: product?.effectiveBaseUnit,
+            ),
           ),
         );
       },

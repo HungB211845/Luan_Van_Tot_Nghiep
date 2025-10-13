@@ -203,9 +203,16 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
       ),
       child: InkWell(
         onTap: () {
+          final resolvedBaseUnit = _baseUnitName.isNotEmpty
+              ? _baseUnitName
+              : (widget.productBaseUnit ?? '');
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (context) => BatchDetailScreen(batch: batch),
+              builder: (context) => BatchDetailScreen(
+                batch: batch,
+                units: _cachedUnits,
+                baseUnitName: resolvedBaseUnit.isEmpty ? null : resolvedBaseUnit,
+              ),
             ),
           );
         },
