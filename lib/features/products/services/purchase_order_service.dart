@@ -5,7 +5,9 @@ import '../models/purchase_order_item.dart';
 import '../models/purchase_order_status.dart';
 import '../models/product_batch.dart';
 import '../models/product.dart'; // 🔥 FIX: Add missing import
+import '../models/product_unit.dart';
 import './product_service.dart'; // 🔥 FIX: Add missing import
+import './product_unit_service.dart';
 
 class PurchaseOrderService extends BaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -142,7 +144,14 @@ class PurchaseOrderService extends BaseService {
       // 1. Gọi RPC để xử lý nghiệp vụ chính (tạo batch, cập nhật giá)
       await _supabase.rpc('create_batches_from_po', params: {'po_id': poId});
 
-      // 2. Lấy lại thông tin PO mới nhất
+      // 2. Đảm bảo trạng thái đã chuyển sang DELIVERED
+      await _supabase
+          .from('purchase_orders')
+          .update({'status': PurchaseOrderStatus.delivered.name})
+          .eq('id', poId)
+          .eq('store_id', currentStoreId!);
+
+      // 3. Lấy lại thông tin PO mới nhất
       final updatedPoResponse = await addStoreFilter(
         _supabase.from('purchase_orders_with_details').select('*'),
       )
@@ -150,14 +159,17 @@ class PurchaseOrderService extends BaseService {
           .single();
       final updatedPO = PurchaseOrder.fromMap(updatedPoResponse);
 
-      // 3. Lấy danh sách các sản phẩm bị ảnh hưởng từ PO
+      // 4. Lấy danh sách các sản phẩm bị ảnh hưởng từ PO
       final poItems = await addStoreFilter(
         _supabase.from('purchase_order_items').select('product_id'),
       ).eq('purchase_order_id', poId);
 
-      final productIds = (poItems as List).map((item) => item['product_id'] as String).toSet().toList();
+      final productIds = (poItems as List)
+          .map((item) => item['product_id'] as String)
+          .toSet()
+          .toList();
 
-      // 4. Chủ động lấy lại dữ liệu mới nhất của các sản phẩm đó
+      // 5. Chủ động lấy lại dữ liệu mới nhất của các sản phẩm đó
       final productService = ProductService();
       final updatedProducts = <Product>[];
       for (final productId in productIds) {
@@ -167,10 +179,24 @@ class PurchaseOrderService extends BaseService {
         }
       }
 
-      // 5. Trả về một object chứa tất cả dữ liệu đã được làm mới
+      // 6. Nạp lại danh sách đơn vị để đảm bảo giá/đa đơn vị cập nhật
+      final unitService = ProductUnitService();
+      final Map<String, List<ProductUnit>> unitsByProduct = {};
+      for (final productId in productIds) {
+        try {
+          final units = await unitService.getProductUnits(productId);
+          unitsByProduct[productId] = units;
+        } catch (e) {
+          // Ignore unit failures to avoid blocking flow
+          print('Warning: Failed to refresh units for $productId: $e');
+        }
+      }
+
+      // 7. Trả về một object chứa tất cả dữ liệu đã được làm mới
       return {
         'po': updatedPO,
         'products': updatedProducts,
+        'units': unitsByProduct,
       };
     } catch (e) {
       throw Exception('Lỗi khi nhận hàng cho đơn nhập: $e');

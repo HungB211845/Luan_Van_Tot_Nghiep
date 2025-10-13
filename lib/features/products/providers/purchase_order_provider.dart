@@ -83,6 +83,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
   PurchaseOrder? _selectedPO;
   List<PurchaseOrderItem> _selectedPOItems = [];
   List<ProductBatch> _batchesForPO = []; // State mới
+  final Map<String, List<ProductUnit>> _productUnitsById = {};
   POStatus _status = POStatus.idle;
   String _errorMessage = '';
 
@@ -117,6 +118,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
   PurchaseOrder? get selectedPO => _selectedPO;
   List<PurchaseOrderItem> get selectedPOItems => _selectedPOItems;
   List<ProductBatch> get batchesForPO => _batchesForPO; // Getter mới
+  List<ProductUnit>? unitsForProduct(String productId) =>
+      _productUnitsById[productId];
   POStatus get status => _status;
   String get errorMessage => _errorMessage;
   bool get isLoading => _status == POStatus.loading;
@@ -371,6 +374,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
       // Gán giá trị sau khi đã có dữ liệu để tránh lỗi
       _selectedPO = details['order'];
       _selectedPOItems = details['items'];
+      await _ensureUnitsForProducts(
+        _selectedPOItems.map((item) => item.productId).toSet(),
+      );
       await loadBatchesForPO(poId);
       _setStatus(POStatus.success);
     } catch (e) {
@@ -396,28 +402,129 @@ class PurchaseOrderProvider extends ChangeNotifier {
   Future<bool> receivePO(String poId) async {
     _setStatus(POStatus.loading);
     try {
-      // 1. Gọi service để thực hiện nghiệp vụ chính dưới DB
-      await _poService.receivePurchaseOrder(poId);
+      // Ensure PO is in CONFIRMED state before receiving (backend requirement)
+      final currentStatus = _selectedPO?.status;
+      if (currentStatus == PurchaseOrderStatus.sent) {
+        final confirmedPO = await _poService.updatePurchaseOrderStatus(
+          poId,
+          PurchaseOrderStatus.confirmed,
+        );
+        _selectedPO = confirmedPO;
+        _updatePurchaseOrderInList(confirmedPO);
+      }
 
-      // 2. Tải lại toàn bộ danh sách PO để cập nhật trạng thái trên màn hình danh sách
-      await loadPurchaseOrders();
+      final result = await _poService.receivePurchaseOrder(poId);
+      final updatedPO = result['po'] as PurchaseOrder;
+      final updatedProducts = (result['products'] as List<Product>?) ?? const [];
+      final unitsMap = (result['units'] as Map<String, List<ProductUnit>>?) ??
+          const <String, List<ProductUnit>>{};
 
-      // 3. Tải lại chi tiết của chính PO này để cập nhật màn hình chi tiết
-      await loadPODetails(poId);
+      // Update local PO state
+      _selectedPO = updatedPO;
+      _updatePurchaseOrderInList(updatedPO);
 
-      // 4. Yêu cầu ProductProvider làm mới tồn kho
-      final productIds = _selectedPOItems.map((item) => item.productId).toList();
+      // Determine affected product IDs (fallback to existing items if service didn't return products)
+      final productIds = updatedProducts.isNotEmpty
+          ? updatedProducts.map((p) => p.id).toList()
+          : _selectedPOItems.map((item) => item.productId).toList();
+
+      // Refresh product data & caches
+      for (final productId in productIds) {
+        await _productProvider.refreshProductSummary(productId);
+        final prefetchedUnits = unitsMap[productId];
+        await _productProvider.refreshProductUnitsCache(
+          productId,
+          forceNetwork: prefetchedUnits == null,
+          prefetchedUnits: prefetchedUnits,
+        );
+        if (prefetchedUnits != null && prefetchedUnits.isNotEmpty) {
+          _productUnitsById[productId] = prefetchedUnits;
+        }
+      }
       if (productIds.isNotEmpty) {
         await _productProvider.refreshInventoryAfterGoodsReceipt(productIds);
       }
 
-      // 5. Không cần setStatus(success) vì loadPODetails đã làm điều đó
-      // và không cần trả về giá trị vì UI sẽ tự cập nhật qua Consumer
+      await loadPODetails(poId);
+
       return true;
     } catch (e) {
       _setError(e.toString());
       return false;
     }
+  }
+
+  void _updatePurchaseOrderInList(PurchaseOrder updatedPO) {
+    final index = _purchaseOrders.indexWhere((po) => po.id == updatedPO.id);
+    if (index != -1) {
+      _purchaseOrders[index] = updatedPO;
+    } else {
+      _purchaseOrders.insert(0, updatedPO);
+    }
+  }
+
+  Future<void> _ensureUnitsForProducts(Set<String> productIds) async {
+    for (final productId in productIds) {
+      if (_productUnitsById.containsKey(productId) &&
+          _productUnitsById[productId]!.isNotEmpty) {
+        continue;
+      }
+      try {
+        final units =
+            await _productProvider.getProductUnits(productId, forceRefresh: false);
+        _productUnitsById[productId] = units;
+      } catch (e) {
+        debugPrint('Unable to load units for $productId: $e');
+      }
+    }
+  }
+
+  String formatItemQuantity(PurchaseOrderItem item) {
+    final unitName = item.unit;
+    if (unitName == null || unitName.isEmpty) {
+      return '${item.quantity}';
+    }
+    final units = _productUnitsById[item.productId];
+    if (units != null && units.isNotEmpty) {
+      final matching = units.firstWhere(
+        (u) => u.unitName.toLowerCase() == unitName.toLowerCase(),
+        orElse: () => units.first,
+      );
+      if (matching.conversionFactor > 0) {
+        final qty = item.quantity / matching.conversionFactor;
+        final formatted = _formatQuantity(qty);
+        return '$formatted $unitName';
+      }
+    }
+    return '${_formatQuantity(item.quantity.toDouble())} $unitName';
+  }
+
+  String formatBatchQuantity(ProductBatch batch) {
+    final units = _productUnitsById[batch.productId];
+    if (units != null && units.isNotEmpty) {
+      // Prefer default selling unit
+      final defaultUnit = units.firstWhere(
+        (u) => u.isDefaultSellingUnit,
+        orElse: () => units.first,
+      );
+      if (defaultUnit.conversionFactor > 0) {
+        final qty = batch.quantity / defaultUnit.conversionFactor;
+        final formatted = _formatQuantity(qty);
+        return '$formatted ${defaultUnit.unitName}';
+      }
+    }
+    return _formatQuantity(batch.quantity.toDouble());
+  }
+
+  String _formatQuantity(double value) {
+    final rounded = value.roundToDouble();
+    if ((rounded - value).abs() < 0.0001) {
+      return rounded.toInt().toString();
+    }
+    return value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(
+          RegExp(r'\.$'),
+          '',
+        );
   }
 
   // Get product IDs from PO items for inventory refresh
@@ -467,6 +574,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
     int quantity = 1,
     double? unitCost,
     String? unit,
+    double? sellingPrice,
   }) {
     final existingIndex = _poCartItems.indexWhere(
       (item) => item.product.id == product.id,
@@ -479,7 +587,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
           product: product,
           quantity: quantity,
           unitCost: unitCost ?? 0.0,
-          sellingPrice: null, // Explicitly set as null
+          sellingPrice: sellingPrice,
           unit: unit,
         ),
       );

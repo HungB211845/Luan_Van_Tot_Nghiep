@@ -85,7 +85,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
 
   Widget _buildUnitDropdown(POCartItem item, PurchaseOrderProvider poProvider) {
     return FutureBuilder<List<ProductUnit>>(
-      future: context.read<ProductProvider>().getProductUnits(item.product.id),
+      future: context
+          .read<ProductProvider>()
+          .getProductUnits(item.product.id, forceRefresh: true),
       builder: (context, snapshot) {
         List<String> unitOptions;
         String? currentUnit = item.unit;
@@ -1102,7 +1104,11 @@ class _ProductPickerDialogState extends State<ProductPickerDialog> {
                         if (product.category == ProductCategory.SEED)
                           defaultUnit = 'kg';
 
-                        poProvider.addToPOCart(product, unit: defaultUnit);
+                        poProvider.addToPOCart(
+                          product,
+                          unit: defaultUnit,
+                          sellingPrice: product.currentSellingPrice,
+                        );
                         Navigator.of(context).pop(); // Đóng dialog sau khi chọn
                       },
                     );

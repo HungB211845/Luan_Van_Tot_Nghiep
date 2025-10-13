@@ -117,7 +117,10 @@ class _QuickAddBatchSheetState extends State<QuickAddBatchSheet> {
   Future<void> _loadProductUnits() async {
     try {
       final productProvider = context.read<ProductProvider>();
-      final units = await productProvider.getProductUnits(widget.product.id);
+      final units = await productProvider.getProductUnits(
+        widget.product.id,
+        forceRefresh: true,
+      );
       if (mounted) {
         setState(() {
           _productUnits = units; 

@@ -4,8 +4,9 @@ import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/responsive.dart';
 import '../../models/purchase_order.dart';
 import '../../models/purchase_order_status.dart';
+import '../../models/purchase_order_item.dart';
+import '../../models/product_batch.dart';
 import '../../providers/purchase_order_provider.dart';
-import '../../providers/product_provider.dart';
 
 class PurchaseOrderDetailScreen extends StatefulWidget {
   final PurchaseOrder purchaseOrder;
@@ -186,7 +187,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           
           return Column(
             children: [
-              _buildProductRow(item),
+              _buildProductRow(item, provider),
               if (!isLast) Divider(height: 1, color: Colors.grey[300]),
             ],
           );
@@ -217,7 +218,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 
                 return Column(
                   children: [
-                    _buildBatchRow(batch),
+                    _buildBatchRow(batch, provider),
                     if (!isLast) Divider(height: 1, color: Colors.grey[300]),
                   ],
                 );
@@ -264,10 +265,15 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
   }
 
   // Invoice-style Product Row - HIG Guideline #3
-  Widget _buildProductRow(dynamic item) {
+  Widget _buildProductRow(
+    PurchaseOrderItem item,
+    PurchaseOrderProvider provider,
+  ) {
     final titleText = item.productName != null && item.productName!.isNotEmpty
         ? item.productName!
         : 'Sản phẩm: ${item.productId}';
+
+    final quantityLabel = provider.formatItemQuantity(item);
     
     return Padding(
       padding: EdgeInsets.all(context.sectionPadding),
@@ -288,7 +294,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 ),
                 SizedBox(height: context.cardSpacing / 2),
                 Text(
-                  'SL: ${item.quantity} ${item.unit ?? ''}',
+                  'SL: $quantityLabel',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[600],
@@ -320,7 +326,11 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     );
   }
 
-  Widget _buildBatchRow(dynamic batch) {
+  Widget _buildBatchRow(
+    ProductBatch batch,
+    PurchaseOrderProvider provider,
+  ) {
+    final quantityLabel = provider.formatBatchQuantity(batch);
     final productTitle = batch.productName ?? 'ID: ${batch.productId}';
     
     return Padding(
@@ -358,7 +368,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
             ),
           ),
           Text(
-            'SL: ${batch.quantity}',
+            'SL: $quantityLabel',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -413,25 +423,12 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           return const SizedBox.shrink(); // Clean UI, no permanent success banner
         }
 
-        // Case 2: PO has been sent, waiting for supplier confirmation
-        if (po.status == PurchaseOrderStatus.sent) {
+        // Any status before delivered: allow single confirm flow
+        if (po.status == PurchaseOrderStatus.sent ||
+            po.status == PurchaseOrderStatus.confirmed ||
+            po.status == PurchaseOrderStatus.draft) {
           return _buildActionButton(
             title: 'Xác nhận Đơn Hàng',
-            icon: Icons.thumb_up_alt_outlined,
-            color: Colors.blue.shade600,
-            isLoading: provider.isLoading,
-            onPressed: () async {
-              await provider.updatePOStatus(po.id, PurchaseOrderStatus.confirmed);
-              // 🔥 REMOVED: Success SnackBar - UI will automatically update to show confirmed status
-              // Button will change from blue "Xác nhận Đơn Hàng" to green "Xác Nhận Nhận Hàng"
-            },
-          );
-        }
-
-        // Case 3: PO is confirmed, ready to receive goods
-        if (po.status == PurchaseOrderStatus.confirmed) {
-          return _buildActionButton(
-            title: 'Xác Nhận Nhận Hàng',
             icon: Icons.inventory,
             color: Colors.green.shade600,
             isLoading: provider.isLoading,
@@ -532,9 +529,9 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
               'Hành động này sẽ:',
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
-            const Text('• Đánh dấu đơn hàng là "Đã Giao"'),
+            const Text('• Đánh dấu đơn hàng là "ĐÃ NHẬN"'),
             const Text('• Tạo lô hàng (ProductBatch) cho từng sản phẩm'),
-            const Text('• Cập nhật tồn kho hệ thống'),
+            const Text('• Cập nhật giá bán và tồn kho hệ thống'),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(8),
@@ -572,7 +569,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
             ),
             onPressed: () async {
               // Capture dependencies BEFORE closing dialog to avoid using context after dispose
-              final productProvider = context.read<ProductProvider>();
               final navigator = Navigator.of(context);
               final scaffoldMessenger = ScaffoldMessenger.of(context);
 
@@ -584,18 +580,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
               // Check mounted before using any context-dependent operations
               if (!mounted) return;
 
-              if (success) {
-                // Refresh inventory after successful goods receipt
-                final productIds = provider.getProductIdsFromPO(po.id);
-                await productProvider.refreshInventoryAfterGoodsReceipt(productIds);
-                // Force refresh all inventory data to ensure UI reflects new stock across the app
-                await productProvider.refreshAllInventoryData();
-                // Optional: reload products list to refresh available_stock from view
-                await productProvider.loadProductsPaginated();
-
-                // 🔥 REMOVED: Success SnackBar - UI will automatically update to show delivered status
-                // No need for additional success message since status change is visible
-              } else {
+              if (!success) {
                 // Check mounted before showing SnackBar
                 if (!mounted) return;
 

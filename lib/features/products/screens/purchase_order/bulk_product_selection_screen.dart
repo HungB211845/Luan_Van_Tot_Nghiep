@@ -106,15 +106,18 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
         product: product,
         existingQuantity: cartItem?.quantity,
         existingPrice: cartItem?.unitCost,
+        existingSellingPrice:
+            cartItem?.sellingPrice ?? product.currentSellingPrice,
         existingUnit: cartItem?.unit,
-        onAdd: (quantity, price, unit, unitId) {  // 🔥 ADD: unitId parameter
+        onAdd: (quantity, price, unit, unitId, sellingPrice) {
           setState(() {
             _localCartItems[product.id] = POCartItem(
               product: product,
               quantity: quantity,
               unitCost: price,
+              sellingPrice: sellingPrice,
               unit: unit,
-              unitId: unitId, // 🔥 NEW: Store unit ID for conversion
+              unitId: unitId,
             );
           });
         },

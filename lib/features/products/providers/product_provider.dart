@@ -2285,13 +2285,79 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
   /// 🔥 NEW: Refresh product units cache for a specific product
   /// Used to ensure UI shows latest unit configuration after changes
-  Future<void> refreshProductUnitsCache(String productId) async {
+  Future<void> refreshProductUnitsCache(
+    String productId, {
+    bool forceNetwork = false,
+    List<ProductUnit>? prefetchedUnits,
+  }) async {
     try {
+      if (prefetchedUnits != null && prefetchedUnits.isNotEmpty) {
+        _unitCache[productId] = prefetchedUnits;
+        notifyListeners();
+        if (!forceNetwork) {
+          return;
+        }
+      }
+      if (forceNetwork) {
+        _unitCache.remove(productId);
+      }
       final units = await _unitService.getProductUnits(productId);
       _unitCache[productId] = units;
       print('✅ Refreshed product units cache for product: $productId');
+      notifyListeners();
     } catch (e) {
       print('❌ Error refreshing product units cache: $e');
+    }
+  }
+
+  Future<void> refreshProductSummary(String productId) async {
+    try {
+      final product = await _productService.getProductById(productId);
+      if (product == null) return;
+
+      void replaceProductInList(List<Product> list) {
+        final idx = list.indexWhere((p) => p.id == productId);
+        if (idx != -1) {
+          list[idx] = product;
+        } else {
+          list.insert(0, product);
+        }
+      }
+
+      // Update master list
+      replaceProductInList(_products);
+
+      // Update category caches
+      final ProductCategory category = product.category;
+      if (_productsByCategory.containsKey(null)) {
+        replaceProductInList(_productsByCategory[null]!);
+      } else {
+        _productsByCategory[null] = List<Product>.from(_products);
+      }
+      if (_productsByCategory.containsKey(category)) {
+        replaceProductInList(_productsByCategory[category]!);
+      } else {
+        _productsByCategory[category] = _products
+            .where((p) => p.category == category)
+            .toList();
+      }
+
+      // Update filtered results if present
+      if (_filteredProducts.isNotEmpty) {
+        replaceProductInList(_filteredProducts);
+      }
+
+      // Update selected product if necessary
+      if (_selectedProduct?.id == productId) {
+        _selectedProduct = product;
+      }
+
+      // Update supporting caches (prices, search)
+      _currentPrices[productId] = product.currentSellingPrice;
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error refreshing product summary for $productId: $e');
     }
   }
 

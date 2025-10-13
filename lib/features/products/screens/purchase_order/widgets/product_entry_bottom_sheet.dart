@@ -12,14 +12,22 @@ class ProductEntryBottomSheet extends StatefulWidget {
   final Product product;
   final int? existingQuantity;
   final double? existingPrice;
+  final double? existingSellingPrice;
   final String? existingUnit;
-  final Function(int quantity, double price, String unit, String? unitId) onAdd; // 🔥 ADD: unitId parameter
+  final Function(
+    int quantity,
+    double price,
+    String unit,
+    String? unitId,
+    double? sellingPrice,
+  ) onAdd;
 
   const ProductEntryBottomSheet({
     Key? key,
     required this.product,
     this.existingQuantity,
     this.existingPrice,
+    this.existingSellingPrice,
     this.existingUnit,
     required this.onAdd,
   }) : super(key: key);
@@ -32,8 +40,10 @@ class ProductEntryBottomSheet extends StatefulWidget {
 class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _sellingPriceController = TextEditingController();
   final FocusNode _quantityFocusNode = FocusNode();
   final FocusNode _priceFocusNode = FocusNode();
+  final FocusNode _sellingPriceFocusNode = FocusNode();
 
   String _selectedUnit = 'kg';
   String? _selectedUnitId; // 🔥 NEW: Track selected unit ID
@@ -49,6 +59,11 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     if (widget.existingPrice != null && widget.existingPrice! > 0) {
       _priceController.text = AppFormatter.formatNumber(widget.existingPrice!);
     }
+    final sellingPrice =
+        widget.existingSellingPrice ?? widget.product.currentSellingPrice;
+    if (sellingPrice > 0) {
+      _sellingPriceController.text = AppFormatter.formatNumber(sellingPrice);
+    }
     
     // 🔥 NEW: Load product units and set default selection
     _loadProductUnits();
@@ -58,7 +73,10 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   Future<void> _loadProductUnits() async {
     try {
       final productProvider = context.read<ProductProvider>();
-      final units = await productProvider.getProductUnits(widget.product.id);
+      final units = await productProvider.getProductUnits(
+        widget.product.id,
+        forceRefresh: true,
+      );
       if (mounted) {
         setState(() {
           _productUnits = units;
@@ -107,8 +125,10 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   void dispose() {
     _quantityController.dispose();
     _priceController.dispose();
+    _sellingPriceController.dispose();
     _quantityFocusNode.dispose();
     _priceFocusNode.dispose();
+    _sellingPriceFocusNode.dispose();
     super.dispose();
   }
 
@@ -187,10 +207,15 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   void _handleAdd() {
     final quantity = int.tryParse(_quantityController.text) ?? 0;
     final price = double.tryParse(_priceController.text.replaceAll('.', '')) ?? 0.0;
+    final sellingPriceText =
+        _sellingPriceController.text.replaceAll('.', '').trim();
+    final sellingPrice = sellingPriceText.isEmpty
+        ? null
+        : double.tryParse(sellingPriceText);
 
     if (quantity > 0 && price >= 0) {
       // 🔥 NEW: Pass unitId for conversion tracking
-      widget.onAdd(quantity, price, _selectedUnit, _selectedUnitId);
+      widget.onAdd(quantity, price, _selectedUnit, _selectedUnitId, sellingPrice);
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -234,10 +259,10 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          // Handle bar
+        ),
+        child: Column(
+          children: [
+            // Handle bar
           Container(
             margin: const EdgeInsets.only(top: 8),
             width: 40,
@@ -445,7 +470,7 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
                           });
                         }
                       },
-                    ),
+                  ),
 
                   const SizedBox(height: 20),
 
@@ -491,6 +516,53 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
                       _priceController.selection = TextSelection(
                         baseOffset: 0,
                         extentOffset: _priceController.text.length,
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    'Giá bán mới (tùy chọn)',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _sellingPriceController,
+                    focusNode: _sellingPriceFocusNode,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      signed: false,
+                      decimal: true,
+                    ),
+                    inputFormatters: [CurrencyInputFormatter()],
+                    decoration: InputDecoration(
+                      hintText: 'Giá bán đề xuất (ví dụ: 35.000)',
+                      prefixIcon: const Icon(Icons.sell),
+                      suffixText: 'VND',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: categoryColor, width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onTap: () {
+                      _sellingPriceController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _sellingPriceController.text.length,
                       );
                     },
                   ),

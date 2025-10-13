@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../shared/utils/formatter.dart';
 import '../models/product_unit.dart';
 import '../models/product.dart';
 import '../services/product_unit_service.dart';
 import '../utils/unit_display_formatter.dart';
+import '../providers/product_provider.dart';
 
 /// Bottom sheet for selecting a unit when adding product to cart
 /// Follows Apple HIG principles: Clear, Efficient, Non-disruptive
@@ -31,69 +33,94 @@ class UnitSelectionSheet extends StatefulWidget {
 
 class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
   final _unitService = ProductUnitService();
+  late Future<List<ProductUnit>> _unitsFuture;
+  List<ProductUnit> _units = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _units = widget.units;
+    _unitsFuture = _fetchUnits();
+  }
+
+  Future<List<ProductUnit>> _fetchUnits() async {
+    final provider = Provider.of<ProductProvider>(context, listen: false);
+    final freshUnits = await provider.getProductUnits(
+      widget.product.id,
+      forceRefresh: true,
+    );
+    if (mounted) {
+      setState(() {
+        _units = freshUnits;
+      });
+    }
+    return freshUnits;
+  }
 
   /// 🔥 HELPER: Calculate unit price on-the-fly if database unit_price is 0
-  double _getCalculatedUnitPrice(ProductUnit unit) {
+  double _getCalculatedUnitPrice(ProductUnit unit, List<ProductUnit> units) {
     // If unit already has price set in database, use it
     if (unit.unitPrice > 0) {
       return unit.unitPrice;
     }
-    
+
     // Otherwise, calculate from product's currentSellingPrice
     final productPrice = widget.product.currentSellingPrice;
     if (productPrice <= 0) {
       return 0; // No product price set
     }
-    
+
     // Find default unit to use as price base
-    final defaultUnit = widget.units.firstWhere(
+    final defaultUnit = units.firstWhere(
       (u) => u.isDefaultSellingUnit,
-      orElse: () => widget.units.first,
+      orElse: () => units.first,
     );
-    
+
     if (unit.id == defaultUnit.id) {
-      // This IS the default unit (Bao) → full product price
-      return productPrice; // 660K ✅
-    } else {
-      // This is NOT default unit (kg) → calculate from default unit's conversion factor
-      // Price per kg = Product price ÷ Bao's conversion factor
-      return productPrice / defaultUnit.conversionFactor; // 660K ÷ 50 = 13.2K ✅
+      return productPrice;
     }
+    return productPrice / defaultUnit.conversionFactor;
   }
 
-  List<ProductUnit> _visibleUnits() {
-    if (widget.product.category == ProductCategory.PESTICIDE && widget.units.length > 1) {
-      final baseUnit = UnitDisplayFormatter.baseUnit(widget.units);
+  List<ProductUnit> _visibleUnits(List<ProductUnit> units) {
+    if (widget.product.category == ProductCategory.PESTICIDE && units.length > 1) {
+      final baseUnit = UnitDisplayFormatter.baseUnit(units);
       if (baseUnit != null) {
-        final filtered = widget.units.where((u) => u.id != baseUnit.id).toList();
+        final filtered = units.where((u) => u.id != baseUnit.id).toList();
         if (filtered.isNotEmpty) return filtered;
       }
     }
-    return widget.units;
+    return units;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHandle(),
-            const SizedBox(height: 16),
-            _buildHeader(),
-            const SizedBox(height: 8),
-            _buildSubtitle(),
-            const SizedBox(height: 16),
-            _buildUnitList(),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+    return FutureBuilder<List<ProductUnit>>(
+      future: _unitsFuture,
+      builder: (context, snapshot) {
+        final units = snapshot.data ?? _units;
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildHandle(),
+                const SizedBox(height: 16),
+                _buildHeader(),
+                const SizedBox(height: 8),
+                _buildSubtitle(),
+                const SizedBox(height: 16),
+                _buildUnitList(units),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -162,8 +189,8 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
     );
   }
 
-  Widget _buildUnitList() {
-    final visibleUnits = _visibleUnits();
+  Widget _buildUnitList(List<ProductUnit> units) {
+    final visibleUnits = _visibleUnits(units);
 
     if (visibleUnits.isEmpty) {
       return Padding(
@@ -190,11 +217,11 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
     }
 
     return Column(
-      children: visibleUnits.map((unit) => _buildUnitItem(unit)).toList(),
+      children: visibleUnits.map((unit) => _buildUnitItem(unit, units)).toList(),
     );
   }
 
-  Widget _buildUnitItem(ProductUnit unit) {
+  Widget _buildUnitItem(ProductUnit unit, List<ProductUnit> allUnits) {
     // Calculate stock in this unit
     final stockInThisUnit = _unitService.convertFromBaseUnit(
       baseQuantity: widget.availableStockInBaseUnit,
@@ -205,12 +232,12 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
     final isOutOfStock = stockInThisUnit <= 0;
     final label = UnitDisplayFormatter.label(
       unit: unit,
-      units: widget.units,
+      units: allUnits,
       baseUnitName: widget.product.effectiveBaseUnit,
     );
     final conversionHint = UnitDisplayFormatter.conversionHint(
       unit: unit,
-      units: widget.units,
+      units: allUnits,
       baseUnitName: widget.product.effectiveBaseUnit,
     );
 
@@ -290,7 +317,7 @@ class _UnitSelectionSheetState extends State<UnitSelectionSheet> {
                   Row(
                     children: [
                       Text(
-                        AppFormatter.formatCurrency(_getCalculatedUnitPrice(unit)), // 🔥 FIXED: Use calculated price
+                        AppFormatter.formatCurrency(_getCalculatedUnitPrice(unit, allUnits)), // 🔥 FIXED: Use calculated price
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
