@@ -989,6 +989,19 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Widget _buildPesticideForm() {
+    final volumeUnitOptions = ['ml', 'lít', 'chai', 'gói', 'lọ'];
+    String? selectedVolumeUnit;
+    final rawVolumeUnit = _volumeUnitController.text.trim();
+    if (rawVolumeUnit.isNotEmpty) {
+      try {
+        selectedVolumeUnit = volumeUnitOptions.firstWhere(
+          (unit) => unit.toLowerCase() == rawVolumeUnit.toLowerCase(),
+        );
+      } catch (_) {
+        selectedVolumeUnit = null;
+      }
+    }
+
     return Column(
       children: [
         TextFormField(
@@ -1016,11 +1029,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _volumeUnitController.text.isEmpty ? null : _volumeUnitController.text,
+                value: selectedVolumeUnit,
                 decoration: _buildInputDecoration(label: 'Đơn vị *'),
-                items: ['ml', 'lít', 'chai', 'gói', 'lọ'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                items: volumeUnitOptions.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
                 onChanged: (v) => setState(() {
-                  _volumeUnitController.text = v ?? '';
+                  _volumeUnitController.text = v?.trim() ?? '';
                   _hasChanges = true;
                 }),
                 validator: (v) => (v?.isEmpty ?? true) ? 'Chọn đơn vị' : null,
