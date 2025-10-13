@@ -5,6 +5,7 @@ import {
   ProductBatch,
   ProductBatchResult,
   ProductListParams,
+  ProductUnit,
   ProductSearchParams,
   ProductSearchResult,
 } from '@/types/product';
@@ -236,6 +237,138 @@ export const productService = {
     }
 
     return items;
+  },
+
+  getProductUnits: async (productId: string): Promise<ProductUnit[]> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/rpc/get_product_units', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ p_product_id: productId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to fetch product units');
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload) ? (payload as ProductUnit[]) : [];
+  },
+
+  getDefaultUnit: async (productId: string): Promise<ProductUnit | null> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`/api/products/${encodeURIComponent(productId)}/units/default`, { headers });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to fetch default unit');
+    }
+
+    const payload = await response.json();
+    return (payload.item as ProductUnit | null) ?? null;
+  },
+
+  createProductUnit: async (productId: string, payload: Record<string, unknown>): Promise<ProductUnit> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`/api/products/${encodeURIComponent(productId)}/units`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.error ?? 'Failed to create product unit';
+      if (message.includes('product_units_unique_name_per_product')) {
+        throw new Error('Đơn vị đã tồn tại cho sản phẩm này');
+      }
+      throw new Error(message);
+    }
+
+    return response.json();
+  },
+
+  updateProductUnit: async (unitId: string, payload: Record<string, unknown>): Promise<ProductUnit> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`/api/product-units/${encodeURIComponent(unitId)}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to update product unit');
+    }
+
+    return response.json();
+  },
+
+  deleteProductUnit: async (unitId: string): Promise<void> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`/api/product-units/${encodeURIComponent(unitId)}`, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to delete product unit');
+    }
+  },
+
+  setDefaultUnit: async (productId: string, unitId: string): Promise<ProductUnit> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`/api/products/${encodeURIComponent(productId)}/units/${encodeURIComponent(unitId)}`, {
+      method: 'POST',
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to set default unit');
+    }
+
+    return response.json();
+  },
+
+  checkStockAvailability: async (productId: string, quantity: number, unitId: string): Promise<boolean> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/rpc/check_stock_availability', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        p_product_id: productId,
+        p_quantity: quantity,
+        p_unit_id: unitId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to check stock availability');
+    }
+
+    const payload = await response.json();
+    return Boolean(payload);
+  },
+
+  getAvailableStockBaseUnit: async (productId: string): Promise<number> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/rpc/get_available_stock_base_unit', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ p_product_id: productId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error ?? 'Failed to get available stock base unit');
+    }
+
+    const payload = await response.json();
+    return typeof payload === 'number' ? payload : Number(payload ?? 0);
   },
 
   addBatch: async (productId: string, payload: Record<string, unknown>): Promise<ProductBatch> => {

@@ -56,6 +56,18 @@ export type ProductBatchResult = {
   hasNextPage: boolean;
 };
 
+export type ProductUnit = {
+  id: string;
+  product_id: string;
+  store_id: string;
+  unit_name: string;
+  conversion_factor: number;
+  is_default_selling_unit: boolean;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type ExpiringBatch = {
   id: string;
   product_id: string;

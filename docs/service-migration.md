@@ -41,14 +41,14 @@ Tài liệu này liệt kê toàn bộ hàm public trong các service Flutter hi
 - [x] ✅ `getTotalProductsCount()` → GET `/api/products/count`
 
 ## ProductUnitService (`lib/features/products/services/product_unit_service.dart`)
-- [ ] `getProductUnits(productId)` → GET `/api/products/{productId}/units`
-- [ ] `getDefaultUnit(productId)` → GET `/api/products/{productId}/units/default`
-- [ ] `createProductUnit(unit)` → POST `/api/products/{productId}/units`
-- [ ] `updateProductUnit(unit)` → PATCH `/api/product-units/{unitId}`
-- [ ] `deleteProductUnit(unitId)` → DELETE `/api/product-units/{unitId}`
-- [ ] `setDefaultUnit(productId, unitId)` → POST `/api/products/{productId}/units/{unitId}/set-default`
-- [ ] `checkStockAvailability(productId, quantity, unitId)` → POST `/api/rpc/check_stock_availability`
-- [ ] `getAvailableStockBaseUnit(productId)` → POST `/api/rpc/get_available_stock_base_unit`
+- [x] ✅ `getProductUnits(productId)` → GET `/api/products/{productId}/units`
+- [x] ✅ `getDefaultUnit(productId)` → GET `/api/products/{productId}/units/default`
+- [x] ✅ `createProductUnit(unit)` → POST `/api/products/{productId}/units`
+- [x] ✅ `updateProductUnit(unit)` → PATCH `/api/product-units/{unitId}`
+- [x] ✅ `deleteProductUnit(unitId)` → DELETE `/api/product-units/{unitId}`
+- [x] ✅ `setDefaultUnit(productId, unitId)` → POST `/api/products/{productId}/units/{unitId}/set-default`
+- [x] ✅ `checkStockAvailability(productId, quantity, unitId)` → POST `/api/rpc/check_stock_availability`
+- [x] ✅ `getAvailableStockBaseUnit(productId)` → POST `/api/rpc/get_available_stock_base_unit`
 - [ ] `convertToBaseUnit(...)` → *Helper, giữ client-side (không cần API)*
 - [ ] `convertFromBaseUnit(...)` → *Helper, giữ client-side (không cần API)*
 
