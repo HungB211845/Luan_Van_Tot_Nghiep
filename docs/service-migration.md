@@ -53,22 +53,22 @@ Tài liệu này liệt kê toàn bộ hàm public trong các service Flutter hi
 - [ ] `convertFromBaseUnit(...)` → *Helper, giữ client-side (không cần API)*
 
 ## InventoryAdjustmentService (`lib/features/products/services/inventory_adjustment_service.dart`)
-- [ ] `createAdjustment(payload)` → POST `/api/inventory/adjustments`
-- [ ] `voidBatch(batchId, reason)` → POST `/api/inventory/batches/{batchId}/void`
-- [ ] `canEditBatch(batchId)` → GET `/api/inventory/batches/{batchId}/permissions`
-- [ ] `canDeleteBatch(batchId)` → GET `/api/inventory/batches/{batchId}/permissions`
-- [ ] `getBatchAdjustmentHistory(batchId)` → GET `/api/inventory/batches/{batchId}/adjustments`
-- [ ] `getProductAdjustmentHistory(productId)` → GET `/api/inventory/products/{productId}/adjustments`
-- [ ] `incrementBatchSalesCount(batchId, increment)` → POST `/api/rpc/increment_batch_sales_count`
+- [x] ✅ `createAdjustment(payload)` → POST `/api/inventory/adjustments`
+- [x] ✅ `voidBatch(batchId, reason)` → POST `/api/inventory/batches/{batchId}/void`
+- [x] ✅ `canEditBatch(batchId)` → GET `/api/inventory/batches/{batchId}/permissions`
+- [x] ✅ `canDeleteBatch(batchId)` → GET `/api/inventory/batches/{batchId}/permissions`
+- [x] ✅ `getBatchAdjustmentHistory(batchId)` → GET `/api/inventory/batches/{batchId}/adjustments`
+- [x] ✅ `getProductAdjustmentHistory(productId)` → GET `/api/inventory/products/{productId}/adjustments`
+- [x] ✅ `incrementBatchSalesCount(batchId, increment)` → POST `/api/rpc/increment_batch_sales_count`
 
 ## PurchaseOrderService (`lib/features/products/services/purchase_order_service.dart`)
-- [ ] `getPurchaseOrders()` → GET `/api/purchase-orders`
-- [ ] `searchPurchaseOrders(filters)` → POST `/api/rpc/search_purchase_orders`
-- [ ] `getPurchaseOrderDetails(poId)` → GET `/api/purchase-orders/{poId}`
-- [ ] `createPurchaseOrder(order, items)` → POST `/api/purchase-orders`
-- [ ] `updatePurchaseOrderStatus(poId, status)` → PATCH `/api/purchase-orders/{poId}/status`
-- [ ] `receivePurchaseOrder(poId)` → POST `/api/purchase-orders/{poId}/receive`
-- [ ] `getBatchesFromPO(poId)` → GET `/api/purchase-orders/{poId}/batches`
+- [x] ✅ `getPurchaseOrders()` → GET `/api/purchase-orders`
+- [x] ✅ `searchPurchaseOrders(filters)` → POST `/api/rpc/search_purchase_orders`
+- [x] ✅ `getPurchaseOrderDetails(poId)` → GET `/api/purchase-orders/{poId}`
+- [x] ✅ `createPurchaseOrder(order, items)` → POST `/api/purchase-orders`
+- [x] ✅ `updatePurchaseOrderStatus(poId, status)` → PATCH `/api/purchase-orders/{poId}/status`
+- [x] ✅ `receivePurchaseOrder(poId)` → POST `/api/purchase-orders/{poId}/receive`
+- [x] ✅ `getBatchesFromPO(poId)` → GET `/api/purchase-orders/{poId}/batches`
 
 ## CompanyService (`lib/features/products/services/company_service.dart`)
 - [ ] `getCompanies()` → GET `/api/companies`

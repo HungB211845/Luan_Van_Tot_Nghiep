@@ -88,3 +88,15 @@ export type LowStockProduct = {
   current_stock?: number | null;
   company_name?: string | null;
 };
+
+export type InventoryAdjustment = {
+  id: string;
+  batch_id: string;
+  quantity_change: number;
+  reason: string;
+  adjustment_type: string;
+  created_at: string;
+  user_id_who_adjusted?: string | null;
+  store_id: string;
+  notes?: string | null;
+};
