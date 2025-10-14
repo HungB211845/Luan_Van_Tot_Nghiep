@@ -291,15 +291,29 @@ class PurchaseOrderProvider extends ChangeNotifier {
         );
       }
 
+      // Filter by status
+      if (_statusFilters.isNotEmpty) {
+        results = results.where((po) => _statusFilters.contains(po.status)).toList();
+        debugPrint(
+          '🔍 searchPurchaseOrders: after status filter ${results.length} rows',
+        );
+      }
+
       // Sort
       results.sort((a, b) {
         int cmp;
         if (_sortBy == 'total_amount') {
-          cmp = (a.totalAmount).compareTo(b.totalAmount);
+          cmp = a.totalAmount.compareTo(b.totalAmount);
         } else {
           // Default by order_date
           cmp = a.orderDate.compareTo(b.orderDate);
         }
+
+        // If primary sort key is the same, use creation time as a tie-breaker
+        if (cmp == 0) {
+          cmp = b.createdAt.compareTo(a.createdAt); // Newest first
+        }
+
         return _sortAsc ? cmp : -cmp;
       });
 
