@@ -181,6 +181,10 @@ class PurchaseOrderProvider extends ChangeNotifier {
         sortAsc: _sortAsc,
       );
 
+      debugPrint(
+        '🔍 searchPurchaseOrders: fetched ${fetched.length} rows (search="$_searchText", suppliers=${_selectedSupplierIds.join(',')}, statusFilters=${_statusFilters.map((e) => e.name).join(',')})',
+      );
+
       // Apply client-side filtering/sorting as a safety net
       List<PurchaseOrder> results = List.from(fetched);
 
@@ -193,6 +197,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
                   _selectedSupplierIds.contains(po.supplierId),
             )
             .toList();
+        debugPrint(
+          '🔍 searchPurchaseOrders: after supplier filter ${results.length} rows',
+        );
       }
 
       // Filter by date range
@@ -210,6 +217,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
           );
           return od.isAtSameMomentAs(start) || od.isAfter(start);
         }).toList();
+        debugPrint(
+          '🔍 searchPurchaseOrders: after fromDate filter ${results.length} rows',
+        );
       }
       if (_toDate != null) {
         final end = DateTime(_toDate!.year, _toDate!.month, _toDate!.day);
@@ -221,14 +231,23 @@ class PurchaseOrderProvider extends ChangeNotifier {
           );
           return od.isAtSameMomentAs(end) || od.isBefore(end);
         }).toList();
+        debugPrint(
+          '🔍 searchPurchaseOrders: after toDate filter ${results.length} rows',
+        );
       }
 
       // Filter by amount range
       if (_minTotal != null) {
         results = results.where((po) => po.totalAmount >= _minTotal!).toList();
+        debugPrint(
+          '🔍 searchPurchaseOrders: after minTotal filter ${results.length} rows',
+        );
       }
       if (_maxTotal != null) {
         results = results.where((po) => po.totalAmount <= _maxTotal!).toList();
+        debugPrint(
+          '🔍 searchPurchaseOrders: after maxTotal filter ${results.length} rows',
+        );
       }
 
       // Filter by search text (po_number, supplier_name) or exact date (dd/mm/yyyy | dd.mm.yyyy | dd-mm-yyyy)
@@ -267,6 +286,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
           }
           return matchesText;
         }).toList();
+        debugPrint(
+          '🔍 searchPurchaseOrders: after text/date filter ${results.length} rows',
+        );
       }
 
       // Sort
@@ -282,6 +304,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
       });
 
       _purchaseOrders = results;
+      debugPrint(
+        '🔍 searchPurchaseOrders: final ${_purchaseOrders.length} rows, first=${_purchaseOrders.isNotEmpty ? _purchaseOrders.first.poNumber : 'none'}',
+      );
       // Reset pagination on every search
       _visibleCount = _pageSize;
       _setStatus(POStatus.success);
@@ -814,6 +839,11 @@ class PurchaseOrderProvider extends ChangeNotifier {
       );
 
       newPO = await _poService.createPurchaseOrder(order, items);
+      if (newPO != null) {
+        debugPrint(
+          '✅ createPOFromCart: created PO ${newPO.id} (${newPO.poNumber}) status=${newPO.status.name} total=${newPO.totalAmount}',
+        );
+      }
 
       _selectedSupplierId = null;
       for (var item in _poCartItems) {
@@ -821,10 +851,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
       }
       _poCartItems.clear();
       _filteredProducts.clear();
-      _purchaseOrders = await _poService.getPurchaseOrders();
       await _productProvider.refreshAllCache();
-
-      _status = POStatus.success;
+      await searchPurchaseOrders(); // Refresh list view with filters applied
       return newPO;
     } catch (e) {
       _status = POStatus.error;
