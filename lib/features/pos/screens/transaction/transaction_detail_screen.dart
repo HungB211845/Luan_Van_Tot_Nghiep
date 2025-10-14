@@ -31,6 +31,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     });
   }
 
+  @override
+  void didUpdateWidget(covariant TransactionDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.transaction.id != oldWidget.transaction.id) {
+      // A new transaction has been selected in the master-detail view,
+      // so we need to load its specific details.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<ProductProvider>().loadTransactionDetails(widget.transaction.id);
+      });
+    }
+  }
+
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
