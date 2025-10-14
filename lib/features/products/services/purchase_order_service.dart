@@ -31,16 +31,28 @@ class PurchaseOrderService extends BaseService {
   Future<List<PurchaseOrder>> searchPurchaseOrders({
     String? searchText,
     List<String>? supplierIds,
+    Set<PurchaseOrderStatus>? statusFilters,
+    DateTime? fromDate,
+    DateTime? toDate,
+    double? minTotal,
+    double? maxTotal,
     String? sortBy,
     bool? sortAsc,
   }) async {
     try {
-      final response = await _supabase.rpc('search_purchase_orders', params: {
+      final params = {
         'p_search_text': searchText,
         'p_supplier_ids': supplierIds,
+        'p_status_filters': statusFilters?.map((s) => s.name).toList(),
+        'p_from_date': fromDate?.toIso8601String(),
+        'p_to_date': toDate?.toIso8601String(),
+        'p_min_total': minTotal,
+        'p_max_total': maxTotal,
         'p_sort_by': sortBy,
         'p_sort_asc': sortAsc,
-      });
+      };
+
+      final response = await _supabase.rpc('search_purchase_orders', params: params);
       return (response as List)
           .map((json) => PurchaseOrder.fromMap(json))
           .toList();

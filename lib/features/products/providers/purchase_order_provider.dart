@@ -172,155 +172,25 @@ class PurchaseOrderProvider extends ChangeNotifier {
   Future<void> searchPurchaseOrders() async {
     _setStatus(POStatus.loading);
     try {
+      // All filtering and sorting is now done by the database RPC.
       final fetched = await _poService.searchPurchaseOrders(
         searchText: _searchText,
-        supplierIds: _selectedSupplierIds.isNotEmpty
-            ? _selectedSupplierIds
-            : null,
+        supplierIds: _selectedSupplierIds.isNotEmpty ? _selectedSupplierIds : null,
+        statusFilters: _statusFilters.isNotEmpty ? _statusFilters : null,
+        fromDate: _fromDate,
+        toDate: _toDate,
+        minTotal: _minTotal,
+        maxTotal: _maxTotal,
         sortBy: _sortBy,
         sortAsc: _sortAsc,
       );
 
+      _purchaseOrders = fetched;
+
       debugPrint(
-        '🔍 searchPurchaseOrders: fetched ${fetched.length} rows (search="$_searchText", suppliers=${_selectedSupplierIds.join(',')}, statusFilters=${_statusFilters.map((e) => e.name).join(',')})',
+        '🔍 searchPurchaseOrders: RPC returned ${_purchaseOrders.length} rows, first=${_purchaseOrders.isNotEmpty ? _purchaseOrders.first.poNumber : 'none'}',
       );
 
-      // Apply client-side filtering/sorting as a safety net
-      List<PurchaseOrder> results = List.from(fetched);
-
-      // Filter by supplier ids
-      if (_selectedSupplierIds.isNotEmpty) {
-        results = results
-            .where(
-              (po) =>
-                  po.supplierId != null &&
-                  _selectedSupplierIds.contains(po.supplierId),
-            )
-            .toList();
-        debugPrint(
-          '🔍 searchPurchaseOrders: after supplier filter ${results.length} rows',
-        );
-      }
-
-      // Filter by date range
-      if (_fromDate != null) {
-        final start = DateTime(
-          _fromDate!.year,
-          _fromDate!.month,
-          _fromDate!.day,
-        );
-        results = results.where((po) {
-          final od = DateTime(
-            po.orderDate.year,
-            po.orderDate.month,
-            po.orderDate.day,
-          );
-          return od.isAtSameMomentAs(start) || od.isAfter(start);
-        }).toList();
-        debugPrint(
-          '🔍 searchPurchaseOrders: after fromDate filter ${results.length} rows',
-        );
-      }
-      if (_toDate != null) {
-        final end = DateTime(_toDate!.year, _toDate!.month, _toDate!.day);
-        results = results.where((po) {
-          final od = DateTime(
-            po.orderDate.year,
-            po.orderDate.month,
-            po.orderDate.day,
-          );
-          return od.isAtSameMomentAs(end) || od.isBefore(end);
-        }).toList();
-        debugPrint(
-          '🔍 searchPurchaseOrders: after toDate filter ${results.length} rows',
-        );
-      }
-
-      // Filter by amount range
-      if (_minTotal != null) {
-        results = results.where((po) => po.totalAmount >= _minTotal!).toList();
-        debugPrint(
-          '🔍 searchPurchaseOrders: after minTotal filter ${results.length} rows',
-        );
-      }
-      if (_maxTotal != null) {
-        results = results.where((po) => po.totalAmount <= _maxTotal!).toList();
-        debugPrint(
-          '🔍 searchPurchaseOrders: after maxTotal filter ${results.length} rows',
-        );
-      }
-
-      // Filter by search text (po_number, supplier_name) or exact date (dd/mm/yyyy | dd.mm.yyyy | dd-mm-yyyy)
-      final q = _searchText.trim().toLowerCase();
-      DateTime? dateQuery;
-      if (q.isNotEmpty) {
-        // Parse d/m/yyyy with '/', '.' or '-' as separators
-        final reg = RegExp(r'^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$');
-        final m = reg.firstMatch(q);
-        if (m != null) {
-          final d = int.tryParse(m.group(1)!);
-          final mo = int.tryParse(m.group(2)!);
-          final y = int.tryParse(m.group(3)!);
-          if (d != null && mo != null && y != null) {
-            dateQuery = DateTime(y, mo, d);
-          }
-        }
-      }
-      if (q.isNotEmpty) {
-        results = results.where((po) {
-          final poNum = (po.poNumber ?? '').toLowerCase();
-          final supplierName = (po.supplierName ?? '').toLowerCase();
-          final matchesText = poNum.contains(q) || supplierName.contains(q);
-          if (dateQuery != null) {
-            final od = DateTime(
-              po.orderDate.year,
-              po.orderDate.month,
-              po.orderDate.day,
-            );
-            final dq = DateTime(
-              dateQuery!.year,
-              dateQuery!.month,
-              dateQuery!.day,
-            );
-            return od == dq; // exact date match
-          }
-          return matchesText;
-        }).toList();
-        debugPrint(
-          '🔍 searchPurchaseOrders: after text/date filter ${results.length} rows',
-        );
-      }
-
-      // Filter by status
-      if (_statusFilters.isNotEmpty) {
-        results = results.where((po) => _statusFilters.contains(po.status)).toList();
-        debugPrint(
-          '🔍 searchPurchaseOrders: after status filter ${results.length} rows',
-        );
-      }
-
-      // Sort
-      results.sort((a, b) {
-        int cmp;
-        if (_sortBy == 'total_amount') {
-          cmp = a.totalAmount.compareTo(b.totalAmount);
-        } else {
-          // Default by order_date
-          cmp = a.orderDate.compareTo(b.orderDate);
-        }
-
-        // If primary sort key is the same, use creation time as a tie-breaker
-        if (cmp == 0) {
-          cmp = b.createdAt.compareTo(a.createdAt); // Newest first
-        }
-
-        return _sortAsc ? cmp : -cmp;
-      });
-
-      _purchaseOrders = results;
-      debugPrint(
-        '🔍 searchPurchaseOrders: final ${_purchaseOrders.length} rows, first=${_purchaseOrders.isNotEmpty ? _purchaseOrders.first.poNumber : 'none'}',
-      );
       // Reset pagination on every search
       _visibleCount = _pageSize;
       _setStatus(POStatus.success);
@@ -735,6 +605,18 @@ class PurchaseOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _clearAllFilters() {
+    _searchText = '';
+    _selectedSupplierIds = [];
+    _statusFilters.clear();
+    _fromDate = null;
+    _toDate = null;
+    _minTotal = null;
+    _maxTotal = null;
+    _sortBy = 'order_date';
+    _sortAsc = false;
+  }
+
   Future<PurchaseOrder?> createPOFromCart({
     String? notes,
     PurchaseOrderStatus status = PurchaseOrderStatus.draft,
@@ -865,6 +747,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
       }
       _poCartItems.clear();
       _filteredProducts.clear();
+      _clearAllFilters(); // Clear filters before refreshing
       await _productProvider.refreshAllCache();
       await searchPurchaseOrders(); // Refresh list view with filters applied
       return newPO;
