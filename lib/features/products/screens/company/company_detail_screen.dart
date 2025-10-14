@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/responsive.dart';
+import '../../../../shared/utils/input_formatters.dart';
 import '../../models/company.dart';
 import '../../models/product.dart';
 import '../../providers/company_provider.dart';
@@ -170,6 +171,107 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     }
     return products.where((p) => p.category == category).toList();
   }
+
+  Future<void> _showEditPriceDialog(Product product) async {
+    final priceController = TextEditingController(
+      text: AppFormatter.formatNumber(product.currentSellingPrice),
+    );
+    final formKey = GlobalKey<FormState>();
+    final productProvider = context.read<ProductProvider>();
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.0),
+          ),
+          backgroundColor: Colors.white,
+          title: Text('Chỉnh sửa giá bán', style: TextStyle(color: Colors.green[800], fontWeight: FontWeight.bold)),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: priceController,
+              decoration: const InputDecoration(
+                labelText: 'Giá bán mới',
+                prefixText: 'đ ',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                CurrencyInputFormatter(),
+              ],
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Vui lòng nhập giá';
+                }
+                return null;
+              },
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          actions: <Widget>[
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    child: const Text('Hủy'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey[700],
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    child: const Text('Lưu'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () async {
+                      if (formKey.currentState!.validate()) {
+                        final newPrice = double.tryParse(priceController.text.replaceAll('.', '')) ?? 0.0;
+                        
+                        final success = await productProvider.updateProductPrice(
+                          product.id,
+                          newPrice,
+                        );
+
+                        if (!mounted) return;
+
+                        // Force refresh of the product list in CompanyProvider
+                        if (success) {
+                          await context.read<CompanyProvider>().loadCompanyProducts(widget.company.id);
+                        }
+
+                        Navigator.of(dialogContext).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(success
+                                ? 'Cập nhật giá thành công!'
+                                : 'Lỗi: ${productProvider.errorMessage}'),
+                            backgroundColor: success ? Colors.green : Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            )
+          ],
+        );
+      },
+    );
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -467,24 +569,14 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                     ),
                   ),
 
-                  // Quick add to cart button
+                  // Edit price button
                   IconButton(
-                    onPressed: () {
-                      if (!isBanned && stock > 0) {
-                        context.read<ProductProvider>().addToCart(product, 1);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Đã thêm ${product.name} vào giỏ hàng'),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: () => _showEditPriceDialog(product),
                     icon: Icon(
-                      Icons.add_shopping_cart,
-                      color: (!isBanned && stock > 0) ? Colors.green : Colors.grey[400],
+                      Icons.price_change,
+                      color: Colors.blue[700],
                     ),
-                    tooltip: 'Thêm vào giỏ',
+                    tooltip: 'Chỉnh sửa giá bán',
                   ),
                 ],
               ),

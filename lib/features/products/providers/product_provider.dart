@@ -20,6 +20,9 @@ import '../../../services/cache_manager.dart';
 import '../../../services/cached_product_service.dart';
 import '../../../core/config/cache_config.dart';
 
+import '../models/bulk_product_entry.dart';
+
+
 enum ProductStatus { idle, loading, success, error }
 
 class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
@@ -565,6 +568,82 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       _setError(e.toString());
       return null;
     }
+  }
+
+  Future<Map<String, int>> addBulkProducts(List<ProductEntryData> entries, String companyId) async {
+    _setStatus(ProductStatus.loading);
+    int successCount = 0;
+    int errorCount = 0;
+
+    for (final entry in entries) {
+      try {
+        // 1. Create the Product
+        final product = Product(
+          id: '',
+          name: entry.name,
+          category: entry.category,
+          companyId: companyId,
+          storeId: '', // Will be set by service
+          baseUnit: entry.category == ProductCategory.PESTICIDE ? entry.pesticideBaseUnit : 'kg',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          attributes: {},
+        );
+
+        final createdProduct = await _productService.createProduct(product);
+        final now = DateTime.now();
+        final storeId = createdProduct.storeId; // Use the storeId from the created product
+
+        // 2. Create UOMs based on category
+        switch (entry.category) {
+          case ProductCategory.FERTILIZER:
+          case ProductCategory.SEED:
+            // Logic for Fertilizer/Seed: create 'kg' and 'Bao'
+            await _unitService.createProductUnit(ProductUnit(
+              id: '', productId: createdProduct.id, unitName: 'kg', conversionFactor: 1, unitPrice: 0, storeId: storeId, createdAt: now, updatedAt: now
+            ));
+            await _unitService.createProductUnit(ProductUnit(
+              id: '', productId: createdProduct.id, unitName: 'Bao', conversionFactor: 50, unitPrice: 0, isDefaultSellingUnit: true, storeId: storeId, createdAt: now, updatedAt: now
+            ));
+            break;
+          case ProductCategory.PESTICIDE:
+            // Logic for Pesticide
+            final config = packagingDefaults[entry.pesticidePackagingType]!;
+            // Use defaults from user request if values are null
+            final volume = entry.pesticideVolume ?? (entry.pesticideBaseUnit == 'ml' ? 500.0 : 50.0);
+            final quantity = entry.pesticideQuantityPerBox ?? (entry.pesticideBaseUnit == 'ml' ? 20 : 100);
+            final baseUnit = entry.pesticideBaseUnit;
+            
+            final retailUnitName = '${config.displayName} ${volume.toStringAsFixed(0)}$baseUnit';
+            final boxConversionFactor = volume * quantity;
+
+            // Base Unit
+            await _unitService.createProductUnit(ProductUnit(
+              id: '', productId: createdProduct.id, unitName: baseUnit, conversionFactor: 1, unitPrice: 0, storeId: storeId, createdAt: now, updatedAt: now
+            ));
+            // Retail Unit
+            await _unitService.createProductUnit(ProductUnit(
+              id: '', productId: createdProduct.id, unitName: retailUnitName, conversionFactor: volume, unitPrice: 0, isDefaultSellingUnit: true, storeId: storeId, createdAt: now, updatedAt: now
+            ));
+            // Wholesale Unit
+            await _unitService.createProductUnit(ProductUnit(
+              id: '', productId: createdProduct.id, unitName: 'Thùng', conversionFactor: boxConversionFactor, unitPrice: 0, storeId: storeId, createdAt: now, updatedAt: now
+            ));
+            break;
+        }
+        successCount++;
+      } catch (e) {
+        debugPrint('Failed to create bulk product "${entry.name}": $e');
+        errorCount++;
+      }
+    }
+
+    // Invalidate cache and reload products to reflect changes
+    await invalidateCache();
+    await loadProductsPaginated(); 
+
+    _setStatus(ProductStatus.success);
+    return {'success': successCount, 'error': errorCount};
   }
 
   Future<bool> updateProduct(Product product) async {
@@ -2053,6 +2132,31 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       return success;
     } catch (e) {
       _setError('Lỗi cập nhật giá bán: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateProductPrice(String productId, double newPrice) async {
+    try {
+      await _productService.updateCurrentSellingPrice(
+        productId,
+        newPrice,
+        reason: 'Manual update from UI',
+      );
+      // Manually update the price in the local cache/state
+      _currentPrices[productId] = newPrice;
+      final index = _products.indexWhere((p) => p.id == productId);
+      if (index != -1) {
+        _products[index] = _products[index].copyWith(currentSellingPrice: newPrice);
+      }
+      if (_selectedProduct?.id == productId) {
+        _selectedProduct = _selectedProduct!.copyWith(currentSellingPrice: newPrice);
+      }
+      notifyListeners();
+      _clearError();
+      return true;
+    } catch (e) {
+      _setError(e.toString());
       return false;
     }
   }

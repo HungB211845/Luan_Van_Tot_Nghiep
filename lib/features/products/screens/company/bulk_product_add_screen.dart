@@ -7,19 +7,9 @@ import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../../../shared/widgets/loading_overlay.dart';
 
-/// Base unit options for products
-const List<String> kBaseUnits = [
-  'kg',
-  'g',
-  'lít',
-  'ml',
-  'cây',
-  'hộp',
-  'bao',
-  'chai',
-  'viên',
-  'đơn vị',
-];
+import 'package:flutter/cupertino.dart';
+
+import '../../models/bulk_product_entry.dart';
 
 class BulkProductAddScreen extends StatefulWidget {
   final Company company;
@@ -42,7 +32,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
   @override
   void initState() {
     super.initState();
-    // Thêm một entry mặc định
+    // Add a default entry
     _addNewEntry();
   }
 
@@ -53,6 +43,10 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
       newEntry.nameController.addListener(() {
         setState(() {}); // Trigger rebuild to update button text
       });
+      // Add listener to rebuild UOM config when category changes
+      newEntry.categoryNotifier.addListener(() {
+        setState(() {});
+      });
       _productEntries.add(newEntry);
     });
   }
@@ -60,18 +54,18 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
   void _removeEntry(int index) {
     if (_productEntries.length > 1) {
       setState(() {
-        // Remove listener before removing entry
-        _productEntries[index].nameController.removeListener(() {});
+        // Dispose all controllers and notifiers in the entry
+        _productEntries[index].dispose();
         _productEntries.removeAt(index);
       });
     }
   }
 
   Future<void> _saveProducts() async {
-    // Validate tất cả entries
-    final validEntries = _productEntries.where((entry) {
-      return entry.nameController.text.trim().isNotEmpty;
-    }).toList();
+    // 1. Validate entries
+    final validEntries = _productEntries
+        .where((entry) => entry.nameController.text.trim().isNotEmpty)
+        .toList();
 
     if (validEntries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -83,49 +77,47 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
       return;
     }
 
-    // Store context references before any await calls
+    // 2. Get contexts before async gap
     final productProvider = context.read<ProductProvider>();
     final companyProvider = context.read<CompanyProvider>();
     final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-    // Hiển thị confirmation dialog
+    // 3. Show confirmation
     final confirmed = await _showConfirmationDialog(validEntries.length);
     if (!confirmed) return;
 
     setState(() => _isLoading = true);
 
-    int successCount = 0;
-    int errorCount = 0;
-
     try {
-      for (final entry in validEntries) {
-        final product = Product(
-          id: '', // Sẽ được generate bởi database
-          name: entry.nameController.text.trim(),
-          category: entry.selectedCategory,
-          companyId: widget.company.id,
-          attributes: {},
-          isActive: true,
-          isBanned: false,
-          storeId: '', // Sẽ được set bởi service
-          minStockLevel: 0,
-          currentSellingPrice: 0.0,
-          unit: 'kg',
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-          baseUnit: entry.selectedBaseUnit,
-        );
+      // 4. Map UI state to DTOs
+      final List<ProductEntryData> entriesData = validEntries.map((entry) {
+        double? pesticideVolume;
+        int? pesticideQuantity;
 
-        final createdProduct = await productProvider.addProduct(product);
-        if (createdProduct != null) {
-          successCount++;
-        } else {
-          errorCount++;
+        if (entry.categoryNotifier.value == ProductCategory.PESTICIDE) {
+          pesticideVolume =
+              double.tryParse(entry.pesticideVolumeController.text.trim());
+          pesticideQuantity =
+              int.tryParse(entry.pesticideQuantityController.text.trim());
         }
-      }
 
-      // Refresh company products
+        return ProductEntryData(
+          name: entry.nameController.text.trim(),
+          category: entry.categoryNotifier.value,
+          pesticidePackagingType: entry.pesticidePackagingType,
+          pesticideBaseUnit: entry.pesticideBaseUnit,
+          pesticideVolume: pesticideVolume,
+          pesticideQuantityPerBox: pesticideQuantity,
+        );
+      }).toList();
+
+      // 5. Call the new provider method
+      final result = await productProvider.addBulkProducts(entriesData, widget.company.id);
+      final successCount = result['success'] ?? 0;
+      final errorCount = result['error'] ?? 0;
+
+      // 6. Handle result
       if (mounted) {
         await companyProvider.loadCompanyProducts(widget.company.id);
 
@@ -134,7 +126,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
           SnackBar(
             content: Text(
               'Đã thêm $successCount sản phẩm thành công'
-              '${errorCount > 0 ? ', $errorCount lỗi' : ''}',
+              '${errorCount > 0 ? '. Có $errorCount lỗi.' : '.'}',
             ),
             backgroundColor: errorCount > 0 ? Colors.orange : Colors.green,
           ),
@@ -144,7 +136,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
       if (mounted) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text('Lỗi: ${e.toString()}'),
+            content: Text('Lỗi không mong muốn: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -216,7 +208,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Chỉ cần nhập tên sản phẩm và chọn loại. Các thông tin khác có thể cập nhật sau.',
+                    'Nhập tên, chọn loại. Đơn vị sẽ được tự động cấu hình.',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[600],
@@ -244,7 +236,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
+                    color: Colors.black.withOpacity(0.1),
                     offset: const Offset(0, -2),
                     blurRadius: 4,
                   ),
@@ -315,7 +307,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header với số thứ tự và nút xóa
+            // Header with index and remove button
             Row(
               children: [
                 Container(
@@ -349,7 +341,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
 
             SizedBox(height: context.cardSpacing),
 
-            // Tên sản phẩm
+            // Product Name
             TextField(
               controller: entry.nameController,
               decoration: const InputDecoration(
@@ -363,9 +355,9 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
 
             SizedBox(height: context.sectionPadding),
 
-            // Loại sản phẩm
+            // Product Category
             DropdownButtonFormField<ProductCategory>(
-              initialValue: entry.selectedCategory,
+              value: entry.categoryNotifier.value,
               decoration: const InputDecoration(
                 labelText: 'Loại sản phẩm *',
                 border: OutlineInputBorder(),
@@ -388,36 +380,128 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
                 );
               }).toList(),
               onChanged: (value) {
-                setState(() {
-                  entry.selectedCategory = value!;
-                });
+                if (value != null) {
+                  entry.categoryNotifier.value = value;
+                }
               },
             ),
 
-            SizedBox(height: context.sectionPadding),
-
-            // Đơn vị cơ sở
-            DropdownButtonFormField<String>(
-              value: entry.selectedBaseUnit,
-              decoration: const InputDecoration(
-                labelText: 'Đơn vị cơ sở *',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.straighten),
-              ),
-              items: kBaseUnits.map((unit) {
-                return DropdownMenuItem<String>(
-                  value: unit,
-                  child: Text(unit),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  entry.selectedBaseUnit = value!;
-                });
+            // Dynamic UOM Config UI
+            ValueListenableBuilder<ProductCategory>(
+              valueListenable: entry.categoryNotifier,
+              builder: (context, category, child) {
+                if (category == ProductCategory.PESTICIDE) {
+                  return _buildUomConfigUI(entry);
+                }
+                return const SizedBox.shrink();
               },
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // New UI for Pesticide UOM Configuration
+  Widget _buildUomConfigUI(ProductEntry entry) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Quy cách đóng gói (Thuốc BVTV)',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoSlidingSegmentedControl<PesticidePackagingType>(
+              groupValue: entry.pesticidePackagingType,
+              backgroundColor: Colors.grey.shade200,
+              thumbColor: _getCategoryColor(ProductCategory.PESTICIDE),
+              onValueChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    entry.pesticidePackagingType = value;
+                    entry.pesticideBaseUnit = packagingDefaults[value]!.defaultBaseUnit;
+                  });
+                }
+              },
+              children: {
+                for (var type in PesticidePackagingType.values)
+                  type: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      packagingDefaults[type]!.displayName,
+                      style: TextStyle(
+                        color: entry.pesticidePackagingType == type
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    ),
+                  ),
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextFormField(
+                  controller: entry.pesticideVolumeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Dung tích/KL',
+                    hintText: 'ví dụ: 500',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: DropdownButtonFormField<String>(
+                  value: entry.pesticideBaseUnit,
+                  decoration: const InputDecoration(
+                    labelText: 'Đơn vị',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: packagingDefaults[entry.pesticidePackagingType]!
+                      .baseUnits
+                      .map((unit) => DropdownMenuItem(
+                            value: unit,
+                            child: Text(unit),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        entry.pesticideBaseUnit = value;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: entry.pesticideQuantityController,
+            decoration: const InputDecoration(
+              labelText: 'Số lượng/thùng',
+              hintText: 'ví dụ: 20',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.inventory),
+            ),
+            keyboardType: TextInputType.number,
+          ),
+        ],
       ),
     );
   }
@@ -446,7 +530,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
 
   @override
   void dispose() {
-    // Dispose tất cả controllers
+    // Dispose all controllers
     for (final entry in _productEntries) {
       entry.dispose();
     }
@@ -456,10 +540,32 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
 
 class ProductEntry {
   final TextEditingController nameController = TextEditingController();
-  ProductCategory selectedCategory = ProductCategory.FERTILIZER;
-  String selectedBaseUnit = kBaseUnits.first; // Default to 'kg'
+  // Use ValueNotifier to easily rebuild widgets that depend on the category
+  final ValueNotifier<ProductCategory> categoryNotifier =
+      ValueNotifier(ProductCategory.FERTILIZER);
+
+  // State for Pesticide UOM configuration
+  PesticidePackagingType pesticidePackagingType = PesticidePackagingType.bottle;
+  String pesticideBaseUnit = 'ml';
+  final TextEditingController pesticideVolumeController =
+      TextEditingController();
+  final TextEditingController pesticideQuantityController =
+      TextEditingController();
+
+  ProductEntry() {
+    // Set default base unit when category changes to pesticide
+    categoryNotifier.addListener(() {
+      if (categoryNotifier.value == ProductCategory.PESTICIDE) {
+        pesticideBaseUnit =
+            packagingDefaults[pesticidePackagingType]!.defaultBaseUnit;
+      }
+    });
+  }
 
   void dispose() {
     nameController.dispose();
+    categoryNotifier.dispose();
+    pesticideVolumeController.dispose();
+    pesticideQuantityController.dispose();
   }
 }
