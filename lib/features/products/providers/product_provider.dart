@@ -585,6 +585,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
           companyId: companyId,
           storeId: '', // Will be set by service
           baseUnit: entry.category == ProductCategory.PESTICIDE ? entry.pesticideBaseUnit : 'kg',
+          currentSellingPrice: entry.price ?? 0.0, // Use price from DTO
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
           attributes: {},

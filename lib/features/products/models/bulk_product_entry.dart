@@ -44,6 +44,8 @@ class ProductEntryData {
   final double? pesticideVolume;
   final int? pesticideQuantityPerBox;
 
+  final double? price;
+
   ProductEntryData({
     required this.name,
     required this.category,
@@ -51,5 +53,6 @@ class ProductEntryData {
     this.pesticideBaseUnit = 'ml',
     this.pesticideVolume,
     this.pesticideQuantityPerBox,
+    this.price,
   });
 }

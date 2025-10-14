@@ -463,10 +463,10 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     Product product,
     CompanyProvider provider,
   ) {
-    // By watching the ProductProvider here, this card will rebuild whenever the specific
-    // product's stock or price changes in the provider, ensuring the UI is always fresh.
-    final stock = context.watch<ProductProvider>().getProductStock(product.id);
-    final currentPrice = context.watch<ProductProvider>().getCurrentPrice(product.id);
+    // Use the data directly from the product object passed in.
+    // The list is refreshed by CompanyProvider, so this data is fresh.
+    final stock = product.availableStock ?? 0;
+    final currentPrice = product.currentSellingPrice;
 
     final isLowStock = stock <= 10;
     final isBanned = product.isBanned;

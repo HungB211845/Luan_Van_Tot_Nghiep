@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../../shared/utils/input_formatters.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/responsive.dart';
 import '../../models/product.dart';
@@ -102,6 +104,8 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
               int.tryParse(entry.pesticideQuantityController.text.trim());
         }
 
+        final price = double.tryParse(entry.priceController.text.replaceAll('.', ''));
+
         return ProductEntryData(
           name: entry.nameController.text.trim(),
           category: entry.categoryNotifier.value,
@@ -109,6 +113,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
           pesticideBaseUnit: entry.pesticideBaseUnit,
           pesticideVolume: pesticideVolume,
           pesticideQuantityPerBox: pesticideQuantity,
+          price: price,
         );
       }).toList();
 
@@ -396,6 +401,24 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
                 return const SizedBox.shrink();
               },
             ),
+
+            SizedBox(height: context.sectionPadding),
+
+            // Selling Price
+            TextFormField(
+              controller: entry.priceController,
+              decoration: const InputDecoration(
+                labelText: 'Giá bán',
+                hintText: 'Nhập giá bán...',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.attach_money),
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                CurrencyInputFormatter(),
+              ],
+            ),
           ],
         ),
       ),
@@ -540,6 +563,7 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
 
 class ProductEntry {
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController priceController = TextEditingController();
   // Use ValueNotifier to easily rebuild widgets that depend on the category
   final ValueNotifier<ProductCategory> categoryNotifier =
       ValueNotifier(ProductCategory.FERTILIZER);
@@ -564,6 +588,7 @@ class ProductEntry {
 
   void dispose() {
     nameController.dispose();
+    priceController.dispose();
     categoryNotifier.dispose();
     pesticideVolumeController.dispose();
     pesticideQuantityController.dispose();
