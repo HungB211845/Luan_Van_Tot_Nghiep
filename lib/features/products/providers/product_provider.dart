@@ -577,7 +577,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
     for (final entry in entries) {
       try {
-        // 1. Create the Product
+        // 1. Create the Product with a default price of 0
         final product = Product(
           id: '',
           name: entry.name,
@@ -585,7 +585,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
           companyId: companyId,
           storeId: '', // Will be set by service
           baseUnit: entry.category == ProductCategory.PESTICIDE ? entry.pesticideBaseUnit : 'kg',
-          currentSellingPrice: entry.price ?? 0.0, // Use price from DTO
+          currentSellingPrice: 0.0, // Create with 0 price first
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
           attributes: {},
@@ -593,13 +593,21 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
         final createdProduct = await _productService.createProduct(product);
         final now = DateTime.now();
-        final storeId = createdProduct.storeId; // Use the storeId from the created product
+        final storeId = createdProduct.storeId;
 
-        // 2. Create UOMs based on category
+        // 2. If a price was provided, update it properly to create a price history record
+        if (entry.price != null && entry.price! > 0) {
+          await _productService.updateCurrentSellingPrice(
+            createdProduct.id,
+            entry.price!,
+            reason: 'Initial price on bulk add',
+          );
+        }
+
+        // 3. Create UOMs based on category
         switch (entry.category) {
           case ProductCategory.FERTILIZER:
           case ProductCategory.SEED:
-            // Logic for Fertilizer/Seed: create 'kg' and 'Bao'
             await _unitService.createProductUnit(ProductUnit(
               id: '', productId: createdProduct.id, unitName: 'kg', conversionFactor: 1, unitPrice: 0, storeId: storeId, createdAt: now, updatedAt: now
             ));
@@ -608,9 +616,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
             ));
             break;
           case ProductCategory.PESTICIDE:
-            // Logic for Pesticide
             final config = packagingDefaults[entry.pesticidePackagingType]!;
-            // Use defaults from user request if values are null
             final volume = entry.pesticideVolume ?? (entry.pesticideBaseUnit == 'ml' ? 500.0 : 50.0);
             final quantity = entry.pesticideQuantityPerBox ?? (entry.pesticideBaseUnit == 'ml' ? 20 : 100);
             final baseUnit = entry.pesticideBaseUnit;
@@ -618,15 +624,12 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
             final retailUnitName = '${config.displayName} ${volume.toStringAsFixed(0)}$baseUnit';
             final boxConversionFactor = volume * quantity;
 
-            // Base Unit
             await _unitService.createProductUnit(ProductUnit(
               id: '', productId: createdProduct.id, unitName: baseUnit, conversionFactor: 1, unitPrice: 0, storeId: storeId, createdAt: now, updatedAt: now
             ));
-            // Retail Unit
             await _unitService.createProductUnit(ProductUnit(
               id: '', productId: createdProduct.id, unitName: retailUnitName, conversionFactor: volume, unitPrice: 0, isDefaultSellingUnit: true, storeId: storeId, createdAt: now, updatedAt: now
             ));
-            // Wholesale Unit
             await _unitService.createProductUnit(ProductUnit(
               id: '', productId: createdProduct.id, unitName: 'Thùng', conversionFactor: boxConversionFactor, unitPrice: 0, storeId: storeId, createdAt: now, updatedAt: now
             ));
@@ -639,7 +642,6 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       }
     }
 
-    // Invalidate cache and reload products to reflect changes
     await invalidateCache();
     await loadProductsPaginated(); 
 

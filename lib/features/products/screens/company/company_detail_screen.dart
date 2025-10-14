@@ -146,12 +146,17 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     );
   }
 
-  void _addBulkProducts(Company company) {
-    Navigator.of(context, rootNavigator: true).push(
+  void _addBulkProducts(Company company) async {
+    final result = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute(
         builder: (context) => BulkProductAddScreen(company: company),
       ),
     );
+
+    // If the screen was popped with a `true` result, reload the data.
+    if (result == true && mounted) {
+      context.read<CompanyProvider>().loadCompanyProducts(company.id);
+    }
   }
 
   List<Product> _getFilteredProducts(List<Product> products) {

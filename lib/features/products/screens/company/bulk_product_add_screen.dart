@@ -124,9 +124,8 @@ class _BulkProductAddScreenState extends State<BulkProductAddScreen> {
 
       // 6. Handle result
       if (mounted) {
-        await companyProvider.loadCompanyProducts(widget.company.id);
-
-        navigator.pop();
+        // Pop with a result to indicate success; the calling screen will handle the refresh.
+        navigator.pop(true); 
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(

@@ -22,6 +22,27 @@ extension ProductCategoryExtension on ProductCategory {
   }
 }
 
+Map<String, dynamic> _parseAttributes(dynamic attributes) {
+  if (attributes == null) {
+    return {};
+  }
+  if (attributes is Map<String, dynamic>) {
+    return attributes;
+  }
+  if (attributes is String) {
+    try {
+      final decoded = jsonDecode(attributes);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } catch (e) {
+      // Ignore if parsing fails
+    }
+  }
+  // Return empty map for any other invalid type (like List)
+  return {};
+}
+
 class Product {
   final String id;
   final String? sku;
@@ -80,9 +101,7 @@ class Product {
         (e) => e.toString().split('.').last == json['category'],
       ),
       companyId: json['company_id'],
-      attributes: json['attributes'] is String
-          ? jsonDecode(json['attributes'])
-          : json['attributes'] ?? {},
+      attributes: _parseAttributes(json['attributes']),
       isActive: json['is_active'] ?? true,
       isBanned: json['is_banned'] ?? false,
       imageUrl: json['image_url'],
