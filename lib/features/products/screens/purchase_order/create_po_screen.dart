@@ -28,8 +28,9 @@ class CreatePurchaseOrderScreen extends StatefulWidget {
 
 class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   final _notesController = TextEditingController();
+  bool _isCreatingPO = false; // Add this line
   // 🔥 FIX: Cache the futures to prevent re-fetching in build method
-  final Map<String, Future<List<dynamic>>> _unitFutures = {};
+  final Map<String, Future<List<ProductUnit>>> _unitFutures = {};
 
   @override
   void initState() {
@@ -83,59 +84,31 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     );
   }
 
+  Future<List<ProductUnit>> _getUnits(BuildContext context, String productId) {
+    if (!_unitFutures.containsKey(productId)) {
+      _unitFutures[productId] = context
+          .read<ProductProvider>()
+          .getProductUnits(productId, forceRefresh: false); // No force refresh
+    }
+    return _unitFutures[productId]!;
+  }
+
   Widget _buildUnitDropdown(POCartItem item, PurchaseOrderProvider poProvider) {
     return FutureBuilder<List<ProductUnit>>(
-      future: context
-          .read<ProductProvider>()
-          .getProductUnits(item.product.id, forceRefresh: true),
+      future: _getUnits(context, item.product.id), // Use cached future
       builder: (context, snapshot) {
-        List<String> unitOptions;
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final units = snapshot.data ?? [];
+        final unitOptions = units.map((u) => u.unitName).toList();
         String? currentUnit = item.unit;
-        final units = snapshot.data ?? const <ProductUnit>[];
-        final bool hideBaseUnit = item.product.category == ProductCategory.PESTICIDE && units.length > 1;
-        final baseUnit = hideBaseUnit ? UnitDisplayFormatter.baseUnit(units) : null;
-        List<ProductUnit> filteredUnits = units;
-        if (baseUnit != null) {
-          final tmp = units.where((u) => u.id != baseUnit.id).toList();
-          if (tmp.isNotEmpty) {
-            filteredUnits = tmp;
-          }
-        }
 
-        if (snapshot.connectionState == ConnectionState.done && filteredUnits.isNotEmpty) {
-          // Đã có dữ liệu thật từ database
-          unitOptions = filteredUnits.map((unit) => unit.unitName).toList();
-          if (currentUnit != null && !unitOptions.contains(currentUnit)) {
-            final fallbackUnit = filteredUnits.first;
-            final fallbackName = fallbackUnit.unitName;
-            currentUnit = fallbackName;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                poProvider.updatePOCartItem(
-                  item.product.id,
-                  newUnit: fallbackName,
-                  newUnitId: fallbackUnit.id,
-                );
-              }
-            });
-          }
-        } else {
-          // Đang tải hoặc lỗi, dùng danh sách tạm thời
-          unitOptions = _getUnitListForCategory(item.product.category);
-          if (currentUnit != null && !unitOptions.contains(currentUnit)) {
-            unitOptions.insert(0, currentUnit);
-          }
-        }
-
-        // Chỉ đặt giá trị mặc định nếu item chưa có unit
-        if (currentUnit == null && unitOptions.isNotEmpty) {
-          currentUnit = unitOptions.first;
-          // Cập nhật lại state của provider trong frame tiếp theo
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-               poProvider.updatePOCartItem(item.product.id, newUnit: currentUnit);
-            }
-          });
+        // Basic validation if current unit is valid
+        if (currentUnit == null || !unitOptions.contains(currentUnit)) {
+          currentUnit = units.isNotEmpty ? units.first.unitName : null;
         }
 
         final baseUnitLabel = units.isNotEmpty
@@ -147,53 +120,30 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
 
         return DropdownButtonFormField<String>(
           value: currentUnit,
-          isExpanded: true, // 🔥 FIX: Force dropdown to expand and prevent overflow
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Đơn vị',
             border: const OutlineInputBorder(),
-            helperText: snapshot.connectionState == ConnectionState.waiting 
-                ? 'Đang tải đơn vị...' 
-                : 'Hệ thống sẽ tự chuyển đổi sang $baseUnitLabel',
+            helperText: 'Hệ thống sẽ tự chuyển đổi sang $baseUnitLabel',
           ),
-          items: unitOptions.map((String unitName) {
-            String displayText = unitName;
-
-            if (units.isNotEmpty) {
-              ProductUnit? unitObj;
-              try {
-                unitObj = units.firstWhere((u) => u.unitName == unitName);
-              } catch (_) {
-                unitObj = null;
-              }
-              if (unitObj != null) {
-                displayText = UnitDisplayFormatter.label(
-                  unit: unitObj,
-                  units: units,
-                  baseUnitName: baseUnitLabel,
-                );
-              }
-            }
-
+          items: units.map((ProductUnit unit) {
+            final displayText = UnitDisplayFormatter.label(
+              unit: unit,
+              units: units,
+              baseUnitName: baseUnitLabel,
+            );
             return DropdownMenuItem<String>(
-              value: unitName,
-              child: Text(displayText, overflow: TextOverflow.ellipsis), // Add overflow protection
+              value: unit.unitName,
+              child: Text(displayText, overflow: TextOverflow.ellipsis),
             );
           }).toList(),
           onChanged: (String? newValue) {
             if (newValue != null) {
-              String? unitId;
-              if (units.isNotEmpty) {
-                try {
-                  final unitObj = units.firstWhere((u) => u.unitName == newValue);
-                  unitId = unitObj.id;
-                } catch (_) {
-                  unitId = null;
-                }
-              }
+              final selectedUnit = units.firstWhere((u) => u.unitName == newValue);
               poProvider.updatePOCartItem(
                 item.product.id,
                 newUnit: newValue,
-                newUnitId: unitId,
+                newUnitId: selectedUnit.id,
               );
             }
           },
@@ -838,8 +788,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   Widget _buildActionButtons(PurchaseOrderProvider poProvider) {
     final hasSupplier = poProvider.selectedSupplierId != null;
     final hasItems = poProvider.poCartItems.isNotEmpty;
-    final canSend =
-        hasSupplier && hasItems; // Only disable if truly can't proceed
+    final canSend = hasSupplier && hasItems && !_isCreatingPO;
 
     return Column(
       children: [
@@ -850,46 +799,46 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           child: ElevatedButton(
             onPressed: canSend
                 ? () async {
-                    final newPO = await poProvider.createPOFromCart(
-                      notes: _notesController.text,
-                      status: PurchaseOrderStatus.sent,
-                    );
-                    if (newPO != null) {
-                      // Clear everything after successful PO creation
-                      poProvider.clearPOCartAndSupplier();
-                      Navigator.of(context).pop();
-                      Navigator.of(context).pushNamed(
-                        RouteNames.purchaseOrderDetail,
-                        arguments: newPO,
+                    setState(() => _isCreatingPO = true);
+                    try {
+                      final newPO = await poProvider.createPOFromCart(
+                        notes: _notesController.text,
+                        status: PurchaseOrderStatus.sent,
                       );
-                      // Show success message (simplified - no quick confirm action)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              const Icon(
-                                Icons.check_circle,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'Đã gửi đơn nhập hàng thành công',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
+                      if (newPO != null && mounted) {
+                        poProvider.clearPOCartAndSupplier();
+                        Navigator.of(context).pop();
+                        Navigator.of(context).pushNamed(
+                          RouteNames.purchaseOrderDetail,
+                          arguments: newPO,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Đã gửi đơn nhập hàng thành công',
+                                    style: TextStyle(fontWeight: FontWeight.w600),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
+                            backgroundColor: Colors.green,
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 3),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
-                          backgroundColor: Colors.green,
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 3), // 🔥 REDUCED: Shorter duration
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          // 🔥 REMOVED: action SnackBarAction with "XÁC NHẬN NHANH"
-                        ),
-                      );
+                        );
+                      }
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isCreatingPO = false);
+                      }
                     }
                   }
                 : null,
@@ -906,55 +855,64 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.send,
-                  size: 20,
-                  color: canSend ? Colors.white : Colors.grey[500],
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  canSend
-                      ? 'Gửi Đơn Hàng'
-                      : (!hasSupplier
-                            ? 'Chọn nhà cung cấp trước'
-                            : 'Thêm sản phẩm trước'),
-                  style: TextStyle(
-                    fontSize: canSend ? 18 : 16,
-                    fontWeight: FontWeight.w600,
+            child: _isCreatingPO
+                ? const SizedBox(
+                    width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.send,
+                        size: 20,
+                        color: canSend ? Colors.white : Colors.grey[500],
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        canSend
+                            ? 'Gửi Đơn Hàng'
+                            : (!hasSupplier
+                                  ? 'Chọn nhà cung cấp trước'
+                                  : 'Thêm sản phẩm trước'),
+                        style: TextStyle(
+                          fontSize: canSend ? 18 : 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
 
         const SizedBox(height: 12),
 
         // Secondary Action - Lưu Nháp (subtle text button)
-        if (hasItems) // Only show save draft if there's something to save
+        if (hasItems && !_isCreatingPO) // Only show save draft if not creating
           TextButton(
             onPressed: () async {
-              final newPO = await poProvider.createPOFromCart(
-                notes: _notesController.text,
-                status: PurchaseOrderStatus.draft,
-              );
-              if (newPO != null) {
-                // Clear everything after successful draft save
-                poProvider.clearPOCartAndSupplier();
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Đã lưu đơn hàng nháp'),
-                    backgroundColor: Colors.grey[600],
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
+              setState(() => _isCreatingPO = true);
+              try {
+                final newPO = await poProvider.createPOFromCart(
+                  notes: _notesController.text,
+                  status: PurchaseOrderStatus.draft,
                 );
+                if (newPO != null && mounted) {
+                  poProvider.clearPOCartAndSupplier();
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Đã lưu đơn hàng nháp'),
+                      backgroundColor: Colors.grey[600],
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                }
+              } finally {
+                if (mounted) {
+                  setState(() => _isCreatingPO = false);
+                }
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.grey[600]),

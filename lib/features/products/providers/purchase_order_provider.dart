@@ -702,113 +702,137 @@ class PurchaseOrderProvider extends ChangeNotifier {
   }) async {
     final validItems = validPOCartItems;
     if (_selectedSupplierId == null || validItems.isEmpty) {
-      _setError(
-        'Vui lòng chọn nhà cung cấp và thêm sản phẩm có số lượng > 0 vào đơn hàng',
-      );
+      _status = POStatus.error;
+      _errorMessage =
+          'Vui lòng chọn nhà cung cấp và thêm sản phẩm có số lượng > 0 vào đơn hàng';
+      notifyListeners();
       return null;
     }
 
-    _setStatus(POStatus.loading);
+    if (_status == POStatus.loading) return null; // Prevent re-entrant calls
 
-    final order = PurchaseOrder(
-      id: '', // Handled by DB
-      supplierId: _selectedSupplierId!,
-      orderDate: DateTime.now(),
-      status: status,
-      notes: notes,
-      totalAmount: poCartTotal,
-      subtotal: poCartTotal,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      storeId: BaseService.getDefaultStoreId(),
-    );
+    _status = POStatus.loading;
+    _errorMessage = '';
 
-    // 🔥 NEW: Process items with unit conversion and selling price updates
-    final items = <PurchaseOrderItem>[];
-    
-    for (final cartItem in validItems) {
-      // 🔥 NEW: Convert quantity to base unit if unitId is available
-      int baseQuantity = cartItem.quantity; // Default to input quantity
-      
-      if (cartItem.unitId != null) {
-        try {
-          final units = await _productProvider.getProductUnits(cartItem.product.id);
-          final selectedUnit = units.firstWhere(
-            (u) => u.id == cartItem.unitId,
-            orElse: () => units.isNotEmpty ? units.first : ProductUnit( // 🔥 FIX: Return actual ProductUnit
-              id: '',
-              productId: cartItem.product.id,
-              unitName: cartItem.product.effectiveBaseUnit,
-              conversionFactor: 1.0,
-              unitPrice: 0,
-              isDefaultSellingUnit: false,
-              isActive: true,
-              storeId: '',
-              createdAt: DateTime.now(),
-              updatedAt: DateTime.now(),
-            ),
-          );
-          
-          if (selectedUnit.conversionFactor > 0) { // 🔥 FIX: Remove null check
-            // Convert: input quantity × conversion factor = base quantity
-            // Example: 50 Bao × 50 kg/Bao = 2500 kg (base unit)
-            baseQuantity = (cartItem.quantity * selectedUnit.conversionFactor).toInt();
-            print('DEBUG: PO Unit Conversion - ${cartItem.quantity} ${cartItem.unit} → ${baseQuantity} base units');
-          }
-        } catch (e) {
-          print('Warning: Could not convert units for ${cartItem.product.name}: $e');
-          // Continue with original quantity if conversion fails
-        }
-      }
-
-      // 🔥 NEW: Update product selling price if changed
-      if (cartItem.sellingPrice != null && 
-          cartItem.sellingPrice! > 0 && 
-          cartItem.sellingPrice! != cartItem.product.currentSellingPrice) {
-        try {
-          await _productService.updateCurrentSellingPrice(
-            cartItem.product.id,
-            cartItem.sellingPrice!,
-            reason: 'Updated via Purchase Order creation',
-          );
-          print('DEBUG: Updated selling price for ${cartItem.product.name}: ${cartItem.sellingPrice}');
-        } catch (e) {
-          print('Warning: Could not update selling price for ${cartItem.product.name}: $e');
-          // Continue with PO creation even if price update fails
-        }
-      }
-
-      // Create PO item with converted quantity
-      items.add(PurchaseOrderItem(
-        id: '', // Handled by DB
-        purchaseOrderId: '', // Handled by service
-        productId: cartItem.product.id,
-        quantity: baseQuantity, // 🔥 CRITICAL: Use converted base quantity
-        unitCost: cartItem.unitCost,
-        sellingPrice: cartItem.sellingPrice ?? cartItem.product.currentSellingPrice,
-        unit: cartItem.unit,
-        totalCost: cartItem.quantity * cartItem.unitCost, // Keep original calculation for PO total
-        createdAt: DateTime.now(),
-        storeId: BaseService.getDefaultStoreId(),
-        notes: cartItem.unitId != null 
-            ? 'Unit conversion: ${cartItem.quantity} ${cartItem.unit} → ${baseQuantity} base units'
-            : null,
-      ));
-    }
-
+    PurchaseOrder? newPO;
     try {
-      final newPO = await _poService.createPurchaseOrder(order, items);
-      clearPOCart();
-      await loadPurchaseOrders(); // Refresh the list
-      
-      // 🔥 NEW: Refresh product provider to reflect selling price updates
+      final items = <PurchaseOrderItem>[];
+      double computedSubtotal = 0.0;
+
+      for (final cartItem in validItems) {
+        int baseQuantity = cartItem.quantity;
+        double baseUnitCost = cartItem.unitCost;
+        String unitName = cartItem.unit ?? cartItem.product.effectiveBaseUnit;
+
+        if (cartItem.unitId != null) {
+          try {
+            final units =
+                await _productProvider.getProductUnits(cartItem.product.id);
+            final selectedUnit = units.firstWhere(
+              (u) => u.id == cartItem.unitId,
+              orElse: () => units.isNotEmpty
+                  ? units.first
+                  : ProductUnit(
+                      id: '',
+                      productId: cartItem.product.id,
+                      unitName: cartItem.product.effectiveBaseUnit,
+                      conversionFactor: 1.0,
+                      unitPrice: 0,
+                      isDefaultSellingUnit: false,
+                      isActive: true,
+                      storeId: '',
+                      createdAt: DateTime.now(),
+                      updatedAt: DateTime.now(),
+                    ),
+            );
+            
+            if (selectedUnit.conversionFactor > 0) {
+              final convertedQuantity =
+                  cartItem.quantity * selectedUnit.conversionFactor;
+              baseQuantity = convertedQuantity.round();
+              baseUnitCost = cartItem.unitCost / selectedUnit.conversionFactor;
+              unitName =
+                  cartItem.product.effectiveBaseUnit; // Store using base unit
+              debugPrint(
+                  'DEBUG: PO Unit Conversion - ${cartItem.quantity} ${cartItem.unit} → ${convertedQuantity.toStringAsFixed(2)} base units (stored as $baseQuantity)');
+            }
+          } catch (e) {
+            debugPrint(
+                'Warning: Could not convert units for ${cartItem.product.name}: $e');
+          }
+        }
+
+        if (cartItem.sellingPrice != null &&
+            cartItem.sellingPrice! > 0 &&
+            cartItem.sellingPrice! != cartItem.product.currentSellingPrice) {
+          try {
+            await _productService.updateCurrentSellingPrice(
+              cartItem.product.id,
+              cartItem.sellingPrice!,
+              reason: 'Updated via Purchase Order creation',
+            );
+            debugPrint(
+                'DEBUG: Updated selling price for ${cartItem.product.name}: ${cartItem.sellingPrice}');
+          } catch (e) {
+            debugPrint(
+                'Warning: Could not update selling price for ${cartItem.product.name}: $e');
+          }
+        }
+
+        final double totalCost = baseQuantity * baseUnitCost;
+        computedSubtotal += totalCost;
+
+        items.add(PurchaseOrderItem(
+          id: '',
+          purchaseOrderId: '',
+          productId: cartItem.product.id,
+          quantity: baseQuantity,
+          unitCost: baseUnitCost,
+          sellingPrice:
+              cartItem.sellingPrice ?? cartItem.product.currentSellingPrice,
+          unit: unitName,
+          totalCost: totalCost,
+          createdAt: DateTime.now(),
+          storeId: BaseService.getDefaultStoreId(),
+          notes: cartItem.unitId != null
+              ? 'Unit conversion: ${cartItem.quantity} ${cartItem.unit} @ ${AppFormatter.formatNumber(cartItem.unitCost)} → $baseQuantity $unitName @ ${AppFormatter.formatNumber(baseUnitCost)}'
+              : null,
+        ));
+      }
+
+      final order = PurchaseOrder(
+        id: '', // Handled by DB
+        supplierId: _selectedSupplierId!,
+        orderDate: DateTime.now(),
+        status: status,
+        notes: notes,
+        totalAmount: computedSubtotal,
+        subtotal: computedSubtotal,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        storeId: BaseService.getDefaultStoreId(),
+      );
+
+      newPO = await _poService.createPurchaseOrder(order, items);
+
+      _selectedSupplierId = null;
+      for (var item in _poCartItems) {
+        item.dispose();
+      }
+      _poCartItems.clear();
+      _filteredProducts.clear();
+      _purchaseOrders = await _poService.getPurchaseOrders();
       await _productProvider.refreshAllCache();
-      
-      _setStatus(POStatus.success);
+
+      _status = POStatus.success;
       return newPO;
     } catch (e) {
-      _setError(e.toString());
+      _status = POStatus.error;
+      _errorMessage = e.toString();
+      debugPrint('❌ createPOFromCart failed: $e');
       return null;
+    } finally {
+      notifyListeners();
     }
   }
 
