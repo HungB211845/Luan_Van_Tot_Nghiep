@@ -335,6 +335,10 @@ class PurchaseOrderProvider extends ChangeNotifier {
   }
 
   Future<void> loadPODetails(String poId) async {
+    // Clear previously selected order to avoid flashing stale data while loading.
+    _selectedPO = null;
+    _selectedPOItems = [];
+    _batchesForPO = [];
     _setStatus(POStatus.loading);
     try {
       final details = await _poService.getPurchaseOrderDetails(poId);
