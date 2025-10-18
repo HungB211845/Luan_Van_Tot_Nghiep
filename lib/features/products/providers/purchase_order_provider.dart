@@ -18,6 +18,16 @@ import '../../../shared/utils/formatter.dart'; // 🔥 ADD: For proper formattin
 // Trạng thái cho giỏ hàng nhập
 enum PricingUnitSelection { container, base }
 
+class FormattedQuantity {
+  final String display;
+  final String? conversionNote;
+
+  const FormattedQuantity({
+    required this.display,
+    this.conversionNote,
+  });
+}
+
 class POCartItem {
   final Product product;
   int quantity;
@@ -454,42 +464,19 @@ class PurchaseOrderProvider extends ChangeNotifier {
     }
   }
 
-  String formatItemQuantity(PurchaseOrderItem item) {
-    final units = _productUnitsById[item.productId];
-    if (units != null && units.isNotEmpty) {
-      final defaultUnit = units.firstWhere(
-        (u) => u.isDefaultSellingUnit,
-        orElse: () => units.first,
-      );
-      if (defaultUnit.conversionFactor > 0) {
-        final qty = item.quantity / defaultUnit.conversionFactor;
-        final formatted = _formatQuantity(qty);
-        return '$formatted ${defaultUnit.unitName}';
-      }
-    }
-
-    final unitName = item.unit;
-    if (unitName == null || unitName.isEmpty) {
-      return _formatQuantity(item.quantity.toDouble());
-    }
-    return '${_formatQuantity(item.quantity.toDouble())} $unitName';
+  FormattedQuantity formatItemQuantity(PurchaseOrderItem item) {
+    return _formatQuantityForProduct(
+      productId: item.productId,
+      baseQuantity: item.quantity,
+      fallbackUnitName: item.unit,
+    );
   }
 
-  String formatBatchQuantity(ProductBatch batch) {
-    final units = _productUnitsById[batch.productId];
-    if (units != null && units.isNotEmpty) {
-      // Prefer default selling unit
-      final defaultUnit = units.firstWhere(
-        (u) => u.isDefaultSellingUnit,
-        orElse: () => units.first,
-      );
-      if (defaultUnit.conversionFactor > 0) {
-        final qty = batch.quantity / defaultUnit.conversionFactor;
-        final formatted = _formatQuantity(qty);
-        return '$formatted ${defaultUnit.unitName}';
-      }
-    }
-    return _formatQuantity(batch.quantity.toDouble());
+  FormattedQuantity formatBatchQuantity(ProductBatch batch) {
+    return _formatQuantityForProduct(
+      productId: batch.productId,
+      baseQuantity: batch.quantity,
+    );
   }
 
   String _formatQuantity(double value) {
@@ -501,6 +488,196 @@ class PurchaseOrderProvider extends ChangeNotifier {
           RegExp(r'\.$'),
           '',
         );
+  }
+
+  FormattedQuantity _formatQuantityForProduct({
+    required String productId,
+    required int baseQuantity,
+    String? fallbackUnitName,
+  }) {
+    final units = _productUnitsById[productId];
+    if (units != null && units.isNotEmpty) {
+      final List<ProductUnit> positiveUnits = units
+          .where((u) => u.conversionFactor > 0)
+          .toList()
+        ..sort(
+          (a, b) => b.conversionFactor.compareTo(a.conversionFactor),
+        );
+
+      if (positiveUnits.isNotEmpty) {
+        final ProductUnit baseUnit = positiveUnits.reduce(
+          (value, element) =>
+              element.conversionFactor < value.conversionFactor
+                  ? element
+                  : value,
+        );
+
+        final List<ProductUnit> containerUnits =
+            positiveUnits.where((u) => u != baseUnit).toList();
+
+        ProductUnit chosenUnit = baseUnit;
+        double quantityInChosen =
+            baseQuantity / chosenUnit.conversionFactor;
+
+        if (containerUnits.isNotEmpty) {
+          ProductUnit? divisibleUnit;
+          double? divisibleQty;
+          for (final unit in containerUnits) {
+            final double raw = baseQuantity / unit.conversionFactor;
+            if (_isWhole(raw)) {
+              divisibleUnit = unit;
+              divisibleQty = raw;
+              break;
+            }
+          }
+          chosenUnit = divisibleUnit ?? containerUnits.first;
+          quantityInChosen =
+              divisibleQty ?? (baseQuantity / chosenUnit.conversionFactor);
+        }
+
+        final ProductUnit noteUnit = _selectNoteUnit(
+          units: positiveUnits,
+          chosenUnit: chosenUnit,
+          baseUnit: baseUnit,
+        );
+
+        if (chosenUnit == baseUnit) {
+          return FormattedQuantity(
+            display: _formatUnitQuantityWithName(quantityInChosen, baseUnit),
+          );
+        }
+
+        final double chosenFactor = chosenUnit.conversionFactor;
+        final int wholePortion = (baseQuantity / chosenFactor).floor();
+
+        if (wholePortion == 0) {
+          final double baseCount =
+              baseQuantity / noteUnit.conversionFactor;
+          return FormattedQuantity(
+            display: _formatUnitQuantityWithName(baseCount, noteUnit),
+            conversionNote: _buildConversionNote(
+              chosenUnit: chosenUnit,
+              noteUnit: noteUnit,
+            ),
+          );
+        }
+
+        final double remainderBaseUnits =
+            baseQuantity - (wholePortion * chosenFactor);
+        final double remainderInNoteUnit =
+            remainderBaseUnits / noteUnit.conversionFactor;
+        final bool hasRemainder =
+            !_isWhole(quantityInChosen) && remainderBaseUnits > 0;
+
+        String display;
+        if (!hasRemainder) {
+          display =
+              '${_formatQuantity(quantityInChosen)} ${chosenUnit.unitName}';
+        } else if (remainderInNoteUnit > 0) {
+          final String remainderLabel = _isWhole(remainderInNoteUnit)
+              ? _formatUnitQuantityWithName(remainderInNoteUnit, noteUnit)
+              : _formatUnitQuantityWithName(
+                  remainderBaseUnits / baseUnit.conversionFactor,
+                  baseUnit,
+                );
+          display =
+              '${_formatQuantity(wholePortion.toDouble())} ${chosenUnit.unitName} + $remainderLabel';
+        } else {
+          display =
+              '${_formatQuantity(quantityInChosen)} ${chosenUnit.unitName}';
+        }
+
+        final String? note = _buildConversionNote(
+          chosenUnit: chosenUnit,
+          noteUnit: noteUnit,
+        );
+
+        return FormattedQuantity(
+          display: display,
+          conversionNote: note,
+        );
+      }
+    }
+
+    final String display = (fallbackUnitName != null &&
+            fallbackUnitName.isNotEmpty)
+        ? '${_formatQuantity(baseQuantity.toDouble())} $fallbackUnitName'
+        : _formatQuantity(baseQuantity.toDouble());
+
+    return FormattedQuantity(display: display);
+  }
+
+  bool _isWhole(double value) {
+    return (value - value.round()).abs() < 1e-4;
+  }
+
+  ProductUnit _selectNoteUnit({
+    required List<ProductUnit> units,
+    required ProductUnit chosenUnit,
+    required ProductUnit baseUnit,
+  }) {
+    final candidates = units
+        .where((u) =>
+            u.conversionFactor <= chosenUnit.conversionFactor &&
+            u.conversionFactor > 0)
+        .toList()
+      ..sort((a, b) => a.conversionFactor.compareTo(b.conversionFactor));
+
+    ProductUnit? preferred = candidates.firstWhere(
+      (u) => u != chosenUnit && _looksLikePack(u.unitName),
+      orElse: () => baseUnit,
+    );
+
+    if (preferred == chosenUnit) {
+      preferred = baseUnit;
+    }
+
+    return preferred ?? baseUnit;
+  }
+
+  String _formatUnitQuantityWithName(double quantity, ProductUnit unit) {
+    final String formattedQuantity = _formatQuantity(quantity);
+    final lower = unit.unitName.trim().toLowerCase();
+
+    if (lower == 'ml') {
+      final double liters = quantity / 1000;
+      if (liters >= 1 && _isWhole(liters)) {
+        return '${_formatQuantity(liters)} L';
+      }
+    }
+    if (lower == 'g') {
+      final double kilograms = quantity / 1000;
+      if (kilograms >= 1 && _isWhole(kilograms)) {
+        return '${_formatQuantity(kilograms)} kg';
+      }
+    }
+
+    return '$formattedQuantity ${unit.unitName}';
+  }
+
+  bool _looksLikePack(String name) {
+    final lower = name.toLowerCase();
+    return lower.contains('gói') ||
+        lower.contains('chai') ||
+        lower.contains('lọ') ||
+        lower.contains('hộp') ||
+        lower.contains('bao') ||
+        lower.contains('túi') ||
+        lower.contains('bịch') ||
+        RegExp(r'\d').hasMatch(lower);
+  }
+
+  String? _buildConversionNote({
+    required ProductUnit chosenUnit,
+    required ProductUnit noteUnit,
+  }) {
+    if (chosenUnit == noteUnit) {
+      return null;
+    }
+    final double ratio =
+        chosenUnit.conversionFactor / noteUnit.conversionFactor;
+    final String formatted = _formatUnitQuantityWithName(ratio, noteUnit);
+    return '(1 ${chosenUnit.unitName} = $formatted)';
   }
 
   // Get product IDs from PO items for inventory refresh

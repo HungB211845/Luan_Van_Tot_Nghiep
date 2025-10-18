@@ -273,7 +273,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         ? item.productName!
         : 'Sản phẩm: ${item.productId}';
 
-    final quantityLabel = provider.formatItemQuantity(item);
+    final quantityInfo = provider.formatItemQuantity(item);
     
     return Padding(
       padding: EdgeInsets.all(context.sectionPadding),
@@ -293,12 +293,29 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                   ),
                 ),
                 SizedBox(height: context.cardSpacing / 2),
-                Text(
-                  'SL: $quantityLabel',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SL: ${quantityInfo.display}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    if (quantityInfo.conversionNote != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          quantityInfo.conversionNote!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -330,7 +347,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     ProductBatch batch,
     PurchaseOrderProvider provider,
   ) {
-    final quantityLabel = provider.formatBatchQuantity(batch);
+    final quantityInfo = provider.formatBatchQuantity(batch);
     final productTitle = batch.productName ?? 'ID: ${batch.productId}';
     
     return Padding(
@@ -367,12 +384,29 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
               ],
             ),
           ),
-          Text(
-            'SL: $quantityLabel',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'SL: ${quantityInfo.display}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (quantityInfo.conversionNote != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    quantityInfo.conversionNote!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
