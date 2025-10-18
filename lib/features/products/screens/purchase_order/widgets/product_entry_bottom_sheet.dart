@@ -5,6 +5,7 @@ import '../../../models/product.dart';
 import '../../../models/product_unit.dart';
 import '../../../utils/unit_display_formatter.dart';
 import '../../../providers/product_unit_provider.dart';
+import '../../../providers/purchase_order_provider.dart';
 import '../../../../../shared/utils/formatter.dart';
 import '../../../../../shared/utils/input_formatters.dart';
 
@@ -25,6 +26,9 @@ class ProductEntryBottomSheet extends StatefulWidget {
     double? selectedUnitFactor,
     double? defaultUnitFactor,
     double? defaultSellingPrice,
+    double? defaultUnitCost,
+    bool allowsPricingToggle,
+    PricingUnitSelection pricingSelection,
   ) onAdd;
 
   const ProductEntryBottomSheet({
@@ -267,6 +271,7 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
         ? null
         : double.tryParse(sellingPriceText);
     double? defaultSellingPrice = sellingPrice;
+    double? defaultUnitCost = price;
     if (sellingPrice != null &&
         _selectedUnitFactor != null &&
         _defaultUnitFactor != null &&
@@ -275,6 +280,20 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
       defaultSellingPrice =
           sellingPrice * (_defaultUnitFactor! / _selectedUnitFactor!);
     }
+    if (_selectedUnitFactor != null &&
+        _defaultUnitFactor != null &&
+        _selectedUnitFactor! > 0 &&
+        _defaultUnitFactor! > 0) {
+      defaultUnitCost =
+          price * (_defaultUnitFactor! / _selectedUnitFactor!);
+    }
+
+    final allowsPricingToggle = _selectedUnitFactor != null &&
+        _defaultUnitFactor != null &&
+        _selectedUnitFactor! > _defaultUnitFactor!;
+    final initialSelection = allowsPricingToggle
+        ? PricingUnitSelection.container
+        : PricingUnitSelection.base;
 
     if (quantity > 0 && price >= 0) {
       // 🔥 Pass extended unit metadata for downstream conversion logic
@@ -289,6 +308,9 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
         _selectedUnitFactor,
         _defaultUnitFactor,
         defaultSellingPrice,
+        defaultUnitCost,
+        allowsPricingToggle,
+        initialSelection,
       );
       Navigator.pop(context);
     } else {

@@ -16,6 +16,8 @@ import '../../../shared/utils/formatter.dart'; // 🔥 ADD: For proper formattin
 // Trạng thái cho giỏ hàng nhập
 
 // Trạng thái cho giỏ hàng nhập
+enum PricingUnitSelection { container, base }
+
 class POCartItem {
   final Product product;
   int quantity;
@@ -29,8 +31,8 @@ class POCartItem {
   double? defaultUnitFactor;
   double? defaultUnitCost;
   double? defaultSellingPrice;
-  PriceEntryMode purchasePriceMode;
-  PriceEntryMode sellingPriceMode;
+  PricingUnitSelection pricingSelection;
+  bool allowsPricingToggle;
 
   final TextEditingController quantityController;
   final TextEditingController unitCostController;
@@ -51,8 +53,8 @@ class POCartItem {
     this.defaultUnitFactor,
     this.defaultUnitCost,
     this.defaultSellingPrice,
-    this.purchasePriceMode = PriceEntryMode.selectedUnit,
-    this.sellingPriceMode = PriceEntryMode.selectedUnit,
+    this.pricingSelection = PricingUnitSelection.container,
+    this.allowsPricingToggle = false,
   })  : quantityController = TextEditingController(text: quantity.toString()),
         unitCostController = TextEditingController(
           text: unitCost > 0 ? AppFormatter.formatNumber(unitCost) : '',
@@ -76,8 +78,7 @@ class POCartItem {
           })(),
         ) {
     this.sellingPrice ??= product.currentSellingPrice;
-    this.defaultSellingPrice ??=
-        sellingPrice ?? product.currentSellingPrice;
+    this.defaultSellingPrice ??= sellingPrice ?? product.currentSellingPrice;
   }
 
   void dispose() {
@@ -101,8 +102,8 @@ class POCartItem {
     double? defaultUnitFactor,
     double? defaultUnitCost,
     double? defaultSellingPrice,
-    PriceEntryMode? purchasePriceMode,
-    PriceEntryMode? sellingPriceMode,
+    PricingUnitSelection? pricingSelection,
+    bool? allowsPricingToggle,
   }) {
     return POCartItem(
       product: product ?? this.product,
@@ -117,14 +118,11 @@ class POCartItem {
       defaultUnitFactor: defaultUnitFactor ?? this.defaultUnitFactor,
       defaultUnitCost: defaultUnitCost ?? this.defaultUnitCost,
       defaultSellingPrice: defaultSellingPrice ?? this.defaultSellingPrice,
-      purchasePriceMode: purchasePriceMode ?? this.purchasePriceMode,
-      sellingPriceMode: sellingPriceMode ?? this.sellingPriceMode,
+      pricingSelection: pricingSelection ?? this.pricingSelection,
+      allowsPricingToggle: allowsPricingToggle ?? this.allowsPricingToggle,
     );
   }
 }
-
-enum PriceEntryMode { selectedUnit, defaultUnit }
-
 enum POStatus { idle, loading, success, error }
 
 class PurchaseOrderProvider extends ChangeNotifier {
@@ -593,8 +591,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
     String? newDefaultUnitName,
     double? newSelectedUnitFactor,
     double? newDefaultUnitFactor,
-    PriceEntryMode? newPurchasePriceMode,
-    PriceEntryMode? newSellingPriceMode,
+    PricingUnitSelection? newPricingSelection,
+    bool? newAllowsPricingToggle,
     bool? clearSellingPrice, // Add explicit flag for clearing
     bool? clearDefaultUnitCost,
     bool? clearDefaultSellingPrice,
@@ -602,85 +600,139 @@ class PurchaseOrderProvider extends ChangeNotifier {
     final index = _poCartItems.indexWhere(
       (item) => item.product.id == productId,
     );
-    if (index != -1) {
-      if (newQuantity != null) {
-        _poCartItems[index].quantity = newQuantity.clamp(0, 999999);
-        _poCartItems[index].quantityController.text =
-            _poCartItems[index].quantity.toString();
-      }
-      if (newUnitCost != null) {
-        _poCartItems[index].unitCost = newUnitCost.clamp(0.0, double.infinity);
-        _poCartItems[index].unitCostController.text =
-            _poCartItems[index].unitCost > 0 
-                ? AppFormatter.formatNumber(_poCartItems[index].unitCost) // 🔥 FIXED: Use AppFormatter
-                : '';
-      }
-      // Handle selling price update
-      if (clearSellingPrice == true) {
-        // Explicitly clear selling price when user deletes all text
-        _poCartItems[index].sellingPrice = null;
-        _poCartItems[index].sellingPriceController.text = '';
-      } else if (newSellingPrice != null) {
-        // Update with new selling price value
-        _poCartItems[index].sellingPrice =
-            newSellingPrice.clamp(0.0, double.infinity);
-        _poCartItems[index].sellingPriceController.text =
-            _poCartItems[index].sellingPrice! > 0 
-                ? AppFormatter.formatNumber(_poCartItems[index].sellingPrice!) // 🔥 FIXED: Use AppFormatter
-                : '';
-      }
-      if (newUnit != null) {
-        _poCartItems[index].unit = newUnit;
-      }
-      if (newUnitId != null) {
-        _poCartItems[index].unitId = newUnitId; // 🔥 NEW: Update unitId
-      }
-      if (newDefaultUnitId != null) {
-        _poCartItems[index].defaultUnitId = newDefaultUnitId;
-      }
-      if (newDefaultUnitName != null) {
-        _poCartItems[index].defaultUnitName = newDefaultUnitName;
-      }
-      if (newSelectedUnitFactor != null) {
-        _poCartItems[index].selectedUnitFactor = newSelectedUnitFactor;
-      }
-      if (newDefaultUnitFactor != null) {
-        _poCartItems[index].defaultUnitFactor = newDefaultUnitFactor;
-      }
-      if (clearDefaultUnitCost == true) {
-        _poCartItems[index].defaultUnitCost = null;
-        _poCartItems[index].defaultUnitCostController.text = '';
-      } else if (newDefaultUnitCost != null) {
-        _poCartItems[index].defaultUnitCost =
-            newDefaultUnitCost.clamp(0.0, double.infinity);
-        _poCartItems[index].defaultUnitCostController.text =
-            _poCartItems[index].defaultUnitCost != null &&
-                    _poCartItems[index].defaultUnitCost! > 0
-                ? AppFormatter.formatNumber(_poCartItems[index].defaultUnitCost!)
-                : '';
-      }
-      if (clearDefaultSellingPrice == true) {
-        _poCartItems[index].defaultSellingPrice = null;
-        _poCartItems[index].defaultSellingPriceController.text = '';
-      } else if (newDefaultSellingPrice != null) {
-        _poCartItems[index].defaultSellingPrice =
-            newDefaultSellingPrice.clamp(0.0, double.infinity);
-        _poCartItems[index].defaultSellingPriceController.text =
-            _poCartItems[index].defaultSellingPrice != null &&
-                    _poCartItems[index].defaultSellingPrice! > 0
-                ? AppFormatter.formatNumber(
-                    _poCartItems[index].defaultSellingPrice!,
-                  )
-                : '';
-      }
-      if (newPurchasePriceMode != null) {
-        _poCartItems[index].purchasePriceMode = newPurchasePriceMode;
-      }
-      if (newSellingPriceMode != null) {
-        _poCartItems[index].sellingPriceMode = newSellingPriceMode;
-      }
-      notifyListeners();
+    if (index == -1) return;
+
+    final item = _poCartItems[index];
+
+    double? _ratioForItem(POCartItem cartItem) {
+      final selected = cartItem.selectedUnitFactor;
+      final base = cartItem.defaultUnitFactor;
+      if (selected == null || base == null || base == 0) return null;
+      return selected / base;
     }
+
+    double? _toBase(POCartItem cartItem, double containerValue) {
+      final ratio = _ratioForItem(cartItem);
+      if (ratio == null || ratio == 0) return null;
+      return containerValue / ratio;
+    }
+
+    double? _toContainer(POCartItem cartItem, double baseValue) {
+      final ratio = _ratioForItem(cartItem);
+      if (ratio == null) return null;
+      return baseValue * ratio;
+    }
+
+    void syncControllers(POCartItem cartItem) {
+      final containerCost =
+          cartItem.unitCost > 0 ? cartItem.unitCost : null;
+      final baseCost = cartItem.defaultUnitCost ??
+          (containerCost != null ? _toBase(cartItem, containerCost) : null);
+      if (baseCost != null) {
+        cartItem.defaultUnitCost = baseCost;
+        cartItem.defaultUnitCostController.text =
+            baseCost > 0 ? AppFormatter.formatNumber(baseCost) : '';
+      } else {
+        cartItem.defaultUnitCostController.text = '';
+      }
+      if (containerCost != null) {
+        cartItem.unitCostController.text =
+            AppFormatter.formatNumber(containerCost);
+      } else {
+        cartItem.unitCostController.text = '';
+      }
+
+      final containerSell = cartItem.sellingPrice;
+      final baseSell = cartItem.defaultSellingPrice ??
+          (containerSell != null ? _toBase(cartItem, containerSell) : null);
+      if (baseSell != null) {
+        cartItem.defaultSellingPrice = baseSell;
+        cartItem.defaultSellingPriceController.text =
+            baseSell > 0 ? AppFormatter.formatNumber(baseSell) : '';
+      } else {
+        cartItem.defaultSellingPriceController.text = '';
+      }
+      if (containerSell != null && containerSell > 0) {
+        cartItem.sellingPriceController.text =
+            AppFormatter.formatNumber(containerSell);
+      } else {
+        cartItem.sellingPriceController.text = '';
+      }
+    }
+
+    if (newAllowsPricingToggle != null) {
+      item.allowsPricingToggle = newAllowsPricingToggle;
+    }
+
+    if (newQuantity != null) {
+      item.quantity = newQuantity.clamp(0, 999999);
+      item.quantityController.text = item.quantity.toString();
+    }
+    if (newUnit != null) {
+      item.unit = newUnit;
+    }
+    if (newUnitId != null) {
+      item.unitId = newUnitId;
+    }
+    if (newDefaultUnitId != null) {
+      item.defaultUnitId = newDefaultUnitId;
+    }
+    if (newDefaultUnitName != null) {
+      item.defaultUnitName = newDefaultUnitName;
+    }
+    if (newSelectedUnitFactor != null) {
+      item.selectedUnitFactor = newSelectedUnitFactor;
+    }
+    if (newDefaultUnitFactor != null) {
+      item.defaultUnitFactor = newDefaultUnitFactor;
+    }
+
+    if (newUnitCost != null) {
+      item.unitCost = newUnitCost.clamp(0.0, double.infinity);
+      final baseCost = _toBase(item, item.unitCost);
+      if (baseCost != null) {
+        item.defaultUnitCost = baseCost;
+      }
+    }
+    if (newDefaultUnitCost != null) {
+      item.defaultUnitCost = newDefaultUnitCost.clamp(0.0, double.infinity);
+      final containerCost = _toContainer(item, item.defaultUnitCost!);
+      if (containerCost != null) {
+        item.unitCost = containerCost;
+      }
+    }
+    if (clearDefaultUnitCost == true) {
+      item.defaultUnitCost = null;
+    }
+
+    if (clearSellingPrice == true) {
+      item.sellingPrice = null;
+      item.defaultSellingPrice = null;
+    } else if (newSellingPrice != null) {
+      item.sellingPrice = newSellingPrice.clamp(0.0, double.infinity);
+      final baseSell =
+          item.sellingPrice != null ? _toBase(item, item.sellingPrice!) : null;
+      if (baseSell != null) {
+        item.defaultSellingPrice = baseSell;
+      }
+    }
+    if (clearDefaultSellingPrice == true) {
+      item.defaultSellingPrice = null;
+    } else if (newDefaultSellingPrice != null) {
+      item.defaultSellingPrice =
+          newDefaultSellingPrice.clamp(0.0, double.infinity);
+      final containerSell = _toContainer(item, item.defaultSellingPrice!);
+      if (containerSell != null) {
+        item.sellingPrice = containerSell;
+      }
+    }
+
+    if (newPricingSelection != null) {
+      item.pricingSelection = newPricingSelection;
+    }
+
+    syncControllers(item);
+    notifyListeners();
   }
 
   // Explicit method for removing items from cart

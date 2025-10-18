@@ -123,8 +123,13 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
           selectedUnitFactor,
           defaultUnitFactor,
           defaultSellingPrice,
+          defaultUnitCost,
+          allowsPricingToggle,
+          pricingSelection,
         ) {
           setState(() {
+            final normalizedDefaultCost =
+                defaultUnitCost ?? price;
             _localCartItems[product.id] = POCartItem(
               product: product,
               quantity: quantity,
@@ -137,6 +142,9 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
               selectedUnitFactor: selectedUnitFactor,
               defaultUnitFactor: defaultUnitFactor,
               defaultSellingPrice: defaultSellingPrice,
+              defaultUnitCost: normalizedDefaultCost,
+              allowsPricingToggle: allowsPricingToggle,
+              pricingSelection: pricingSelection,
             );
           });
         },

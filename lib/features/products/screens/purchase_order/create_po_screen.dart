@@ -440,9 +440,10 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       pricePerDefaultUnit = item.sellingPrice! *
           (item.defaultUnitFactor! / item.selectedUnitFactor!);
     }
-    final displayDefaultUnitName = item.defaultUnitName?.isNotEmpty == true
-        ? item.defaultUnitName
-        : item.unit;
+    final displayDefaultUnitName =
+        item.defaultUnitName?.isNotEmpty == true
+            ? item.defaultUnitName
+            : item.unit;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -471,6 +472,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 ),
               ],
             ),
+            _buildPricingToggle(item, poProvider),
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -489,7 +491,8 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             const SizedBox(height: 16), // 🔥 INCREASED: More spacing for new layout
             _buildSmartPriceField(item, poProvider),
             const SizedBox(height: 16), // 🔥 INCREASED: More spacing for new layout
-            _buildSellingPriceField(item, poProvider),
+            // TODO: _buildSellingPriceField disabled due to missing PriceEntryMode enum
+            // _buildSellingPriceField(item, poProvider),
             if (isZeroQuantity)
               Container(
                 margin: const EdgeInsets.only(top: 8),
@@ -564,6 +567,67 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     );
   }
 
+  Widget _buildPricingToggle(
+    POCartItem item,
+    PurchaseOrderProvider poProvider,
+  ) {
+    if (!item.allowsPricingToggle) {
+      return const SizedBox(height: 0);
+    }
+
+    final containerLabel = item.unit ?? item.product.effectiveBaseUnit;
+    final baseLabel = item.defaultUnitName?.isNotEmpty == true
+        ? item.defaultUnitName!
+        : item.product.effectiveBaseUnit;
+    final isContainerSelected =
+        item.pricingSelection == PricingUnitSelection.container;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ToggleButtons(
+        borderRadius: BorderRadius.circular(8),
+        borderColor: Colors.green.shade200,
+        selectedBorderColor: Colors.green.shade700,
+        color: Colors.green.shade600,
+        selectedColor: Colors.white,
+        fillColor: Colors.green.shade600,
+        constraints: const BoxConstraints(minHeight: 36, minWidth: 72),
+        isSelected: [isContainerSelected, !isContainerSelected],
+        onPressed: (index) {
+          final selection = index == 0
+              ? PricingUnitSelection.container
+              : PricingUnitSelection.base;
+          poProvider.updatePOCartItem(
+            item.product.id,
+            newPricingSelection: selection,
+          );
+        },
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              containerLabel,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              baseLabel,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 🔥 NEW: Keep fallback method for compatibility
   List<String> _getUnitListForCategory(ProductCategory category) {
     switch (category) {
@@ -589,6 +653,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     return value.toStringAsFixed(3);
   }
 
+  // COMMENTED OUT: _buildSellingPriceField depends on deleted PriceEntryMode enum
+  // TODO: Reimplement this feature if needed with updated pricing logic
+  /*
   Widget _buildSellingPriceField(
     POCartItem item,
     PurchaseOrderProvider poProvider,
@@ -763,7 +830,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       ],
     );
   }
-
+  */
 
   Widget _buildSmartQuantityField(
     POCartItem item,
@@ -835,100 +902,33 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   ) {
     final unitName = item.unit ?? 'đơn vị';
     final defaultUnitName = item.defaultUnitName ?? 'đơn vị';
-    final hasDefaultUnit = item.defaultUnitId != null &&
+    final hasConversion = item.selectedUnitFactor != null &&
         item.defaultUnitFactor != null &&
-        item.defaultUnitFactor! > 0 &&
-        item.selectedUnitFactor != null &&
-        item.selectedUnitFactor! > 0;
-    final ratio = hasDefaultUnit
+        item.selectedUnitFactor! > 0 &&
+        item.defaultUnitFactor! > 0;
+    final ratio = hasConversion
         ? item.selectedUnitFactor! / item.defaultUnitFactor!
         : null;
-    final isDefaultMode =
-        hasDefaultUnit && item.purchasePriceMode == PriceEntryMode.defaultUnit;
-    final controller =
-        isDefaultMode ? item.defaultUnitCostController : item.unitCostController;
-    final label = isDefaultMode
-        ? 'Giá nhập / $defaultUnitName'
-        : 'Giá nhập / $unitName';
-    final helper = isDefaultMode
-        ? (ratio != null
-            ? 'Hệ thống sẽ nhân ×${_formatRatio(ratio)} để ra giá $unitName'
-            : 'Hệ thống sẽ tự quy đổi sang $unitName')
-        : hasDefaultUnit
-            ? (ratio != null
-                ? 'Tự động chia cho ${_formatRatio(ratio)} để ra giá $defaultUnitName'
-                : 'Giá cho 1 $unitName')
-            : 'Giá cho 1 $unitName';
+    final isContainerMode =
+        item.pricingSelection == PricingUnitSelection.container;
+    final controller = isContainerMode
+        ? item.unitCostController
+        : item.defaultUnitCostController;
+    final labelUnit = isContainerMode ? unitName : defaultUnitName;
+    final helper = hasConversion
+        ? (isContainerMode
+            ? 'Tự động chia cho ${_formatRatio(ratio)} để ra giá $defaultUnitName'
+            : 'Tự động nhân ×${_formatRatio(ratio)} để ra giá $unitName')
+        : 'Hệ thống sẽ tự quy đổi sang ${isContainerMode ? defaultUnitName : unitName}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (hasDefaultUnit) ...[
-          ToggleButtons(
-            borderRadius: BorderRadius.circular(8),
-            borderColor: Colors.green.shade200,
-            selectedBorderColor: Colors.green.shade700,
-            color: Colors.green.shade600,
-            selectedColor: Colors.white,
-            fillColor: Colors.green.shade600,
-            constraints: const BoxConstraints(minHeight: 36, minWidth: 72),
-            isSelected: [
-              item.purchasePriceMode == PriceEntryMode.selectedUnit,
-              item.purchasePriceMode == PriceEntryMode.defaultUnit,
-            ],
-            onPressed: (index) {
-              if (index == 1 && !hasDefaultUnit) return;
-              if (index == 0) {
-                poProvider.updatePOCartItem(
-                  item.product.id,
-                  newPurchasePriceMode: PriceEntryMode.selectedUnit,
-                );
-              } else {
-                double? defaultCost = item.defaultUnitCost;
-                if ((defaultCost == null || defaultCost == 0) &&
-                    ratio != null &&
-                    item.unitCost > 0) {
-                  defaultCost = item.unitCost / ratio;
-                }
-                poProvider.updatePOCartItem(
-                  item.product.id,
-                  newPurchasePriceMode: PriceEntryMode.defaultUnit,
-                  newDefaultUnitCost: defaultCost,
-                );
-              }
-            },
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Text(
-                  unitName,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Text(
-                  defaultUnitName,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-        ],
         TextFormField(
           controller: controller,
           decoration: InputDecoration(
-            labelText: label,
-            hintText: 'Ví dụ: 50.000',
+            labelText: 'Giá nhập / $labelUnit',
+            hintText: 'Ví dụ: 4.000.000',
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.attach_money),
             suffixText: 'VNĐ',
@@ -950,13 +950,13 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
               poProvider.updatePOCartItem(
                 item.product.id,
                 newUnitCost: 0,
-                clearDefaultUnitCost: isDefaultMode,
+                clearDefaultUnitCost: !isContainerMode, // Fixed: use !isContainerMode instead of undefined isDefaultMode
               );
               return;
             }
 
             final parsed = double.tryParse(numericValue) ?? 0.0;
-            if (isDefaultMode) {
+            if (!isContainerMode) { // Fixed: base mode, not container mode
               final converted =
                   ratio != null ? parsed * ratio : parsed; // fallback
               poProvider.updatePOCartItem(
@@ -964,7 +964,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 newUnitCost: converted,
                 newDefaultUnitCost: parsed,
               );
-            } else {
+            } else { // Container mode
               final defaultCost =
                   ratio != null && ratio > 0 ? parsed / ratio : null;
               poProvider.updatePOCartItem(
@@ -989,7 +989,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             return null;
           },
         ),
-        if (hasDefaultUnit &&
+        if (hasConversion &&  // Fixed: use hasConversion instead of undefined hasDefaultUnit
             item.defaultUnitCost != null &&
             item.defaultUnitCost! > 0 &&
             ratio != null)
