@@ -78,7 +78,20 @@ class PurchaseOrderService extends BaseService {
 
       // Join products to enrich with product name for UI
       final itemsResponse = await addStoreFilter(
-        _supabase.from('purchase_order_items').select('id,purchase_order_id,product_id,quantity,unit_cost,unit,total_cost,received_quantity,notes,created_at, products(name)'),
+        _supabase.from('purchase_order_items').select('''
+            id,
+            purchase_order_id,
+            product_id,
+            quantity,
+            unit_cost,
+            selling_price,
+            unit,
+            total_cost,
+            received_quantity,
+            notes,
+            created_at,
+            products(name)
+          '''),
       )
           .eq('purchase_order_id', poId);
 

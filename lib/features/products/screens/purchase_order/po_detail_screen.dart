@@ -5,7 +5,7 @@ import '../../../../shared/utils/responsive.dart';
 import '../../models/purchase_order.dart';
 import '../../models/purchase_order_status.dart';
 import '../../models/purchase_order_item.dart';
-import '../../models/product_batch.dart';
+import '../../models/product_unit.dart';
 import '../../providers/purchase_order_provider.dart';
 
 class PurchaseOrderDetailScreen extends StatefulWidget {
@@ -156,9 +156,9 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         _buildProductsSection(provider),
         SizedBox(height: context.sectionPadding),
         
-        // Group 3: Các lô hàng (chỉ hiện khi delivered)
-        if (po.status == PurchaseOrderStatus.delivered)
-          _buildBatchesSection(provider),
+        // Group 3: Chi tiết đơn hàng
+        if (provider.selectedPOItems.isNotEmpty)
+          _buildOrderDetailsSection(provider),
       ],
     );
   }
@@ -196,34 +196,28 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     );
   }
 
-  Widget _buildBatchesSection(PurchaseOrderProvider provider) {
+  Widget _buildOrderDetailsSection(PurchaseOrderProvider provider) {
+    final items = provider.selectedPOItems;
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return _buildGroupContainer(
-      title: 'CÁC LÔ HÀNG ĐÃ TẠO',
-      child: provider.batchesForPO.isEmpty
-          ? Padding(
-              padding: EdgeInsets.all(context.sectionPadding),
-              child: Text(
-                'Chưa có lô hàng nào được tạo',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            )
-          : Column(
-              children: provider.batchesForPO.asMap().entries.map((entry) {
-                final index = entry.key;
-                final batch = entry.value;
-                final isLast = index == provider.batchesForPO.length - 1;
-                
-                return Column(
-                  children: [
-                    _buildBatchRow(batch, provider),
-                    if (!isLast) Divider(height: 1, color: Colors.grey[300]),
-                  ],
-                );
-              }).toList(),
-            ),
+      title: 'CHI TIẾT ĐƠN HÀNG',
+      child: Padding(
+        padding: EdgeInsets.all(context.sectionPadding),
+        child: Column(
+          children: items.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            final isLast = index == items.length - 1;
+            return Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : context.cardSpacing),
+              child: _buildOrderItemCard(item, provider),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
@@ -343,73 +337,111 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     );
   }
 
-  Widget _buildBatchRow(
-    ProductBatch batch,
+  Widget _buildOrderItemCard(
+    PurchaseOrderItem item,
     PurchaseOrderProvider provider,
   ) {
-    final quantityInfo = provider.formatBatchQuantity(batch);
-    final productTitle = batch.productName ?? 'ID: ${batch.productId}';
-    
-    return Padding(
-      padding: EdgeInsets.all(context.sectionPadding),
-      child: Row(
+    final quantityInfo = provider.formatItemQuantity(item);
+    final displayQuantity = quantityInfo.display;
+    final ProductUnit? baseUnit =
+        quantityInfo.baseUnit ?? quantityInfo.displayUnit;
+    final unitLabel = baseUnit?.unitName?.trim().isNotEmpty == true
+        ? baseUnit!.unitName.split(' ').first
+        : (item.unit?.isNotEmpty == true ? item.unit!.split(' ').first : 'đơn vị');
+
+    final String costText =
+        '${AppFormatter.formatCurrency(item.unitCost)} / $unitLabel';
+
+    final sellingText = (item.sellingPrice != null && item.sellingPrice! > 0)
+        ? '${AppFormatter.formatCurrency(item.sellingPrice!)} / $unitLabel'
+        : '—';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Lô hàng cho: $productTitle',
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  item.productName ?? 'ID: ${item.productId}',
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
-                ),
-                SizedBox(height: context.cardSpacing / 2),
-                Text(
-                  'Mã lô: ${batch.batchNumber}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                if (batch.supplierName != null && batch.supplierName!.isNotEmpty)
-                  Text(
-                    'NCC: ${batch.supplierName}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'SL: ${quantityInfo.display}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
-              if (quantityInfo.conversionNote != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    quantityInfo.conversionNote!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
+              Text(
+                displayQuantity,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF4A4A4A),
                 ),
+              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isNarrow = constraints.maxWidth < 280;
+              final children = [
+                _buildPriceColumn('Giá nhập', costText),
+                const SizedBox(width: 16),
+                _buildPriceColumn('Giá bán', sellingText),
+              ];
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildPriceColumn('Giá nhập', costText),
+                    const SizedBox(height: 8),
+                    _buildPriceColumn('Giá bán', sellingText),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: children[0]),
+                  children[1],
+                  Expanded(child: children[2]),
+                ],
+              );
+            },
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPriceColumn(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 

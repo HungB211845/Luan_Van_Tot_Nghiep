@@ -21,10 +21,14 @@ enum PricingUnitSelection { container, base }
 class FormattedQuantity {
   final String display;
   final String? conversionNote;
+  final ProductUnit? displayUnit;
+  final ProductUnit? baseUnit;
 
   const FormattedQuantity({
     required this.display,
     this.conversionNote,
+    this.displayUnit,
+    this.baseUnit,
   });
 }
 
@@ -544,6 +548,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
         if (chosenUnit == baseUnit) {
           return FormattedQuantity(
             display: _formatUnitQuantityWithName(quantityInChosen, baseUnit),
+            displayUnit: baseUnit,
+            baseUnit: baseUnit,
           );
         }
 
@@ -559,6 +565,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
               chosenUnit: chosenUnit,
               noteUnit: noteUnit,
             ),
+            displayUnit: noteUnit,
+            baseUnit: noteUnit,
           );
         }
 
@@ -595,6 +603,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
         return FormattedQuantity(
           display: display,
           conversionNote: note,
+          displayUnit: chosenUnit,
+          baseUnit: noteUnit,
         );
       }
     }
@@ -1069,16 +1079,33 @@ class PurchaseOrderProvider extends ChangeNotifier {
         final double totalCost = baseQuantity * baseUnitCost;
         computedSubtotal += totalCost;
 
+        double baseSellingPrice = computedDefaultSellingPrice ??
+            cartItem.defaultSellingPrice ??
+            cartItem.product.currentSellingPrice;
+
+        if (baseSellingPrice <= 0 && cartItem.sellingPrice != null) {
+          baseSellingPrice = cartItem.sellingPrice!;
+          if (cartItem.selectedUnitFactor != null &&
+              cartItem.defaultUnitFactor != null &&
+              cartItem.selectedUnitFactor! > 0 &&
+              cartItem.defaultUnitFactor! > 0) {
+            baseSellingPrice = cartItem.sellingPrice! *
+                (cartItem.defaultUnitFactor! /
+                    cartItem.selectedUnitFactor!);
+          }
+        }
+
+        if (baseSellingPrice <= 0) {
+          baseSellingPrice = cartItem.product.currentSellingPrice;
+        }
+
         items.add(PurchaseOrderItem(
           id: '',
           purchaseOrderId: '',
           productId: cartItem.product.id,
           quantity: baseQuantity,
           unitCost: baseUnitCost,
-          sellingPrice:
-              cartItem.sellingPrice ??
-                  cartItem.defaultSellingPrice ??
-                  cartItem.product.currentSellingPrice,
+          sellingPrice: baseSellingPrice,
           unit: unitName,
           totalCost: totalCost,
           createdAt: DateTime.now(),
