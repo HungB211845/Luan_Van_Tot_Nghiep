@@ -455,21 +455,22 @@ class PurchaseOrderProvider extends ChangeNotifier {
   }
 
   String formatItemQuantity(PurchaseOrderItem item) {
-    final unitName = item.unit;
-    if (unitName == null || unitName.isEmpty) {
-      return '${item.quantity}';
-    }
     final units = _productUnitsById[item.productId];
     if (units != null && units.isNotEmpty) {
-      final matching = units.firstWhere(
-        (u) => u.unitName.toLowerCase() == unitName.toLowerCase(),
+      final defaultUnit = units.firstWhere(
+        (u) => u.isDefaultSellingUnit,
         orElse: () => units.first,
       );
-      if (matching.conversionFactor > 0) {
-        final qty = item.quantity / matching.conversionFactor;
+      if (defaultUnit.conversionFactor > 0) {
+        final qty = item.quantity / defaultUnit.conversionFactor;
         final formatted = _formatQuantity(qty);
-        return '$formatted $unitName';
+        return '$formatted ${defaultUnit.unitName}';
       }
+    }
+
+    final unitName = item.unit;
+    if (unitName == null || unitName.isEmpty) {
+      return _formatQuantity(item.quantity.toDouble());
     }
     return '${_formatQuantity(item.quantity.toDouble())} $unitName';
   }
