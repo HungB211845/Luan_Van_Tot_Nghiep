@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/base_service.dart';
 import '../models/product_unit.dart';
@@ -201,5 +202,47 @@ class ProductUnitService extends BaseService {
   }) {
     if (conversionFactor == 0) return 0;
     return baseQuantity / conversionFactor;
+  }
+
+  /// Replace all units for a product atomically
+  /// This prevents "zombie units" by deactivating all old units first
+  /// and then creating new ones in a single database transaction
+  ///
+  /// Usage:
+  /// ```dart
+  /// final newUnits = [
+  ///   ProductUnit(unitName: 'kg', conversionFactor: 1.0, ...),
+  ///   ProductUnit(unitName: 'Bao', conversionFactor: 100.0, isDefaultSellingUnit: true, ...),
+  /// ];
+  /// await productUnitService.replaceUnits(productId, newUnits);
+  /// ```
+  Future<void> replaceUnits(String productId, List<ProductUnit> newUnits) async {
+    ensureAuthenticated();
+
+    try {
+      // Convert ProductUnit objects to JSON format for RPC
+      // Remove id field as database will generate new IDs
+      final unitsJson = newUnits.map((unit) {
+        final json = unit.toJson();
+        json.remove('id'); // Remove ID, let database generate
+        json.remove('created_at'); // Remove timestamps
+        json.remove('updated_at');
+        return json;
+      }).toList();
+
+      // Call RPC function to replace units atomically
+      await supabase.rpc(
+        'replace_product_units',
+        params: {
+          'p_product_id': productId,
+          'p_new_units': unitsJson,
+        },
+      );
+
+      debugPrint('✅ Successfully replaced units for product: $productId');
+    } catch (e) {
+      debugPrint('❌ Failed to replace product units: $e');
+      throw Exception('Failed to replace product units: $e');
+    }
   }
 }

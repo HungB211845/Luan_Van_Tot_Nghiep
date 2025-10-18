@@ -9,6 +9,7 @@ import '../services/purchase_order_service.dart';
 import '../services/product_service.dart'; // For product filtering
 import '../models/product.dart'; // For adding to cart
 import './product_provider.dart'; // Import ProductProvider
+import './product_unit_provider.dart';
 import '../../../shared/services/base_service.dart';
 import '../../../shared/utils/formatter.dart'; // 🔥 ADD: For proper formatting
 
@@ -19,13 +20,23 @@ class POCartItem {
   final Product product;
   int quantity;
   double unitCost;
-  double? sellingPrice; // MODIFIED: Make nullable
+  double? sellingPrice;
   String? unit;
-  String? unitId; // 🔥 NEW: Unit ID for Multi-UoM conversion
+  String? unitId;
+  String? defaultUnitId;
+  String? defaultUnitName;
+  double? selectedUnitFactor;
+  double? defaultUnitFactor;
+  double? defaultUnitCost;
+  double? defaultSellingPrice;
+  PriceEntryMode purchasePriceMode;
+  PriceEntryMode sellingPriceMode;
 
   final TextEditingController quantityController;
   final TextEditingController unitCostController;
-  final TextEditingController sellingPriceController; // ADDED
+  final TextEditingController sellingPriceController;
+  final TextEditingController defaultUnitCostController;
+  final TextEditingController defaultSellingPriceController;
 
   POCartItem({
     required this.product,
@@ -33,21 +44,48 @@ class POCartItem {
     this.unitCost = 0.0,
     this.sellingPrice,
     this.unit,
-    this.unitId, // 🔥 NEW: Unit ID parameter
+    this.unitId,
+    this.defaultUnitId,
+    this.defaultUnitName,
+    this.selectedUnitFactor,
+    this.defaultUnitFactor,
+    this.defaultUnitCost,
+    this.defaultSellingPrice,
+    this.purchasePriceMode = PriceEntryMode.selectedUnit,
+    this.sellingPriceMode = PriceEntryMode.selectedUnit,
   })  : quantityController = TextEditingController(text: quantity.toString()),
         unitCostController = TextEditingController(
-          text: unitCost > 0 ? AppFormatter.formatNumber(unitCost) : '', // 🔥 FIXED: Use AppFormatter
+          text: unitCost > 0 ? AppFormatter.formatNumber(unitCost) : '',
         ),
         sellingPriceController = TextEditingController(
-          text: sellingPrice != null && sellingPrice! > 0 
-              ? AppFormatter.formatNumber(sellingPrice!) // 🔥 FIXED: Use AppFormatter
+          text: (() {
+            final seed = sellingPrice ?? product.currentSellingPrice;
+            return seed > 0 ? AppFormatter.formatNumber(seed) : '';
+          })(),
+        ),
+        defaultUnitCostController = TextEditingController(
+          text: defaultUnitCost != null && defaultUnitCost! > 0
+              ? AppFormatter.formatNumber(defaultUnitCost!)
               : '',
-        );
+        ),
+        defaultSellingPriceController = TextEditingController(
+          text: (() {
+            final seed = defaultSellingPrice ??
+                sellingPrice ?? product.currentSellingPrice;
+            return seed > 0 ? AppFormatter.formatNumber(seed) : '';
+          })(),
+        ) {
+    this.sellingPrice ??= product.currentSellingPrice;
+    this.defaultSellingPrice ??=
+        sellingPrice ?? product.currentSellingPrice;
+  }
 
   void dispose() {
     quantityController.dispose();
     unitCostController.dispose();
-    sellingPriceController.dispose(); // ADDED
+    sellingPriceController.dispose();
+    defaultUnitCostController.dispose();
+    defaultSellingPriceController.dispose();
   }
 
   POCartItem copyWith({
@@ -56,7 +94,15 @@ class POCartItem {
     double? unitCost,
     double? sellingPrice,
     String? unit,
-    String? unitId, // 🔥 NEW: unitId parameter
+    String? unitId,
+    String? defaultUnitId,
+    String? defaultUnitName,
+    double? selectedUnitFactor,
+    double? defaultUnitFactor,
+    double? defaultUnitCost,
+    double? defaultSellingPrice,
+    PriceEntryMode? purchasePriceMode,
+    PriceEntryMode? sellingPriceMode,
   }) {
     return POCartItem(
       product: product ?? this.product,
@@ -64,10 +110,20 @@ class POCartItem {
       unitCost: unitCost ?? this.unitCost,
       sellingPrice: sellingPrice ?? this.sellingPrice,
       unit: unit ?? this.unit,
-      unitId: unitId ?? this.unitId, // 🔥 NEW: Copy unitId
+      unitId: unitId ?? this.unitId,
+      defaultUnitId: defaultUnitId ?? this.defaultUnitId,
+      defaultUnitName: defaultUnitName ?? this.defaultUnitName,
+      selectedUnitFactor: selectedUnitFactor ?? this.selectedUnitFactor,
+      defaultUnitFactor: defaultUnitFactor ?? this.defaultUnitFactor,
+      defaultUnitCost: defaultUnitCost ?? this.defaultUnitCost,
+      defaultSellingPrice: defaultSellingPrice ?? this.defaultSellingPrice,
+      purchasePriceMode: purchasePriceMode ?? this.purchasePriceMode,
+      sellingPriceMode: sellingPriceMode ?? this.sellingPriceMode,
     );
   }
 }
+
+enum PriceEntryMode { selectedUnit, defaultUnit }
 
 enum POStatus { idle, loading, success, error }
 
@@ -75,8 +131,12 @@ class PurchaseOrderProvider extends ChangeNotifier {
   final PurchaseOrderService _poService = PurchaseOrderService();
   final ProductService _productService = ProductService();
   final ProductProvider _productProvider;
+  final ProductUnitProvider _productUnitProvider;
 
-  PurchaseOrderProvider(this._productProvider);
+  PurchaseOrderProvider(
+    this._productProvider,
+    this._productUnitProvider,
+  );
 
   // State
   List<PurchaseOrder> _purchaseOrders = [];
@@ -341,13 +401,17 @@ class PurchaseOrderProvider extends ChangeNotifier {
       for (final productId in productIds) {
         await _productProvider.refreshProductSummary(productId);
         final prefetchedUnits = unitsMap[productId];
-        await _productProvider.refreshProductUnitsCache(
-          productId,
-          forceNetwork: prefetchedUnits == null,
-          prefetchedUnits: prefetchedUnits,
-        );
-        if (prefetchedUnits != null && prefetchedUnits.isNotEmpty) {
-          _productUnitsById[productId] = prefetchedUnits;
+
+        // Invalidate ProductUnitProvider cache and reload latest units
+        _productUnitProvider.clearCache(productId: productId);
+        final refreshedUnits = prefetchedUnits != null && prefetchedUnits.isNotEmpty
+            ? prefetchedUnits
+            : await _productUnitProvider.getUnitsForProduct(
+                productId,
+                forceRefresh: true,
+              );
+        if (refreshedUnits.isNotEmpty) {
+          _productUnitsById[productId] = refreshedUnits;
         }
       }
       if (productIds.isNotEmpty) {
@@ -380,7 +444,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
       }
       try {
         final units =
-            await _productProvider.getProductUnits(productId, forceRefresh: false);
+            await _productUnitProvider.getUnitsForProduct(productId);
         _productUnitsById[productId] = units;
       } catch (e) {
         debugPrint('Unable to load units for $productId: $e');
@@ -520,10 +584,20 @@ class PurchaseOrderProvider extends ChangeNotifier {
     String productId, {
     int? newQuantity,
     double? newUnitCost,
+    double? newDefaultUnitCost,
     double? newSellingPrice,
+    double? newDefaultSellingPrice,
     String? newUnit,
     String? newUnitId, // 🔥 NEW: Add unitId parameter
+    String? newDefaultUnitId,
+    String? newDefaultUnitName,
+    double? newSelectedUnitFactor,
+    double? newDefaultUnitFactor,
+    PriceEntryMode? newPurchasePriceMode,
+    PriceEntryMode? newSellingPriceMode,
     bool? clearSellingPrice, // Add explicit flag for clearing
+    bool? clearDefaultUnitCost,
+    bool? clearDefaultSellingPrice,
   }) {
     final index = _poCartItems.indexWhere(
       (item) => item.product.id == productId,
@@ -560,6 +634,50 @@ class PurchaseOrderProvider extends ChangeNotifier {
       }
       if (newUnitId != null) {
         _poCartItems[index].unitId = newUnitId; // 🔥 NEW: Update unitId
+      }
+      if (newDefaultUnitId != null) {
+        _poCartItems[index].defaultUnitId = newDefaultUnitId;
+      }
+      if (newDefaultUnitName != null) {
+        _poCartItems[index].defaultUnitName = newDefaultUnitName;
+      }
+      if (newSelectedUnitFactor != null) {
+        _poCartItems[index].selectedUnitFactor = newSelectedUnitFactor;
+      }
+      if (newDefaultUnitFactor != null) {
+        _poCartItems[index].defaultUnitFactor = newDefaultUnitFactor;
+      }
+      if (clearDefaultUnitCost == true) {
+        _poCartItems[index].defaultUnitCost = null;
+        _poCartItems[index].defaultUnitCostController.text = '';
+      } else if (newDefaultUnitCost != null) {
+        _poCartItems[index].defaultUnitCost =
+            newDefaultUnitCost.clamp(0.0, double.infinity);
+        _poCartItems[index].defaultUnitCostController.text =
+            _poCartItems[index].defaultUnitCost != null &&
+                    _poCartItems[index].defaultUnitCost! > 0
+                ? AppFormatter.formatNumber(_poCartItems[index].defaultUnitCost!)
+                : '';
+      }
+      if (clearDefaultSellingPrice == true) {
+        _poCartItems[index].defaultSellingPrice = null;
+        _poCartItems[index].defaultSellingPriceController.text = '';
+      } else if (newDefaultSellingPrice != null) {
+        _poCartItems[index].defaultSellingPrice =
+            newDefaultSellingPrice.clamp(0.0, double.infinity);
+        _poCartItems[index].defaultSellingPriceController.text =
+            _poCartItems[index].defaultSellingPrice != null &&
+                    _poCartItems[index].defaultSellingPrice! > 0
+                ? AppFormatter.formatNumber(
+                    _poCartItems[index].defaultSellingPrice!,
+                  )
+                : '';
+      }
+      if (newPurchasePriceMode != null) {
+        _poCartItems[index].purchasePriceMode = newPurchasePriceMode;
+      }
+      if (newSellingPriceMode != null) {
+        _poCartItems[index].sellingPriceMode = newSellingPriceMode;
       }
       notifyListeners();
     }
@@ -647,8 +765,10 @@ class PurchaseOrderProvider extends ChangeNotifier {
 
         if (cartItem.unitId != null) {
           try {
-            final units =
-                await _productProvider.getProductUnits(cartItem.product.id);
+            final units = await _productUnitProvider.getUnitsForProduct(
+              cartItem.product.id,
+              forceRefresh: true,
+            );
             final selectedUnit = units.firstWhere(
               (u) => u.id == cartItem.unitId,
               orElse: () => units.isNotEmpty
@@ -683,17 +803,29 @@ class PurchaseOrderProvider extends ChangeNotifier {
           }
         }
 
-        if (cartItem.sellingPrice != null &&
-            cartItem.sellingPrice! > 0 &&
-            cartItem.sellingPrice! != cartItem.product.currentSellingPrice) {
+        double? computedDefaultSellingPrice = cartItem.defaultSellingPrice;
+        if (computedDefaultSellingPrice == null &&
+            cartItem.sellingPrice != null &&
+            cartItem.selectedUnitFactor != null &&
+            cartItem.defaultUnitFactor != null &&
+            cartItem.selectedUnitFactor! > 0 &&
+            cartItem.defaultUnitFactor! > 0) {
+          computedDefaultSellingPrice =
+              cartItem.sellingPrice! *
+                  (cartItem.defaultUnitFactor! / cartItem.selectedUnitFactor!);
+        }
+
+        if (computedDefaultSellingPrice != null &&
+            computedDefaultSellingPrice > 0 &&
+            computedDefaultSellingPrice != cartItem.product.currentSellingPrice) {
           try {
             await _productService.updateCurrentSellingPrice(
               cartItem.product.id,
-              cartItem.sellingPrice!,
+              computedDefaultSellingPrice,
               reason: 'Updated via Purchase Order creation',
             );
             debugPrint(
-                'DEBUG: Updated selling price for ${cartItem.product.name}: ${cartItem.sellingPrice}');
+                'DEBUG: Updated selling price for ${cartItem.product.name}: $computedDefaultSellingPrice (default unit)');
           } catch (e) {
             debugPrint(
                 'Warning: Could not update selling price for ${cartItem.product.name}: $e');
@@ -710,7 +842,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
           quantity: baseQuantity,
           unitCost: baseUnitCost,
           sellingPrice:
-              cartItem.sellingPrice ?? cartItem.product.currentSellingPrice,
+              cartItem.sellingPrice ??
+                  cartItem.defaultSellingPrice ??
+                  cartItem.product.currentSellingPrice,
           unit: unitName,
           totalCost: totalCost,
           createdAt: DateTime.now(),

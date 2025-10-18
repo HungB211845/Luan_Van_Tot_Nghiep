@@ -3,6 +3,7 @@ import 'package:provider/single_child_widget.dart';
 import '../../features/customers/providers/customer_provider.dart';
 import '../../features/products/providers/product_provider.dart';
 import '../../features/products/providers/product_edit_mode_provider.dart';
+import '../../features/products/providers/product_unit_provider.dart';
 import '../../features/pos/providers/transaction_provider.dart';
 import '../../features/products/providers/company_provider.dart';
 import '../../features/products/providers/purchase_order_provider.dart';
@@ -26,6 +27,7 @@ class AppProviders {
     ChangeNotifierProvider(create: (_) => CustomerProvider()),
     ChangeNotifierProvider(create: (_) => ProductProvider()),
     ChangeNotifierProvider(create: (_) => ProductEditModeProvider()),
+    ChangeNotifierProvider(create: (_) => ProductUnitProvider()),
     ChangeNotifierProvider(create: (_) => TransactionProvider()),
     ChangeNotifierProvider(create: (_) => CompanyProvider()),
     ChangeNotifierProvider(create: (_) => AuthProvider()),
@@ -35,6 +37,7 @@ class AppProviders {
     ChangeNotifierProvider(
       create: (context) => PurchaseOrderProvider(
         Provider.of<ProductProvider>(context, listen: false),
+        Provider.of<ProductUnitProvider>(context, listen: false),
       ),
     ),
     ChangeNotifierProvider(create: (_) => DebtProvider()),

@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../models/product.dart';
 import '../../../models/product_unit.dart';
 import '../../../utils/unit_display_formatter.dart';
-import '../../../providers/product_provider.dart';
+import '../../../providers/product_unit_provider.dart';
 import '../../../../../shared/utils/formatter.dart';
 import '../../../../../shared/utils/input_formatters.dart';
 
@@ -20,6 +20,11 @@ class ProductEntryBottomSheet extends StatefulWidget {
     String unit,
     String? unitId,
     double? sellingPrice,
+    String? defaultUnitId,
+    String? defaultUnitName,
+    double? selectedUnitFactor,
+    double? defaultUnitFactor,
+    double? defaultSellingPrice,
   ) onAdd;
 
   const ProductEntryBottomSheet({
@@ -49,6 +54,10 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   String? _selectedUnitId; // 🔥 NEW: Track selected unit ID
   List<ProductUnit> _productUnits = []; // 🔥 NEW: Product units from database
   bool _isLoadingUnits = true; // 🔥 NEW: Loading state
+  String? _defaultUnitId;
+  String? _defaultUnitName;
+  double? _selectedUnitFactor;
+  double? _defaultUnitFactor;
 
   @override
   void initState() {
@@ -72,8 +81,8 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
   /// 🔥 NEW: Load product units from database
   Future<void> _loadProductUnits() async {
     try {
-      final productProvider = context.read<ProductProvider>();
-      final units = await productProvider.getProductUnits(
+      final unitProvider = context.read<ProductUnitProvider>();
+      final units = await unitProvider.getUnitsForProduct(
         widget.product.id,
         forceRefresh: true,
       );
@@ -84,6 +93,14 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
           
           // Set initial unit selection
           if (units.isNotEmpty) {
+            final defaultUnit = units.firstWhere(
+              (u) => u.isDefaultSellingUnit,
+              orElse: () => units.first,
+            );
+            _defaultUnitId = defaultUnit.id;
+            _defaultUnitName = defaultUnit.unitName;
+            _defaultUnitFactor = defaultUnit.conversionFactor;
+
             // Try to match existing unit first
             if (widget.existingUnit != null) {
               final existingUnit = units.firstWhere(
@@ -92,19 +109,34 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
               );
               _selectedUnit = existingUnit.unitName;
               _selectedUnitId = existingUnit.id;
+              _selectedUnitFactor = existingUnit.conversionFactor;
             } else {
               // No existing unit, use default selling unit
-              final defaultUnit = units.firstWhere(
-                (u) => u.isDefaultSellingUnit,
-                orElse: () => units.first,
-              );
               _selectedUnit = defaultUnit.unitName;
               _selectedUnitId = defaultUnit.id;
+              _selectedUnitFactor = defaultUnit.conversionFactor;
+            }
+
+            // Ensure selected unit is visible after filtering (e.g., remove base unit)
+            final visibleUnits = _filteredUnitsForDisplay();
+            if (visibleUnits.isNotEmpty &&
+                visibleUnits.every((u) => u.unitName != _selectedUnit)) {
+              final fallback = visibleUnits.firstWhere(
+                (u) => u.isDefaultSellingUnit,
+                orElse: () => visibleUnits.first,
+              );
+              _selectedUnit = fallback.unitName;
+              _selectedUnitId = fallback.id;
+              _selectedUnitFactor = fallback.conversionFactor;
             }
           } else {
             // No units configured, fallback to category-based default
             _selectedUnit = _getDefaultUnit();
             _selectedUnitId = null;
+            _defaultUnitId = null;
+            _defaultUnitName = null;
+            _selectedUnitFactor = null;
+            _defaultUnitFactor = null;
           }
         });
       }
@@ -115,6 +147,10 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
           _isLoadingUnits = false;
           _selectedUnit = widget.existingUnit ?? _getDefaultUnit();
           _selectedUnitId = null;
+          _defaultUnitId = null;
+          _defaultUnitName = null;
+          _selectedUnitFactor = null;
+          _defaultUnitFactor = null;
         });
       }
       print('Failed to load product units: $e');
@@ -143,10 +179,28 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     }
   }
 
+  List<ProductUnit> _filteredUnitsForDisplay() {
+    if (_productUnits.isEmpty) return [];
+
+    // Filter out base unit for pesticide to simplify purchasing UX
+    if (widget.product.category == ProductCategory.PESTICIDE) {
+      final baseName = widget.product.effectiveBaseUnit.toLowerCase();
+      final filtered = _productUnits.where((unit) {
+        final unitName = unit.unitName.toLowerCase();
+        final isBaseUnit =
+            unitName == baseName || unit.conversionFactor == 1.0;
+        return !isBaseUnit;
+      }).toList();
+      if (filtered.isNotEmpty) return filtered;
+    }
+
+    return _productUnits;
+  }
+
   List<String> _getUnitOptions() {
-    // 🔥 NEW: Use actual product units if available
-    if (_productUnits.isNotEmpty) {
-      return _productUnits.map((unit) => unit.unitName).toList();
+    final availableUnits = _filteredUnitsForDisplay();
+    if (availableUnits.isNotEmpty) {
+      return availableUnits.map((unit) => unit.unitName).toList();
     }
     
     // Fallback to category-based units
@@ -212,10 +266,30 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     final sellingPrice = sellingPriceText.isEmpty
         ? null
         : double.tryParse(sellingPriceText);
+    double? defaultSellingPrice = sellingPrice;
+    if (sellingPrice != null &&
+        _selectedUnitFactor != null &&
+        _defaultUnitFactor != null &&
+        _selectedUnitFactor! > 0 &&
+        _defaultUnitFactor! > 0) {
+      defaultSellingPrice =
+          sellingPrice * (_defaultUnitFactor! / _selectedUnitFactor!);
+    }
 
     if (quantity > 0 && price >= 0) {
-      // 🔥 NEW: Pass unitId for conversion tracking
-      widget.onAdd(quantity, price, _selectedUnit, _selectedUnitId, sellingPrice);
+      // 🔥 Pass extended unit metadata for downstream conversion logic
+      widget.onAdd(
+        quantity,
+        price,
+        _selectedUnit,
+        _selectedUnitId,
+        sellingPrice,
+        _defaultUnitId,
+        _defaultUnitName,
+        _selectedUnitFactor,
+        _defaultUnitFactor,
+        defaultSellingPrice,
+      );
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -466,6 +540,7 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
                                 orElse: () => _productUnits.first,
                               );
                               _selectedUnitId = unitObj.id;
+                              _selectedUnitFactor = unitObj.conversionFactor;
                             }
                           });
                         }

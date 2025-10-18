@@ -5,7 +5,8 @@ import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/purchase_order_provider.dart';
-import '../../providers/product_provider.dart';
+import '../../providers/product_provider.dart'; // ignore: unused_import
+import '../../providers/product_unit_provider.dart';
 import '../../models/company.dart';
 import '../../models/product.dart';
 import '../../models/product_unit.dart';
@@ -29,8 +30,6 @@ class CreatePurchaseOrderScreen extends StatefulWidget {
 class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   final _notesController = TextEditingController();
   bool _isCreatingPO = false; // Add this line
-  // 🔥 FIX: Cache the futures to prevent re-fetching in build method
-  final Map<String, Future<List<ProductUnit>>> _unitFutures = {};
 
   @override
   void initState() {
@@ -84,18 +83,10 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     );
   }
 
-  Future<List<ProductUnit>> _getUnits(BuildContext context, String productId) {
-    if (!_unitFutures.containsKey(productId)) {
-      _unitFutures[productId] = context
-          .read<ProductProvider>()
-          .getProductUnits(productId, forceRefresh: false); // No force refresh
-    }
-    return _unitFutures[productId]!;
-  }
-
   Widget _buildUnitDropdown(POCartItem item, PurchaseOrderProvider poProvider) {
+    final unitProvider = context.watch<ProductUnitProvider>();
     return FutureBuilder<List<ProductUnit>>(
-      future: _getUnits(context, item.product.id), // Use cached future
+      future: unitProvider.getUnitsForProduct(item.product.id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -103,12 +94,39 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         }
 
         final units = snapshot.data ?? [];
-        final unitOptions = units.map((u) => u.unitName).toList();
-        String? currentUnit = item.unit;
+        if (units.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
-        // Basic validation if current unit is valid
+        List<ProductUnit> displayUnits = units;
+        if (item.product.category == ProductCategory.PESTICIDE) {
+          final baseName = item.product.effectiveBaseUnit.toLowerCase();
+          final filtered = units.where((unit) {
+            final unitName = unit.unitName.toLowerCase();
+            final isBaseUnit =
+                unitName == baseName || unit.conversionFactor == 1.0;
+            return !isBaseUnit;
+          }).toList();
+          if (filtered.isNotEmpty) {
+            displayUnits = filtered;
+          }
+        }
+
+        final defaultSellingUnit = units.firstWhere(
+          (u) => u.isDefaultSellingUnit,
+          orElse: () => units.first,
+        );
+
+        final unitOptions = displayUnits.map((u) => u.unitName).toList();
+        String? currentUnit = item.unit;
+        ProductUnit? pendingUnitAssignment;
+
         if (currentUnit == null || !unitOptions.contains(currentUnit)) {
-          currentUnit = units.isNotEmpty ? units.first.unitName : null;
+          pendingUnitAssignment = displayUnits.firstWhere(
+            (u) => u.isDefaultSellingUnit,
+            orElse: () => displayUnits.first,
+          );
+          currentUnit = pendingUnitAssignment.unitName;
         }
 
         final baseUnitLabel = units.isNotEmpty
@@ -118,6 +136,34 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
               )
             : item.product.effectiveBaseUnit;
 
+        final selectedUnitDetails = units.firstWhere(
+          (u) => u.unitName == currentUnit,
+          orElse: () => units.first,
+        );
+
+        final bool metadataMissing =
+            item.unitId == null ||
+            item.defaultUnitId == null ||
+            item.selectedUnitFactor == null ||
+            item.defaultUnitFactor == null ||
+            item.unitId != selectedUnitDetails.id;
+
+        if (pendingUnitAssignment != null || metadataMissing) {
+          final ProductUnit unitToApply =
+              pendingUnitAssignment ?? selectedUnitDetails;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            poProvider.updatePOCartItem(
+              item.product.id,
+              newUnit: unitToApply.unitName,
+              newUnitId: unitToApply.id,
+              newDefaultUnitId: defaultSellingUnit.id,
+              newDefaultUnitName: defaultSellingUnit.unitName,
+              newSelectedUnitFactor: unitToApply.conversionFactor,
+              newDefaultUnitFactor: defaultSellingUnit.conversionFactor,
+            );
+          });
+        }
+
         return DropdownButtonFormField<String>(
           value: currentUnit,
           isExpanded: true,
@@ -126,7 +172,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             border: const OutlineInputBorder(),
             helperText: 'Hệ thống sẽ tự chuyển đổi sang $baseUnitLabel',
           ),
-          items: units.map((ProductUnit unit) {
+          items: displayUnits.map((ProductUnit unit) {
             final displayText = UnitDisplayFormatter.label(
               unit: unit,
               units: units,
@@ -138,14 +184,20 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             );
           }).toList(),
           onChanged: (String? newValue) {
-            if (newValue != null) {
-              final selectedUnit = units.firstWhere((u) => u.unitName == newValue);
-              poProvider.updatePOCartItem(
-                item.product.id,
-                newUnit: newValue,
-                newUnitId: selectedUnit.id,
-              );
-            }
+            if (newValue == null) return;
+            final selectedUnit = units.firstWhere(
+              (u) => u.unitName == newValue,
+              orElse: () => units.first,
+            );
+            poProvider.updatePOCartItem(
+              item.product.id,
+              newUnit: newValue,
+              newUnitId: selectedUnit.id,
+              newDefaultUnitId: defaultSellingUnit.id,
+              newDefaultUnitName: defaultSellingUnit.unitName,
+              newSelectedUnitFactor: selectedUnit.conversionFactor,
+              newDefaultUnitFactor: defaultSellingUnit.conversionFactor,
+            );
           },
         );
       },
@@ -376,6 +428,21 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   Widget _buildCartItem(POCartItem item, PurchaseOrderProvider poProvider) {
     // 🔥 FIXED: Get actual product units instead of hard-coded list
     final isZeroQuantity = item.quantity == 0;
+    final hasConversion =
+        item.selectedUnitFactor != null &&
+        item.defaultUnitFactor != null &&
+        item.selectedUnitFactor! > 0 &&
+        item.defaultUnitFactor! > 0;
+    double? pricePerDefaultUnit = item.defaultSellingPrice;
+    if ((pricePerDefaultUnit == null || pricePerDefaultUnit <= 0) &&
+        item.sellingPrice != null &&
+        hasConversion) {
+      pricePerDefaultUnit = item.sellingPrice! *
+          (item.defaultUnitFactor! / item.selectedUnitFactor!);
+    }
+    final displayDefaultUnitName = item.defaultUnitName?.isNotEmpty == true
+        ? item.defaultUnitName
+        : item.unit;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -473,6 +540,24 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 ),
               ],
             ),
+            if (pricePerDefaultUnit != null &&
+                pricePerDefaultUnit > 0 &&
+                displayDefaultUnitName != null &&
+                displayDefaultUnitName.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Giá bán mỗi $displayDefaultUnitName: ${AppFormatter.formatCurrency(pricePerDefaultUnit)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green.shade700,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -491,58 +576,191 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     }
   }
 
+  String _formatRatio(double? value) {
+    if (value == null) return '';
+    if (value == 0) return '0';
+    final integral = value.roundToDouble();
+    if ((value - integral).abs() < 1e-6) {
+      return integral.toStringAsFixed(0);
+    }
+    if (value.abs() >= 1) {
+      return value.toStringAsFixed(2);
+    }
+    return value.toStringAsFixed(3);
+  }
+
   Widget _buildSellingPriceField(
     POCartItem item,
     PurchaseOrderProvider poProvider,
   ) {
-    // 🔥 FIXED: Remove redundant label, just use InputDecoration
-    String unitName = item.unit ?? 'đơn vị';
-    
-    return TextFormField(
-      controller: item.sellingPriceController,
-      decoration: InputDecoration(
-        labelText: 'Giá bán / ${unitName} (tùy chọn)', // Clear and concise
-        hintText: 'Ví dụ: 55.000',
-        border: const OutlineInputBorder(),
-        prefixIcon: const Icon(Icons.sell_outlined),
-        suffixText: 'VNĐ',
-        helperText: 'Để trống để giữ nguyên giá hiện tại', // Keep helper for clarity
-      ),
-      keyboardType: TextInputType.number,
-      inputFormatters: [
-        CurrencyInputFormatter(maxValue: 999999999), // 🔥 FIXED: Proper currency formatter
+    final unitName = item.unit ?? 'đơn vị';
+    final defaultUnitName = item.defaultUnitName ?? 'đơn vị';
+    final hasDefaultUnit = item.defaultUnitId != null &&
+        item.defaultUnitFactor != null &&
+        item.defaultUnitFactor! > 0 &&
+        item.selectedUnitFactor != null &&
+        item.selectedUnitFactor! > 0;
+    final ratioSelectedToDefault = hasDefaultUnit
+        ? item.selectedUnitFactor! / item.defaultUnitFactor!
+        : null;
+    final ratioDefaultToSelected = ratioSelectedToDefault != null &&
+            ratioSelectedToDefault > 0
+        ? 1 / ratioSelectedToDefault
+        : null;
+    final isDefaultMode =
+        hasDefaultUnit && item.sellingPriceMode == PriceEntryMode.defaultUnit;
+    final controller = isDefaultMode
+        ? item.defaultSellingPriceController
+        : item.sellingPriceController;
+    final label = isDefaultMode
+        ? 'Giá bán / $defaultUnitName (tùy chọn)'
+        : 'Giá bán / $unitName (tùy chọn)';
+    final helper = isDefaultMode
+        ? (ratioSelectedToDefault != null
+            ? 'Tự động nhân ×${_formatRatio(ratioSelectedToDefault)} để ra giá $unitName'
+            : 'Giá bán mặc định của sản phẩm')
+        : hasDefaultUnit
+            ? (ratioSelectedToDefault != null
+                ? 'Tự động chia cho ${_formatRatio(ratioSelectedToDefault)} để ra giá $defaultUnitName'
+                : 'Giá theo đơn vị đang chọn')
+            : 'Giá theo đơn vị đang chọn';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasDefaultUnit) ...[
+          ToggleButtons(
+            borderRadius: BorderRadius.circular(8),
+            borderColor: Colors.green.shade200,
+            selectedBorderColor: Colors.green.shade700,
+            color: Colors.green.shade600,
+            selectedColor: Colors.white,
+            fillColor: Colors.green.shade600,
+            constraints: const BoxConstraints(minHeight: 36, minWidth: 72),
+            isSelected: [
+              item.sellingPriceMode == PriceEntryMode.selectedUnit,
+              item.sellingPriceMode == PriceEntryMode.defaultUnit,
+            ],
+            onPressed: (index) {
+              if (index == 1 && !hasDefaultUnit) return;
+              if (index == 0) {
+                poProvider.updatePOCartItem(
+                  item.product.id,
+                  newSellingPriceMode: PriceEntryMode.selectedUnit,
+                );
+              } else {
+                double? defaultPrice = item.defaultSellingPrice;
+                if ((defaultPrice == null || defaultPrice == 0) &&
+                    ratioDefaultToSelected != null &&
+                    item.sellingPrice != null &&
+                    item.sellingPrice! > 0) {
+                  defaultPrice = item.sellingPrice! * ratioDefaultToSelected;
+                }
+                poProvider.updatePOCartItem(
+                  item.product.id,
+                  newSellingPriceMode: PriceEntryMode.defaultUnit,
+                  newDefaultSellingPrice: defaultPrice,
+                  newSellingPrice: ratioSelectedToDefault != null && defaultPrice != null
+                      ? defaultPrice * ratioSelectedToDefault
+                      : item.sellingPrice,
+                );
+              }
+            },
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  unitName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  defaultUnitName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        TextFormField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: 'Ví dụ: 250.000',
+            prefixIcon: const Icon(Icons.sell_outlined),
+            suffixText: 'VNĐ',
+            border: const OutlineInputBorder(),
+            helperText: helper,
+          ),
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            CurrencyInputFormatter(maxValue: 999999999),
+          ],
+          onTap: () {
+            controller.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: controller.text.length,
+            );
+          },
+          onChanged: (value) {
+            final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+            if (numericValue.isEmpty) {
+              poProvider.updatePOCartItem(
+                item.product.id,
+                clearSellingPrice: true,
+                clearDefaultSellingPrice: true,
+              );
+              return;
+            }
+
+            final parsed = double.tryParse(numericValue) ?? 0.0;
+            if (isDefaultMode) {
+              final selectedPrice = ratioSelectedToDefault != null
+                  ? parsed * ratioSelectedToDefault
+                  : parsed;
+              poProvider.updatePOCartItem(
+                item.product.id,
+                newSellingPrice: selectedPrice,
+                newDefaultSellingPrice: parsed,
+              );
+            } else {
+              final defaultPrice = ratioDefaultToSelected != null
+                  ? parsed * ratioDefaultToSelected
+                  : parsed;
+              poProvider.updatePOCartItem(
+                item.product.id,
+                newSellingPrice: parsed,
+                newDefaultSellingPrice: defaultPrice,
+              );
+            }
+          },
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return null;
+            }
+            final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+            final price = double.tryParse(cleanValue);
+            if (price == null) {
+              return 'Vui lòng nhập số hợp lệ';
+            }
+            if (price < 0) {
+              return 'Giá không được âm';
+            }
+            return null;
+          },
+        ),
       ],
-      onTap: () {
-        if (item.sellingPriceController.text == '0') {
-          item.sellingPriceController.clear();
-        }
-      },
-      onChanged: (value) {
-        String numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
-        double? price = numericValue.isEmpty ? null : double.tryParse(numericValue);
-
-        if (value.isEmpty) {
-          poProvider.updatePOCartItem(item.product.id, clearSellingPrice: true);
-        } else {
-          poProvider.updatePOCartItem(item.product.id, newSellingPrice: price ?? 0.0);
-        }
-
-        // 🔥 FIXED: Let CurrencyInputFormatter handle formatting automatically
-      },
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return null; // Optional field
-        }
-        final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
-        final price = double.tryParse(cleanValue);
-        if (price == null) {
-          return 'Vui lòng nhập số hợp lệ';
-        }
-        if (price < 0) {
-          return 'Giá không được âm';
-        }
-        return null;
-      },
     );
   }
 
@@ -615,51 +833,174 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     POCartItem item,
     PurchaseOrderProvider poProvider,
   ) {
-    // 🔥 FIXED: Remove redundant label, just use InputDecoration
-    String unitName = item.unit ?? 'đơn vị';
-    
-    return TextFormField(
-      controller: item.unitCostController,
-      decoration: InputDecoration(
-        labelText: 'Giá nhập / ${unitName}', // Clear and concise
-        hintText: 'Ví dụ: 50.000',
-        border: const OutlineInputBorder(),
-        prefixIcon: const Icon(Icons.attach_money),
-        suffixText: 'VNĐ',
-        helperText: 'Giá cho 1 ${unitName}', // Keep helper for clarity
-      ),
-      keyboardType: TextInputType.number,
-      inputFormatters: [
-        CurrencyInputFormatter(maxValue: 999999999), // 🔥 FIXED: Proper currency formatter
+    final unitName = item.unit ?? 'đơn vị';
+    final defaultUnitName = item.defaultUnitName ?? 'đơn vị';
+    final hasDefaultUnit = item.defaultUnitId != null &&
+        item.defaultUnitFactor != null &&
+        item.defaultUnitFactor! > 0 &&
+        item.selectedUnitFactor != null &&
+        item.selectedUnitFactor! > 0;
+    final ratio = hasDefaultUnit
+        ? item.selectedUnitFactor! / item.defaultUnitFactor!
+        : null;
+    final isDefaultMode =
+        hasDefaultUnit && item.purchasePriceMode == PriceEntryMode.defaultUnit;
+    final controller =
+        isDefaultMode ? item.defaultUnitCostController : item.unitCostController;
+    final label = isDefaultMode
+        ? 'Giá nhập / $defaultUnitName'
+        : 'Giá nhập / $unitName';
+    final helper = isDefaultMode
+        ? (ratio != null
+            ? 'Hệ thống sẽ nhân ×${_formatRatio(ratio)} để ra giá $unitName'
+            : 'Hệ thống sẽ tự quy đổi sang $unitName')
+        : hasDefaultUnit
+            ? (ratio != null
+                ? 'Tự động chia cho ${_formatRatio(ratio)} để ra giá $defaultUnitName'
+                : 'Giá cho 1 $unitName')
+            : 'Giá cho 1 $unitName';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasDefaultUnit) ...[
+          ToggleButtons(
+            borderRadius: BorderRadius.circular(8),
+            borderColor: Colors.green.shade200,
+            selectedBorderColor: Colors.green.shade700,
+            color: Colors.green.shade600,
+            selectedColor: Colors.white,
+            fillColor: Colors.green.shade600,
+            constraints: const BoxConstraints(minHeight: 36, minWidth: 72),
+            isSelected: [
+              item.purchasePriceMode == PriceEntryMode.selectedUnit,
+              item.purchasePriceMode == PriceEntryMode.defaultUnit,
+            ],
+            onPressed: (index) {
+              if (index == 1 && !hasDefaultUnit) return;
+              if (index == 0) {
+                poProvider.updatePOCartItem(
+                  item.product.id,
+                  newPurchasePriceMode: PriceEntryMode.selectedUnit,
+                );
+              } else {
+                double? defaultCost = item.defaultUnitCost;
+                if ((defaultCost == null || defaultCost == 0) &&
+                    ratio != null &&
+                    item.unitCost > 0) {
+                  defaultCost = item.unitCost / ratio;
+                }
+                poProvider.updatePOCartItem(
+                  item.product.id,
+                  newPurchasePriceMode: PriceEntryMode.defaultUnit,
+                  newDefaultUnitCost: defaultCost,
+                );
+              }
+            },
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  unitName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  defaultUnitName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        TextFormField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: 'Ví dụ: 50.000',
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.attach_money),
+            suffixText: 'VNĐ',
+            helperText: helper,
+          ),
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            CurrencyInputFormatter(maxValue: 999999999),
+          ],
+          onTap: () {
+            controller.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: controller.text.length,
+            );
+          },
+          onChanged: (value) {
+            final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+            if (numericValue.isEmpty) {
+              poProvider.updatePOCartItem(
+                item.product.id,
+                newUnitCost: 0,
+                clearDefaultUnitCost: isDefaultMode,
+              );
+              return;
+            }
+
+            final parsed = double.tryParse(numericValue) ?? 0.0;
+            if (isDefaultMode) {
+              final converted =
+                  ratio != null ? parsed * ratio : parsed; // fallback
+              poProvider.updatePOCartItem(
+                item.product.id,
+                newUnitCost: converted,
+                newDefaultUnitCost: parsed,
+              );
+            } else {
+              final defaultCost =
+                  ratio != null && ratio > 0 ? parsed / ratio : null;
+              poProvider.updatePOCartItem(
+                item.product.id,
+                newUnitCost: parsed,
+                newDefaultUnitCost: defaultCost,
+              );
+            }
+          },
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return null;
+            }
+            final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+            final cost = double.tryParse(cleanValue);
+            if (cost == null) {
+              return 'Vui lòng nhập số hợp lệ';
+            }
+            if (cost < 0) {
+              return 'Giá không được âm';
+            }
+            return null;
+          },
+        ),
+        if (hasDefaultUnit &&
+            item.defaultUnitCost != null &&
+            item.defaultUnitCost! > 0 &&
+            ratio != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '${AppFormatter.formatCurrency(item.defaultUnitCost ?? 0)} × ${_formatRatio(ratio)} = ${AppFormatter.formatCurrency(item.unitCost)}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+          ),
       ],
-      onTap: () {
-        if (item.unitCostController.text == '0') {
-          item.unitCostController.clear();
-        }
-      },
-      onChanged: (value) {
-        // 🔥 FIXED: Use proper currency parsing
-        String numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
-        double cost = double.tryParse(numericValue) ?? 0.0;
-
-        poProvider.updatePOCartItem(item.product.id, newUnitCost: cost);
-
-        // 🔥 FIXED: Let CurrencyInputFormatter handle formatting automatically
-      },
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return null; // Allow empty, will be treated as 0
-        }
-        final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
-        final cost = double.tryParse(cleanValue);
-        if (cost == null) {
-          return 'Vui lòng nhập số hợp lệ';
-        }
-        if (cost < 0) {
-          return 'Giá không được âm';
-        }
-        return null;
-      },
     );
   }
 

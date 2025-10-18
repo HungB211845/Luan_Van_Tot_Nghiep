@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../models/product_unit.dart'; // 🔥 NEW: Import ProductUnit model
+import '../../providers/product_unit_provider.dart';
 import '../../providers/purchase_order_provider.dart';
 import '../../services/product_service.dart'; // Import service
-import '../../services/product_unit_service.dart'; // 🔥 NEW: Import unit service
 import 'widgets/product_selection_header.dart';
 import 'widgets/live_cart_summary.dart';
 import 'widgets/simple_product_card.dart';
@@ -29,7 +29,6 @@ class BulkProductSelectionScreen extends StatefulWidget {
 
 class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen> {
   final ProductService _productService = ProductService(); // Instantiate service
-  final ProductUnitService _unitService = ProductUnitService(); // 🔥 NEW: Unit service
   final TextEditingController _searchController = TextEditingController();
 
   // Local state for this screen
@@ -66,10 +65,14 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
     try {
       final products = await _productService.getProductsByCompany(widget.supplierId);
 
-      // 🔥 NEW: Load units for each product
+      final unitProvider = context.read<ProductUnitProvider>();
+      // 🔥 NEW: Load units for each product via provider (with caching)
       for (final product in products) {
         try {
-          final units = await _unitService.getProductUnits(product.id);
+          final units = await unitProvider.getUnitsForProduct(
+            product.id,
+            forceRefresh: true, // Ensure latest config when opening selector
+          );
           _productUnits[product.id] = units;
         } catch (e) {
           debugPrint('Failed to load units for ${product.name}: $e');
@@ -109,7 +112,18 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
         existingSellingPrice:
             cartItem?.sellingPrice ?? product.currentSellingPrice,
         existingUnit: cartItem?.unit,
-        onAdd: (quantity, price, unit, unitId, sellingPrice) {
+        onAdd: (
+          quantity,
+          price,
+          unit,
+          unitId,
+          sellingPrice,
+          defaultUnitId,
+          defaultUnitName,
+          selectedUnitFactor,
+          defaultUnitFactor,
+          defaultSellingPrice,
+        ) {
           setState(() {
             _localCartItems[product.id] = POCartItem(
               product: product,
@@ -118,6 +132,11 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
               sellingPrice: sellingPrice,
               unit: unit,
               unitId: unitId,
+              defaultUnitId: defaultUnitId,
+              defaultUnitName: defaultUnitName,
+              selectedUnitFactor: selectedUnitFactor,
+              defaultUnitFactor: defaultUnitFactor,
+              defaultSellingPrice: defaultSellingPrice,
             );
           });
         },

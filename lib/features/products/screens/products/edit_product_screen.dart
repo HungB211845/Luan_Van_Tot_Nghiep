@@ -10,6 +10,7 @@ import '../../models/pesticide_attributes.dart';
 import '../../models/seed_attributes.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart';
+import '../../providers/product_unit_provider.dart'; // 🔥 NEW: For unit management
 import '../../services/product_unit_service.dart';
 import '../../../../shared/services/base_service.dart';
 import '../../../../shared/services/image_service.dart';
@@ -52,6 +53,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
   late PesticidePackagingType _selectedPesticidePackagingType; // 🔥 NEW
   late String _pesticideBaseUnit; // 🔥 NEW
 
+  // 🔥 NEW: Selling price controller for unit price calculation
+  late TextEditingController _sellingPriceController;
+
   // Dropdown selections
   late ProductCategory _selectedCategory;
   String? _selectedCompanyId;
@@ -80,6 +84,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _selectedCompanyId = widget.product.companyId;
     _imageUrl = widget.product.imageUrl;
 
+    // 🔥 NEW: Initialize selling price controller with current price
+    _sellingPriceController = TextEditingController(
+      text: widget.product.currentSellingPrice.toString(),
+    );
+
     _populateAttributeControllers();
     _loadExistingUnits();
 
@@ -90,6 +99,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _bagWeightController.addListener(() => setState(() => _hasChanges = true));
     _packageQtyController.addListener(() => setState(() => _hasChanges = true));
     _packageVolumeController.addListener(() => setState(() => _hasChanges = true));
+    _sellingPriceController.addListener(() => setState(() => _hasChanges = true)); // 🔥 NEW
 
     // Initialize new pesticide unit config state with defaults
     _selectedPesticidePackagingType = PesticidePackagingType.bottle;
@@ -218,6 +228,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _bagWeightController.dispose();
     _packageQtyController.dispose();
     _packageVolumeController.dispose();
+    _sellingPriceController.dispose(); // 🔥 NEW
     _npkRatioController.dispose();
     _fertilizerTypeController.dispose();
     // 🔥 REMOVED: _weightController and _weightUnitController disposal
@@ -286,15 +297,47 @@ class _EditProductScreenState extends State<EditProductScreen> {
         updatedAt: DateTime.now(),
       );
 
-      final provider = context.read<ProductProvider>();
-      final success = await provider.updateProduct(updatedProduct);
+      final productProvider = context.read<ProductProvider>();
+      final success = await productProvider.updateProduct(updatedProduct);
 
       if (success && mounted) {
-        // Save product units after product saved successfully
+        // 🔥 NEW: Use ProductUnitProvider to replace units atomically
         try {
-          await _saveProductUnits(widget.product.id);
-          // 🔥 CRITICAL: Reload units cache after successful save
-          await _loadExistingUnits();
+          final sellingPrice = double.parse(_sellingPriceController.text.trim());
+
+          // Build config for ProductUnitProvider based on category
+          final Map<String, dynamic> unitConfig;
+          if (_selectedCategory == ProductCategory.FERTILIZER || _selectedCategory == ProductCategory.SEED) {
+            unitConfig = {
+              'bagWeight': int.parse(_bagWeightController.text.trim()),
+              'productPrice': sellingPrice,
+            };
+          } else if (_selectedCategory == ProductCategory.PESTICIDE) {
+            unitConfig = {
+              'packagingType': _selectedPesticidePackagingType,
+              'packageVolume': int.parse(_packageVolumeController.text.trim()),
+              'packageQty': int.parse(_packageQtyController.text.trim()),
+              'baseUnit': _pesticideBaseUnit,
+              'productPrice': sellingPrice,
+            };
+          } else {
+            throw Exception('Unsupported category');
+          }
+
+          // Call ProductUnitProvider to replace units
+          await context.read<ProductUnitProvider>().replaceUnitsForProduct(
+            widget.product.id,
+            _selectedCategory,
+            unitConfig,
+          );
+
+          // Update product selling price
+          await productProvider.updateCurrentSellingPrice(
+            widget.product.id,
+            sellingPrice,
+            reason: 'Updated via Edit Product screen',
+          );
+
         } catch (e) {
           debugPrint('Warning: Product saved but units failed: $e');
           // Continue anyway - product is saved, units can be fixed later
@@ -311,7 +354,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(provider.errorMessage.isEmpty ? 'Có lỗi xảy ra' : provider.errorMessage),
+            content: Text(productProvider.errorMessage.isEmpty ? 'Có lỗi xảy ra' : productProvider.errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -1152,6 +1195,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Bag weight input
         Text(
           'Trọng lượng mỗi bao (kg)',
           style: TextStyle(
@@ -1175,9 +1219,39 @@ class _EditProductScreenState extends State<EditProductScreen> {
             return null;
           },
         ),
+
+        const SizedBox(height: 16),
+
+        // 🔥 NEW: Selling price input
+        Text(
+          'Giá bán mỗi bao (VNĐ)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _sellingPriceController,
+          decoration: _buildInputDecoration(
+            label: 'VD: 300000',
+            icon: Icons.attach_money,
+          ),
+          keyboardType: TextInputType.number,
+          validator: (v) {
+            if (v?.trim().isEmpty ?? true) return 'Nhập giá bán';
+            final price = double.tryParse(v!.trim());
+            if (price == null || price <= 0) return 'Giá phải > 0';
+            return null;
+          },
+        ),
+
         const SizedBox(height: 8),
         Text(
-          'Hệ thống sẽ tự tạo 2 đơn vị: "Bao" (${_bagWeightController.text}kg) và "kg" (1kg)',
+          'Hệ thống sẽ tự tạo 2 đơn vị:\n'
+          '• "Bao" (${_bagWeightController.text}kg) - Giá: ${_sellingPriceController.text}đ\n'
+          '• "kg" (1kg) - Giá tự động: ${_bagWeightController.text.isNotEmpty && _sellingPriceController.text.isNotEmpty ? (double.tryParse(_sellingPriceController.text) ?? 0) / (int.tryParse(_bagWeightController.text) ?? 1) : 0}đ/kg',
           style: TextStyle(
             fontSize: 12,
             color: Colors.grey[600],
@@ -1325,14 +1399,54 @@ class _EditProductScreenState extends State<EditProductScreen> {
           ],
         ),
 
+        const SizedBox(height: 16),
+
+        // 🔥 NEW: Selling price input for pesticide
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Giá bán mỗi ${currentPackageConfig.displayName} (VNĐ)',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _sellingPriceController,
+              decoration: _buildInputDecoration(
+                label: 'VD: 45000',
+                icon: Icons.attach_money,
+              ),
+              keyboardType: TextInputType.number,
+              validator: (v) {
+                if (v?.trim().isEmpty ?? true) return 'Nhập giá bán';
+                final price = double.tryParse(v!.trim());
+                if (price == null || price <= 0) return 'Giá phải > 0';
+                return null;
+              },
+            ),
+          ],
+        ),
+
         const SizedBox(height: 8),
 
-        // Helper text
+        // Helper text with price calculation
         Text(
-          'Hệ thống sẽ tự tạo 3 đơn vị:\n'
-          '• "${currentPackageConfig.displayName} ${_packageVolumeController.text}$_pesticideBaseUnit" (bán lẻ)\n'
-          '• "Thùng" (${_packageQtyController.text} ${currentPackageConfig.displayName}, nhập hàng)\n'
-          '• "$_pesticideBaseUnit" (đơn vị cơ sở)',
+          () {
+            final packageQty = int.tryParse(_packageQtyController.text) ?? 20;
+            final packageVolume = int.tryParse(_packageVolumeController.text) ?? 500;
+            final sellingPrice = double.tryParse(_sellingPriceController.text) ?? 0;
+            final boxPrice = sellingPrice * packageQty;
+            final baseUnitPrice = packageVolume > 0 ? sellingPrice / packageVolume : 0;
+
+            return '💡 Hệ thống sẽ tự tạo 3 đơn vị:\n'
+                   '1️⃣ "${currentPackageConfig.displayName} $packageVolume$_pesticideBaseUnit" (bán lẻ) - Giá: ${sellingPrice.toStringAsFixed(0)}đ\n'
+                   '2️⃣ "Thùng" ($packageQty ${currentPackageConfig.displayName}) - Giá: ${boxPrice.toStringAsFixed(0)}đ\n'
+                   '3️⃣ "$_pesticideBaseUnit" (đơn vị cơ sở) - Giá: ${baseUnitPrice.toStringAsFixed(2)}đ/$_pesticideBaseUnit';
+          }(),
           style: TextStyle(
             fontSize: 12,
             color: Colors.grey[600],
