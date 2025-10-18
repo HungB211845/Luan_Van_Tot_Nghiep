@@ -3,9 +3,10 @@ import '../../../models/product.dart';
 
 class SimpleProductCard extends StatelessWidget {
   final Product product;
-  final int currentStock;
-  final String stockUnit; // 🔥 NEW: Unit name for display (Bao, kg, etc.)
+  final String stockDisplay;
   final double? lastPrice;
+  final String? lastPriceUnit;
+  final bool isLowStock;
   final bool isInCart;
   final int cartQuantity;
   final VoidCallback onTap;
@@ -13,9 +14,10 @@ class SimpleProductCard extends StatelessWidget {
   const SimpleProductCard({
     Key? key,
     required this.product,
-    required this.currentStock,
-    required this.stockUnit, // 🔥 NEW: Required parameter
+    required this.stockDisplay,
     this.lastPrice,
+    this.lastPriceUnit,
+    required this.isLowStock,
     required this.isInCart,
     required this.cartQuantity,
     required this.onTap,
@@ -24,7 +26,6 @@ class SimpleProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categoryColor = _getCategoryColor();
-    final isLowStock = currentStock <= 10;
 
     return InkWell(
       onTap: onTap,
@@ -163,7 +164,10 @@ class SimpleProductCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           lastPrice != null
-                              ? _formatCurrency(lastPrice!)
+                              ? _formatCurrency(lastPrice!) +
+                                  (lastPriceUnit != null && lastPriceUnit!.isNotEmpty
+                                      ? ' / $lastPriceUnit'
+                                      : '')
                               : 'Chưa có giá',
                           style: const TextStyle(
                             fontSize: 14,
@@ -190,14 +194,17 @@ class SimpleProductCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            Text(
-                              '$currentStock $stockUnit', // 🔥 FIXED: Display with unit name (e.g., "53 Bao")
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: isLowStock
-                                    ? Colors.red[600]
-                                    : Colors.black87,
+                            Expanded(
+                              child: Text(
+                                stockDisplay,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isLowStock
+                                      ? Colors.red[600]
+                                      : Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (isLowStock) ...[

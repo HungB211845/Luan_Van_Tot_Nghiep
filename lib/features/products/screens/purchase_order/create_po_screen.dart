@@ -1096,28 +1096,6 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                           RouteNames.purchaseOrderDetail,
                           arguments: newPO,
                         );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Row(
-                              children: [
-                                Icon(Icons.check_circle, color: Colors.white, size: 20),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Đã gửi đơn nhập hàng thành công',
-                                    style: TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: Colors.green,
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(seconds: 3),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        );
                       }
                     } finally {
                       if (mounted) {

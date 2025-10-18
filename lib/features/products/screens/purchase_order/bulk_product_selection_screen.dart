@@ -5,6 +5,7 @@ import '../../models/product_unit.dart'; // 🔥 NEW: Import ProductUnit model
 import '../../providers/product_unit_provider.dart';
 import '../../providers/purchase_order_provider.dart';
 import '../../services/product_service.dart'; // Import service
+import '../../utils/unit_display_formatter.dart';
 import 'widgets/product_selection_header.dart';
 import 'widgets/live_cart_summary.dart';
 import 'widgets/simple_product_card.dart';
@@ -36,6 +37,7 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
   bool _isLoading = true;
   final Map<String, POCartItem> _localCartItems = {};
   final Map<String, List<ProductUnit>> _productUnits = {}; // 🔥 NEW: Cache units per product
+  final Map<String, _PriceDisplay> _lastPrices = {};
   ProductCategory? _selectedCategory;
   String _searchQuery = '';
   bool _isCartExpanded = false;
@@ -80,9 +82,26 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
         }
       }
 
+      Map<String, double> latestCosts = {};
+      if (products.isNotEmpty) {
+        latestCosts = await _productService.getLatestCostsForSupplier(
+          supplierId: widget.supplierId,
+          productIds: products.map((p) => p.id).toList(),
+        );
+      }
+
       if (mounted) {
         setState(() {
           _supplierProducts = products;
+          _lastPrices
+            ..clear()
+            ..addAll({
+              for (final entry in latestCosts.entries)
+                entry.key: _convertCostForDisplay(
+                  entry.value,
+                  _productUnits[entry.key] ?? [],
+                )
+            });
         });
       }
     } catch (e) {
@@ -108,7 +127,8 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
       builder: (context) => ProductEntryBottomSheet(
         product: product,
         existingQuantity: cartItem?.quantity,
-        existingPrice: cartItem?.unitCost,
+        existingPrice:
+            cartItem?.unitCost ?? _lastPrices[product.id]?.amount,
         existingSellingPrice:
             cartItem?.sellingPrice ?? product.currentSellingPrice,
         existingUnit: cartItem?.unit,
@@ -267,13 +287,16 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
 
                             // 🔥 NEW: Calculate display stock in default selling unit
                             final units = _productUnits[product.id] ?? [];
-                            final displayStock = product.getStockInDefaultUnit(units);
-                            final stockUnit = product.getDefaultUnitName(units);
+                            final stockDisplay = _formatStockDisplay(product, units);
+                            final bool isLowStock = _isLowStock(product, units);
+                            final priceDisplay = _lastPrices[product.id];
 
                             return SimpleProductCard(
                               product: product,
-                              currentStock: displayStock.toInt(), // 🔥 FIXED: Display converted stock (e.g., 53 Bao instead of 2682 kg)
-                              stockUnit: stockUnit, // 🔥 NEW: Pass unit name
+                              stockDisplay: stockDisplay,
+                              lastPrice: priceDisplay?.amount,
+                              lastPriceUnit: priceDisplay?.unitLabel,
+                              isLowStock: isLowStock,
                               isInCart: isInCart,
                               cartQuantity: cartItem?.quantity ?? 0,
                               onTap: () => _showProductEntrySheet(product, cartItem),
@@ -285,6 +308,70 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
         ),
       ),
     );
+  }
+
+  String _formatStockDisplay(Product product, List<ProductUnit> units) {
+    final baseStock = (product.availableStock ?? 0).toDouble();
+    if (baseStock <= 0) {
+      return '0 ${product.effectiveBaseUnit}';
+    }
+
+    if (units.isNotEmpty) {
+      final displayUnit =
+          UnitDisplayFormatter.preferredDisplayUnit(units) ?? units.first;
+
+      if (displayUnit.conversionFactor > 0) {
+        final quantity = baseStock / displayUnit.conversionFactor;
+        if (quantity >= 1) {
+          final rounded = quantity.round();
+          final unitName = UnitDisplayFormatter.simpleUnitName(displayUnit);
+          return '$rounded $unitName';
+        }
+      }
+
+      final defaultQuantity = product.getStockInDefaultUnit(units);
+      final defaultUnitName = product.getDefaultUnitName(units);
+      return '${_formatQuantity(defaultQuantity)} $defaultUnitName';
+    }
+
+    return '${_formatQuantity(baseStock)} ${product.effectiveBaseUnit}';
+  }
+
+  bool _isLowStock(Product product, List<ProductUnit> units) {
+    final converted = product.getStockInDefaultUnit(units);
+    final threshold =
+        product.minStockLevel > 0 ? product.minStockLevel.toDouble() : 10.0;
+    return converted <= threshold;
+  }
+
+  _PriceDisplay _convertCostForDisplay(double baseCost, List<ProductUnit> units) {
+    if (units.isEmpty) {
+      return _PriceDisplay(amount: baseCost, unitLabel: '');
+    }
+
+    final defaultUnit = units.firstWhere(
+      (u) => u.isDefaultSellingUnit,
+      orElse: () => units.first,
+    );
+    final factor = defaultUnit.conversionFactor <= 0
+        ? 1.0
+        : defaultUnit.conversionFactor;
+    final converted = baseCost * factor;
+    debugPrint(
+        'Latest cost conversion -> base: $baseCost, unit: ${defaultUnit.unitName}, factor: $factor, converted: $converted');
+    return _PriceDisplay(
+      amount: converted,
+      unitLabel: UnitDisplayFormatter.simpleUnitName(defaultUnit),
+    );
+  }
+
+  String _formatQuantity(double value) {
+    if (value <= 0) return '0';
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
+    }
+    final formatted = value.toStringAsFixed(2);
+    return formatted.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
   }
 
   Widget _buildCategoryChip(String label, ProductCategory? category) {
@@ -302,4 +389,11 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
       ),
     );
   }
+}
+
+class _PriceDisplay {
+  final double amount;
+  final String unitLabel;
+
+  const _PriceDisplay({required this.amount, required this.unitLabel});
 }

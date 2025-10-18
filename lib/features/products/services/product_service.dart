@@ -201,6 +201,59 @@ class ProductService extends BaseService {
     }
   }
 
+  /// Get latest purchase costs for a set of products scoped by supplier.
+  /// Returns a map keyed by product ID.
+  Future<Map<String, double>> getLatestCostsForSupplier({
+    required String? supplierId,
+    required List<String> productIds,
+  }) async {
+    if (productIds.isEmpty) {
+      return {};
+    }
+
+    try {
+      ensureAuthenticated();
+      final response = await _supabase.rpc(
+        'get_latest_supplier_cost',
+        params: {
+          'p_supplier_id': supplierId,
+          'p_product_ids': productIds,
+        },
+      );
+
+      if (response is! List) {
+        return {};
+      }
+
+      final result = <String, double>{};
+      for (final row in response) {
+        if (row is Map<String, dynamic>) {
+          final productId = row['product_id'] as String?;
+          final dynamic unitCostRaw = row['last_unit_cost'];
+
+          if (productId == null || unitCostRaw == null) {
+            continue;
+          }
+
+          double? parsedCost;
+          if (unitCostRaw is num) {
+            parsedCost = unitCostRaw.toDouble();
+          } else if (unitCostRaw is String) {
+            parsedCost = double.tryParse(unitCostRaw);
+          }
+
+          if (parsedCost != null) {
+            result[productId] = parsedCost;
+          }
+        }
+      }
+      return result;
+    } catch (e) {
+      debugPrint('Failed to load latest costs: $e');
+      return {};
+    }
+  }
+
   /// Tìm kiếm products với Full-Text Search + Pagination
   /// Độ phức tạp: O(log n) thay vì O(n) của ILIKE
   /// Hỗ trợ Vietnamese language và ranking theo độ liên quan
