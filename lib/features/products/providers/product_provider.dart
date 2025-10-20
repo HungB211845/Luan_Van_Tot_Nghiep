@@ -1531,6 +1531,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       // Bước C: Cập nhật state với dữ liệu đã được làm giàu
       _activeTransactionItems = enrichedItems;
       _isLoadingTransaction = false;
+      _errorMessage = '';
+      _status = ProductStatus.success;
       
       print('✅ Transaction details loaded successfully');
       notifyListeners();

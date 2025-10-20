@@ -35,6 +35,8 @@ class TransactionService extends BaseService {
       );
       final totalAmount = baseAmount + surchargeAmount;
 
+      final transactionTimestamp = DateTime.now().toUtc();
+
       // Tạo transaction trước
       final transactionData = addStoreId({
         'customer_id': customerId,
@@ -44,6 +46,7 @@ class TransactionService extends BaseService {
         'payment_method': paymentMethod.value,
         'notes': notes,
         'invoice_number': _generateInvoiceNumber(),
+        'transaction_date': transactionTimestamp.toIso8601String(),
       });
 
       final transactionResponse = await _supabase
