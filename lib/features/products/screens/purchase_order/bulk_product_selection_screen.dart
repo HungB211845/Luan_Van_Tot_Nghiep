@@ -142,7 +142,7 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
           defaultUnitName,
           selectedUnitFactor,
           defaultUnitFactor,
-          defaultSellingPrice,
+          displaySellingPrice,
           defaultUnitCost,
           allowsPricingToggle,
           pricingSelection,
@@ -161,7 +161,12 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
               defaultUnitName: defaultUnitName,
               selectedUnitFactor: selectedUnitFactor,
               defaultUnitFactor: defaultUnitFactor,
-              defaultSellingPrice: defaultSellingPrice,
+              displaySellingPrice: displaySellingPrice,
+              baseSellingPrice: (displaySellingPrice != null &&
+                      defaultUnitFactor != null &&
+                      defaultUnitFactor! > 0)
+                  ? displaySellingPrice! / defaultUnitFactor!
+                  : null,
               defaultUnitCost: normalizedDefaultCost,
               allowsPricingToggle: allowsPricingToggle,
               pricingSelection: pricingSelection,

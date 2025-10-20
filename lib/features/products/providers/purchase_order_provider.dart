@@ -44,7 +44,8 @@ class POCartItem {
   double? selectedUnitFactor;
   double? defaultUnitFactor;
   double? defaultUnitCost;
-  double? defaultSellingPrice;
+  double? displaySellingPrice;
+  double? baseSellingPrice;
   PricingUnitSelection pricingSelection;
   bool allowsPricingToggle;
 
@@ -52,7 +53,7 @@ class POCartItem {
   final TextEditingController unitCostController;
   final TextEditingController sellingPriceController;
   final TextEditingController defaultUnitCostController;
-  final TextEditingController defaultSellingPriceController;
+  final TextEditingController displaySellingPriceController;
 
   POCartItem({
     required this.product,
@@ -66,7 +67,8 @@ class POCartItem {
     this.selectedUnitFactor,
     this.defaultUnitFactor,
     this.defaultUnitCost,
-    this.defaultSellingPrice,
+    this.displaySellingPrice,
+    this.baseSellingPrice,
     this.pricingSelection = PricingUnitSelection.container,
     this.allowsPricingToggle = false,
   })  : quantityController = TextEditingController(text: quantity.toString()),
@@ -84,15 +86,22 @@ class POCartItem {
               ? AppFormatter.formatNumber(defaultUnitCost!)
               : '',
         ),
-        defaultSellingPriceController = TextEditingController(
+        displaySellingPriceController = TextEditingController(
           text: (() {
-            final seed = defaultSellingPrice ??
+            final seed = displaySellingPrice ??
                 sellingPrice ?? product.currentSellingPrice;
             return seed > 0 ? AppFormatter.formatNumber(seed) : '';
           })(),
         ) {
     this.sellingPrice ??= product.currentSellingPrice;
-    this.defaultSellingPrice ??= sellingPrice ?? product.currentSellingPrice;
+    this.displaySellingPrice ??= sellingPrice ?? product.currentSellingPrice;
+    if (this.baseSellingPrice == null &&
+        this.displaySellingPrice != null &&
+        this.defaultUnitFactor != null &&
+        this.defaultUnitFactor! > 0) {
+      this.baseSellingPrice =
+          this.displaySellingPrice! / this.defaultUnitFactor!;
+    }
   }
 
   void dispose() {
@@ -100,7 +109,7 @@ class POCartItem {
     unitCostController.dispose();
     sellingPriceController.dispose();
     defaultUnitCostController.dispose();
-    defaultSellingPriceController.dispose();
+    displaySellingPriceController.dispose();
   }
 
   POCartItem copyWith({
@@ -115,7 +124,8 @@ class POCartItem {
     double? selectedUnitFactor,
     double? defaultUnitFactor,
     double? defaultUnitCost,
-    double? defaultSellingPrice,
+    double? displaySellingPrice,
+    double? baseSellingPrice,
     PricingUnitSelection? pricingSelection,
     bool? allowsPricingToggle,
   }) {
@@ -131,7 +141,8 @@ class POCartItem {
       selectedUnitFactor: selectedUnitFactor ?? this.selectedUnitFactor,
       defaultUnitFactor: defaultUnitFactor ?? this.defaultUnitFactor,
       defaultUnitCost: defaultUnitCost ?? this.defaultUnitCost,
-      defaultSellingPrice: defaultSellingPrice ?? this.defaultSellingPrice,
+      displaySellingPrice: displaySellingPrice ?? this.displaySellingPrice,
+      baseSellingPrice: baseSellingPrice ?? this.baseSellingPrice,
       pricingSelection: pricingSelection ?? this.pricingSelection,
       allowsPricingToggle: allowsPricingToggle ?? this.allowsPricingToggle,
     );
@@ -476,6 +487,80 @@ class PurchaseOrderProvider extends ChangeNotifier {
     );
   }
 
+  PriceDisplayInfo? itemImportPriceDisplay(PurchaseOrderItem item) {
+    final units = _productUnitsById[item.productId];
+    if (units == null || units.isEmpty) return null;
+    return _productUnitProvider.buildPriceDisplayFromUnits(
+      units: units,
+      basePrice: item.unitCost,
+      mode: PriceDisplayMode.defaultUnit,
+    );
+  }
+
+  PriceDisplayInfo? itemSellingPriceDisplay(PurchaseOrderItem item) {
+    final sellingBase = item.sellingPrice ?? 0;
+    if (sellingBase <= 0) return null;
+    final units = _productUnitsById[item.productId];
+    if (units == null || units.isEmpty) return null;
+    return _productUnitProvider.buildPriceDisplayFromUnits(
+      units: units,
+      basePrice: sellingBase,
+      mode: PriceDisplayMode.defaultUnit,
+    );
+  }
+
+  PriceDisplayInfo? cartItemPriceDisplay(
+    POCartItem item, {
+    required bool forSelling,
+    PriceDisplayMode mode = PriceDisplayMode.defaultUnit,
+  }) {
+    final units = _productUnitsById[item.product.id];
+    if (units == null || units.isEmpty) return null;
+
+    double? basePrice;
+    String? targetUnitId = mode == PriceDisplayMode.selectedUnit
+        ? item.unitId
+        : item.defaultUnitId;
+
+    if (forSelling) {
+      basePrice = item.baseSellingPrice;
+      if (basePrice == null || basePrice <= 0) {
+        final defaultPrice = item.displaySellingPrice;
+        if (defaultPrice != null &&
+            defaultPrice > 0 &&
+            item.defaultUnitFactor != null &&
+            item.defaultUnitFactor! > 0) {
+          basePrice = defaultPrice / item.defaultUnitFactor!;
+        } else if (item.sellingPrice != null && item.sellingPrice! > 0) {
+          basePrice = _productUnitProvider.convertPriceToBaseFromUnits(
+            units: units,
+            displayPrice: item.sellingPrice!,
+            fromUnitId: item.unitId,
+          );
+        }
+      }
+      basePrice ??= item.product.currentSellingPrice;
+    } else {
+      basePrice = item.defaultUnitCost;
+      if (basePrice == null || basePrice <= 0) {
+        basePrice = _productUnitProvider.convertPriceToBaseFromUnits(
+          units: units,
+          displayPrice: item.unitCost,
+          fromUnitId: item.unitId,
+        );
+      }
+      basePrice ??= item.unitCost;
+    }
+
+    if (basePrice == null || basePrice <= 0) return null;
+    return _productUnitProvider.buildPriceDisplayFromUnits(
+      units: units,
+      basePrice: basePrice,
+      targetUnitId: targetUnitId,
+      mode: mode,
+    );
+  }
+
   FormattedQuantity formatBatchQuantity(ProductBatch batch) {
     return _formatQuantityForProduct(
       productId: batch.productId,
@@ -776,7 +861,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
     double? newUnitCost,
     double? newDefaultUnitCost,
     double? newSellingPrice,
-    double? newDefaultSellingPrice,
+    double? newDisplaySellingPrice,
     String? newUnit,
     String? newUnitId, // 🔥 NEW: Add unitId parameter
     String? newDefaultUnitId,
@@ -787,7 +872,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
     bool? newAllowsPricingToggle,
     bool? clearSellingPrice, // Add explicit flag for clearing
     bool? clearDefaultUnitCost,
-    bool? clearDefaultSellingPrice,
+    bool? clearDisplaySellingPrice,
   }) {
     final index = _poCartItems.indexWhere(
       (item) => item.product.id == productId,
@@ -834,21 +919,44 @@ class PurchaseOrderProvider extends ChangeNotifier {
         cartItem.unitCostController.text = '';
       }
 
-      final containerSell = cartItem.sellingPrice;
-      final baseSell = cartItem.defaultSellingPrice ??
+      double? containerSell = cartItem.sellingPrice;
+      if ((containerSell == null || containerSell <= 0) &&
+          cartItem.displaySellingPrice != null) {
+        containerSell =
+            _toContainer(cartItem, cartItem.displaySellingPrice!);
+        if (containerSell != null) {
+          cartItem.sellingPrice = containerSell;
+        }
+      }
+
+      final displaySell = cartItem.displaySellingPrice ??
           (containerSell != null ? _toBase(cartItem, containerSell) : null);
-      if (baseSell != null) {
-        cartItem.defaultSellingPrice = baseSell;
-        cartItem.defaultSellingPriceController.text =
-            baseSell > 0 ? AppFormatter.formatNumber(baseSell) : '';
+      if (displaySell != null) {
+        cartItem.displaySellingPrice = displaySell;
+        cartItem.displaySellingPriceController.text =
+            displaySell > 0 ? AppFormatter.formatNumber(displaySell) : '';
       } else {
-        cartItem.defaultSellingPriceController.text = '';
+        cartItem.displaySellingPriceController.text = '';
       }
       if (containerSell != null && containerSell > 0) {
         cartItem.sellingPriceController.text =
             AppFormatter.formatNumber(containerSell);
       } else {
         cartItem.sellingPriceController.text = '';
+      }
+    }
+
+    void _recomputeBaseSellingPrice(POCartItem cartItem) {
+      final double? defaultPrice = cartItem.displaySellingPrice;
+      final double? factor = cartItem.defaultUnitFactor;
+      if (defaultPrice != null && defaultPrice > 0) {
+        if (factor != null && factor > 0) {
+          cartItem.baseSellingPrice = defaultPrice / factor;
+        } else {
+          cartItem.baseSellingPrice = defaultPrice;
+        }
+      } else {
+        cartItem.baseSellingPrice = null;
       }
     }
 
@@ -899,21 +1007,23 @@ class PurchaseOrderProvider extends ChangeNotifier {
 
     if (clearSellingPrice == true) {
       item.sellingPrice = null;
-      item.defaultSellingPrice = null;
+      item.displaySellingPrice = null;
+      item.baseSellingPrice = null;
     } else if (newSellingPrice != null) {
       item.sellingPrice = newSellingPrice.clamp(0.0, double.infinity);
       final baseSell =
           item.sellingPrice != null ? _toBase(item, item.sellingPrice!) : null;
       if (baseSell != null) {
-        item.defaultSellingPrice = baseSell;
+        item.displaySellingPrice = baseSell;
       }
     }
-    if (clearDefaultSellingPrice == true) {
-      item.defaultSellingPrice = null;
-    } else if (newDefaultSellingPrice != null) {
-      item.defaultSellingPrice =
-          newDefaultSellingPrice.clamp(0.0, double.infinity);
-      final containerSell = _toContainer(item, item.defaultSellingPrice!);
+    if (clearDisplaySellingPrice == true) {
+      item.displaySellingPrice = null;
+      item.baseSellingPrice = null;
+    } else if (newDisplaySellingPrice != null) {
+      item.displaySellingPrice =
+          newDisplaySellingPrice.clamp(0.0, double.infinity);
+      final containerSell = _toContainer(item, item.displaySellingPrice!);
       if (containerSell != null) {
         item.sellingPrice = containerSell;
       }
@@ -924,6 +1034,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
     }
 
     syncControllers(item);
+    _recomputeBaseSellingPrice(item);
     notifyListeners();
   }
 
@@ -999,77 +1110,143 @@ class PurchaseOrderProvider extends ChangeNotifier {
 
     PurchaseOrder? newPO;
     try {
+      await _ensureUnitsForProducts(
+        validItems.map((item) => item.product.id).toSet(),
+      );
       final items = <PurchaseOrderItem>[];
       double computedSubtotal = 0.0;
 
       for (final cartItem in validItems) {
-        int baseQuantity = cartItem.quantity;
-        double baseUnitCost = cartItem.unitCost;
-        String unitName = cartItem.unit ?? cartItem.product.effectiveBaseUnit;
+        final units = _productUnitsById[cartItem.product.id] ?? const [];
 
-        if (cartItem.unitId != null) {
-          try {
-            final units = await _productUnitProvider.getUnitsForProduct(
-              cartItem.product.id,
-              forceRefresh: true,
-            );
-            final selectedUnit = units.firstWhere(
-              (u) => u.id == cartItem.unitId,
-              orElse: () => units.isNotEmpty
-                  ? units.first
-                  : ProductUnit(
-                      id: '',
-                      productId: cartItem.product.id,
-                      unitName: cartItem.product.effectiveBaseUnit,
-                      conversionFactor: 1.0,
-                      unitPrice: 0,
-                      isDefaultSellingUnit: false,
-                      isActive: true,
-                      storeId: '',
-                      createdAt: DateTime.now(),
-                      updatedAt: DateTime.now(),
-                    ),
-            );
-            
-            if (selectedUnit.conversionFactor > 0) {
-              final convertedQuantity =
-                  cartItem.quantity * selectedUnit.conversionFactor;
-              baseQuantity = convertedQuantity.round();
-              baseUnitCost = cartItem.unitCost / selectedUnit.conversionFactor;
-              unitName =
-                  cartItem.product.effectiveBaseUnit; // Store using base unit
-              debugPrint(
-                  'DEBUG: PO Unit Conversion - ${cartItem.quantity} ${cartItem.unit} → ${convertedQuantity.toStringAsFixed(2)} base units (stored as $baseQuantity)');
-            }
-          } catch (e) {
-            debugPrint(
-                'Warning: Could not convert units for ${cartItem.product.name}: $e');
+        if (units.isNotEmpty) {
+          final selectedUnit = cartItem.unitId != null
+              ? units.firstWhere(
+                  (u) => u.id == cartItem.unitId,
+                  orElse: () => units.first,
+                )
+              : null;
+          final defaultUnit = units.firstWhere(
+            (u) => u.isDefaultSellingUnit,
+            orElse: () => selectedUnit ?? units.first,
+          );
+
+          if (selectedUnit != null) {
+            cartItem.selectedUnitFactor ??= selectedUnit.conversionFactor;
           }
+          cartItem.defaultUnitFactor ??= defaultUnit.conversionFactor;
+          cartItem.defaultUnitId ??= defaultUnit.id;
+          cartItem.defaultUnitName ??= defaultUnit.unitName;
         }
 
-        double? computedDefaultSellingPrice = cartItem.defaultSellingPrice;
-        if (computedDefaultSellingPrice == null &&
+        debugPrint(
+          '🧾 createPOFromCart → item ${cartItem.product.name}: '
+          'qty=${cartItem.quantity} ${cartItem.unit}, '
+          'unitCost=${cartItem.unitCost}, '
+          'sellingPrice=${cartItem.sellingPrice}, '
+          'defaultSelling=${cartItem.displaySellingPrice}, '
+          'unitId=${cartItem.unitId}, defaultUnitId=${cartItem.defaultUnitId}',
+        );
+
+        final double convertedQuantity = _productUnitProvider
+                .convertQuantityToBaseFromUnits(
+                  units: units,
+                  quantity: cartItem.quantity.toDouble(),
+                  fromUnitId: cartItem.unitId,
+                ) ??
+            cartItem.quantity.toDouble();
+        final int baseQuantity = convertedQuantity.round();
+
+        final double baseUnitCost = _productUnitProvider
+                .convertPriceToBaseFromUnits(
+                  units: units,
+                  displayPrice: cartItem.unitCost,
+                  fromUnitId: cartItem.unitId,
+                ) ??
+            cartItem.unitCost;
+        String unitName = cartItem.unit ?? cartItem.product.effectiveBaseUnit;
+
+        unitName = cartItem.product.effectiveBaseUnit;
+
+        double? displaySellingPrice = cartItem.displaySellingPrice;
+        bool hasUserDisplayPrice =
+            displaySellingPrice != null && displaySellingPrice > 0;
+        if (!hasUserDisplayPrice &&
             cartItem.sellingPrice != null &&
             cartItem.selectedUnitFactor != null &&
             cartItem.defaultUnitFactor != null &&
             cartItem.selectedUnitFactor! > 0 &&
             cartItem.defaultUnitFactor! > 0) {
-          computedDefaultSellingPrice =
+          displaySellingPrice =
               cartItem.sellingPrice! *
                   (cartItem.defaultUnitFactor! / cartItem.selectedUnitFactor!);
+          hasUserDisplayPrice =
+              displaySellingPrice != null && displaySellingPrice > 0;
         }
 
-        if (computedDefaultSellingPrice != null &&
-            computedDefaultSellingPrice > 0 &&
-            computedDefaultSellingPrice != cartItem.product.currentSellingPrice) {
+        double? baseSellingPrice = cartItem.baseSellingPrice;
+        if ((baseSellingPrice == null || baseSellingPrice <= 0) &&
+            displaySellingPrice != null &&
+            cartItem.defaultUnitFactor != null &&
+            cartItem.defaultUnitFactor! > 0) {
+          baseSellingPrice = displaySellingPrice / cartItem.defaultUnitFactor!;
+        }
+        if ((baseSellingPrice == null || baseSellingPrice <= 0) &&
+            displaySellingPrice != null) {
+          baseSellingPrice =
+              _productUnitProvider.convertPriceToBaseFromUnits(
+                    units: units,
+                    displayPrice: displaySellingPrice,
+                    fromUnitId: cartItem.defaultUnitId,
+                  ) ??
+                  displaySellingPrice;
+        }
+        if ((displaySellingPrice == null || displaySellingPrice <= 0) &&
+            baseSellingPrice != null &&
+            baseSellingPrice > 0 &&
+            cartItem.defaultUnitFactor != null &&
+            cartItem.defaultUnitFactor! > 0) {
+          displaySellingPrice =
+              baseSellingPrice * cartItem.defaultUnitFactor!;
+        }
+        if ((baseSellingPrice == null || baseSellingPrice <= 0) &&
+            cartItem.sellingPrice != null) {
+          baseSellingPrice =
+              _productUnitProvider.convertPriceToBaseFromUnits(
+                    units: units,
+                    displayPrice: cartItem.sellingPrice!,
+                    fromUnitId: cartItem.unitId,
+                  ) ??
+                  cartItem.sellingPrice;
+        }
+        displaySellingPrice ??= cartItem.product.currentSellingPrice;
+        baseSellingPrice ??= _productUnitProvider.convertPriceToBaseFromUnits(
+              units: units,
+              displayPrice: displaySellingPrice ?? 0,
+              fromUnitId: cartItem.defaultUnitId,
+            ) ??
+            displaySellingPrice ??
+            cartItem.product.currentSellingPrice;
+
+        cartItem.displaySellingPrice = displaySellingPrice;
+        cartItem.baseSellingPrice = baseSellingPrice;
+
+        if (hasUserDisplayPrice &&
+            displaySellingPrice != null &&
+            displaySellingPrice > 0 &&
+            displaySellingPrice != cartItem.product.currentSellingPrice) {
           try {
+            debugPrint(
+              '💰 Updating product ${cartItem.product.name} selling price (default unit): '
+              '$displaySellingPrice',
+            );
             await _productService.updateCurrentSellingPrice(
               cartItem.product.id,
-              computedDefaultSellingPrice,
+              displaySellingPrice,
               reason: 'Updated via Purchase Order creation',
             );
             debugPrint(
-                'DEBUG: Updated selling price for ${cartItem.product.name}: $computedDefaultSellingPrice (default unit)');
+                'DEBUG: Updated selling price for ${cartItem.product.name}: $displaySellingPrice (default unit)');
           } catch (e) {
             debugPrint(
                 'Warning: Could not update selling price for ${cartItem.product.name}: $e');
@@ -1079,25 +1256,19 @@ class PurchaseOrderProvider extends ChangeNotifier {
         final double totalCost = baseQuantity * baseUnitCost;
         computedSubtotal += totalCost;
 
-        double baseSellingPrice = computedDefaultSellingPrice ??
-            cartItem.defaultSellingPrice ??
-            cartItem.product.currentSellingPrice;
+        final String? displayUnitId =
+            cartItem.defaultUnitId ??
+            units.firstWhere(
+              (u) => u.isDefaultSellingUnit,
+              orElse: () => units.first,
+            ).id;
 
-        if (baseSellingPrice <= 0 && cartItem.sellingPrice != null) {
-          baseSellingPrice = cartItem.sellingPrice!;
-          if (cartItem.selectedUnitFactor != null &&
-              cartItem.defaultUnitFactor != null &&
-              cartItem.selectedUnitFactor! > 0 &&
-              cartItem.defaultUnitFactor! > 0) {
-            baseSellingPrice = cartItem.sellingPrice! *
-                (cartItem.defaultUnitFactor! /
-                    cartItem.selectedUnitFactor!);
-          }
-        }
-
-        if (baseSellingPrice <= 0) {
-          baseSellingPrice = cartItem.product.currentSellingPrice;
-        }
+        debugPrint(
+          '🧮 Converted item ${cartItem.product.name}: '
+          'baseQty=$baseQuantity (${cartItem.quantity} ${cartItem.unit}), '
+          'baseCost=$baseUnitCost, baseSell=$baseSellingPrice '
+          '(defaultUnitId=$displayUnitId)',
+        );
 
         items.add(PurchaseOrderItem(
           id: '',
@@ -1105,7 +1276,7 @@ class PurchaseOrderProvider extends ChangeNotifier {
           productId: cartItem.product.id,
           quantity: baseQuantity,
           unitCost: baseUnitCost,
-          sellingPrice: baseSellingPrice,
+          sellingPrice: baseSellingPrice ?? 0,
           unit: unitName,
           totalCost: totalCost,
           createdAt: DateTime.now(),
@@ -1143,7 +1314,14 @@ class PurchaseOrderProvider extends ChangeNotifier {
       _poCartItems.clear();
       _filteredProducts.clear();
       _clearAllFilters(); // Clear filters before refreshing
-      await _productProvider.refreshAllCache();
+
+      // Refresh affected products to sync cache with database
+      // This ensures POS and Product Detail screens show updated prices
+      final affectedProductIds = validItems
+          .map((item) => item.product.id)
+          .toList();
+      await _productProvider.refreshProductsByIds(affectedProductIds);
+
       await searchPurchaseOrders(); // Refresh list view with filters applied
       return newPO;
     } catch (e) {

@@ -341,20 +341,22 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     PurchaseOrderItem item,
     PurchaseOrderProvider provider,
   ) {
-    final quantityInfo = provider.formatItemQuantity(item);
-    final displayQuantity = quantityInfo.display;
-    final ProductUnit? baseUnit =
-        quantityInfo.baseUnit ?? quantityInfo.displayUnit;
-    final unitLabel = baseUnit?.unitName?.trim().isNotEmpty == true
-        ? baseUnit!.unitName.split(' ').first
-        : (item.unit?.isNotEmpty == true ? item.unit!.split(' ').first : 'đơn vị');
+    final costDisplay = provider.itemImportPriceDisplay(item);
+    final sellingDisplay = provider.itemSellingPriceDisplay(item);
 
-    final String costText =
-        '${AppFormatter.formatCurrency(item.unitCost)} / $unitLabel';
+    final rawUnit = (item.unit ?? '').trim();
+    final fallbackUnitLabel =
+        rawUnit.isNotEmpty ? rawUnit.split(' ').first : 'đơn vị';
 
-    final sellingText = (item.sellingPrice != null && item.sellingPrice! > 0)
-        ? '${AppFormatter.formatCurrency(item.sellingPrice!)} / $unitLabel'
-        : '—';
+    final String costText = costDisplay != null
+        ? '${AppFormatter.formatCurrency(costDisplay.displayPrice)} / ${costDisplay.unitLabel}'
+        : '${AppFormatter.formatCurrency(item.unitCost)} / $fallbackUnitLabel';
+
+    final sellingText = sellingDisplay != null
+        ? '${AppFormatter.formatCurrency(sellingDisplay.displayPrice)} / ${sellingDisplay.unitLabel}'
+        : (item.sellingPrice > 0)
+            ? '${AppFormatter.formatCurrency(item.sellingPrice)} / $fallbackUnitLabel'
+            : '—';
 
     return Container(
       width: double.infinity,
@@ -377,14 +379,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
-                ),
-              ),
-              Text(
-                displayQuantity,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF4A4A4A),
                 ),
               ),
             ],

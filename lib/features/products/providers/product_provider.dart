@@ -2344,13 +2344,58 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   }
 
   /// Force refresh all cached data
+  @Deprecated('Use refreshProductsByIds() for product-specific updates')
   Future<void> refreshAllCache() async {
     await invalidateSearchCache();
     // Dashboard cache disabled - just reload directly
     await loadDashboardStats(useCache: true);
-    
+
     if (CacheConfig.enableCacheLogging) {
       print('🔄 Search cache refreshed (dashboard direct load)');
+    }
+  }
+
+  /// Refresh specific products after price/inventory updates
+  /// This ensures cache stays synchronized with database changes
+  Future<void> refreshProductsByIds(List<String> productIds) async {
+    if (productIds.isEmpty) return;
+
+    try {
+      print('🔄 Refreshing ${productIds.length} products after update...');
+
+      for (final productId in productIds) {
+        // Reload product from database to get latest data
+        final product = await _productService.getProductById(productId);
+        if (product != null) {
+          // Update in main products list
+          final index = _products.indexWhere((p) => p.id == productId);
+          if (index != -1) {
+            _products[index] = product;
+            print('✅ Updated ${product.name} in products list: ${product.currentSellingPrice}');
+          }
+
+          // Update selected product if it matches
+          if (_selectedProduct?.id == productId) {
+            _selectedProduct = product;
+            print('✅ Updated selected product: ${product.name}');
+          }
+
+          // Update price cache (critical for POS display)
+          _currentPrices[productId] = product.currentSellingPrice;
+          print('💰 Updated price cache for ${product.name}: ${product.currentSellingPrice}');
+
+          // Update stock cache
+          _stockMap[productId] = product.availableStock ?? 0;
+          print('📦 Updated stock cache for ${product.name}: ${product.availableStock ?? 0}');
+        }
+      }
+
+      // Notify listeners to rebuild UI with updated data
+      notifyListeners();
+      print('✅ Successfully refreshed ${productIds.length} products');
+    } catch (e) {
+      print('❌ Error refreshing products: $e');
+      // Don't throw - this is a cache refresh operation, not critical
     }
   }
 

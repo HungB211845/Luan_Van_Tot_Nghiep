@@ -6,6 +6,36 @@ import '../services/product_unit_service.dart';
 import '../utils/unit_display_formatter.dart';
 import '../../../shared/services/base_service.dart';
 
+/// Determines how price display should be resolved.
+/// [defaultUnit] forces the default selling unit (used for PO detail, etc.).
+/// [selectedUnit] respects the unit the user picked in the UI when available.
+///
+/// Keeping this enum here avoids scattering conversion rules in multiple files.
+enum PriceDisplayMode { defaultUnit, selectedUnit }
+
+/// Lightweight descriptor for presenting prices in the UI without leaking
+/// formatting decisions outside of this provider.
+class PriceDisplayInfo {
+  final double basePrice;
+  final double displayPrice;
+  final ProductUnit displayUnit;
+  final ProductUnit baseUnit;
+  final ProductUnit? selectedUnit;
+  final PriceDisplayMode mode;
+  final String unitLabel;
+  final String? hint;
+
+  PriceDisplayInfo({
+    required this.basePrice,
+    required this.displayPrice,
+    required this.displayUnit,
+    required this.baseUnit,
+    required this.selectedUnit,
+    required this.mode,
+    this.hint,
+  }) : unitLabel = UnitDisplayFormatter.simpleUnitName(displayUnit);
+}
+
 /// ProductUnitProvider - Single Source of Truth for Product Unit Management
 ///
 /// This provider centralizes all product unit business logic including:
@@ -28,6 +58,7 @@ class ProductUnitProvider extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
+
 
   /// Get units for product with caching
   /// Automatically refreshes cache if not present
@@ -227,6 +258,155 @@ class ProductUnitProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  PriceDisplayInfo? buildPriceDisplayFromUnits({
+    required List<ProductUnit> units,
+    required double basePrice,
+    String? targetUnitId,
+    PriceDisplayMode mode = PriceDisplayMode.defaultUnit,
+  }) {
+    if (units.isEmpty) return null;
+
+    final baseUnit = _resolveBaseUnit(units);
+    if (baseUnit == null) return null;
+
+    final defaultUnit = UnitDisplayFormatter.defaultUnit(units) ?? baseUnit;
+    final selectedUnit = _findUnitByIdOrName(units, targetUnitId);
+    final displayUnit = _selectDisplayUnit(
+      baseUnit: baseUnit,
+      defaultUnit: defaultUnit,
+      selectedUnit: selectedUnit,
+      mode: mode,
+    );
+
+    final conversion = displayUnit.conversionFactor > 0
+        ? displayUnit.conversionFactor
+        : 1.0;
+    final displayPrice = basePrice * conversion;
+
+    String? hint;
+    if (mode == PriceDisplayMode.selectedUnit &&
+        defaultUnit.id != displayUnit.id) {
+      final ratio =
+          displayUnit.conversionFactor / defaultUnit.conversionFactor;
+      if (ratio > 0) {
+        hint =
+            '1 ${displayUnit.unitName} = ${_formatRatio(ratio)} ${defaultUnit.unitName}';
+      }
+    }
+
+    return PriceDisplayInfo(
+      basePrice: basePrice,
+      displayPrice: displayPrice,
+      displayUnit: displayUnit,
+      baseUnit: baseUnit,
+      selectedUnit: selectedUnit,
+      mode: mode,
+      hint: hint,
+    );
+  }
+
+  Future<PriceDisplayInfo?> getPriceDisplay({
+    required String productId,
+    required double basePrice,
+    String? targetUnitId,
+    PriceDisplayMode mode = PriceDisplayMode.defaultUnit,
+    List<ProductUnit>? units,
+  }) async {
+    units ??= await getUnitsForProduct(productId);
+    return buildPriceDisplayFromUnits(
+      units: units,
+      basePrice: basePrice,
+      targetUnitId: targetUnitId,
+      mode: mode,
+    );
+  }
+
+  Future<ProductUnit?> resolveUnitForDisplay({
+    required String productId,
+    String? selectedUnitId,
+    PriceDisplayMode mode = PriceDisplayMode.defaultUnit,
+    List<ProductUnit>? units,
+  }) async {
+    units ??= await getUnitsForProduct(productId);
+    if (units.isEmpty) return null;
+
+    final baseUnit = _resolveBaseUnit(units);
+    if (baseUnit == null) return null;
+
+    final defaultUnit = UnitDisplayFormatter.defaultUnit(units) ?? baseUnit;
+    final selectedUnit = _findUnitByIdOrName(units, selectedUnitId);
+    return _selectDisplayUnit(
+      baseUnit: baseUnit,
+      defaultUnit: defaultUnit,
+      selectedUnit: selectedUnit,
+      mode: mode,
+    );
+  }
+
+  double? convertPriceToBaseFromUnits({
+    required List<ProductUnit> units,
+    required double displayPrice,
+    String? fromUnitId,
+  }) {
+    if (units.isEmpty) return displayPrice;
+
+    final baseUnit =
+        UnitDisplayFormatter.baseUnit(units) ?? _resolveBaseUnit(units);
+    if (baseUnit == null) return displayPrice;
+
+    final unit = _findUnitByIdOrName(units, fromUnitId) ?? baseUnit;
+    final factor = unit.conversionFactor > 0 ? unit.conversionFactor : 1.0;
+    if (factor == 0) return displayPrice;
+    return displayPrice / factor;
+  }
+
+  Future<double?> convertPriceToBase({
+    required String productId,
+    required double displayPrice,
+    String? fromUnitId,
+    List<ProductUnit>? units,
+  }) async {
+    units ??= await getUnitsForProduct(productId);
+    return convertPriceToBaseFromUnits(
+      units: units,
+      displayPrice: displayPrice,
+      fromUnitId: fromUnitId,
+    );
+  }
+
+  double? convertQuantityToBaseFromUnits({
+    required List<ProductUnit> units,
+    required double quantity,
+    String? fromUnitId,
+  }) {
+    if (units.isEmpty) return quantity;
+
+    final baseUnit =
+        UnitDisplayFormatter.baseUnit(units) ?? _resolveBaseUnit(units);
+    if (baseUnit == null || baseUnit.conversionFactor <= 0) {
+      return quantity;
+    }
+
+    final unit = _findUnitByIdOrName(units, fromUnitId) ?? baseUnit;
+    if (unit.conversionFactor <= 0) return quantity;
+
+    return quantity * unit.conversionFactor;
+  }
+
+  Future<double?> convertQuantityToBase({
+    required String productId,
+    required double quantity,
+    String? fromUnitId,
+    List<ProductUnit>? units,
+  }) async {
+    units ??= await getUnitsForProduct(productId);
+    return convertQuantityToBaseFromUnits(
+      units: units,
+      quantity: quantity,
+      fromUnitId: fromUnitId,
+    );
+  }
+
   // Private helper methods
   void _setLoading(bool value) {
     _isLoading = value;
@@ -241,5 +421,53 @@ class ProductUnitProvider extends ChangeNotifier {
 
   void _clearError() {
     _errorMessage = '';
+  }
+
+  ProductUnit? _resolveBaseUnit(List<ProductUnit> units) {
+    if (units.isEmpty) return null;
+    final positives = units
+        .where((unit) => unit.conversionFactor > 0)
+        .toList()
+      ..sort((a, b) => a.conversionFactor.compareTo(b.conversionFactor));
+    return positives.isNotEmpty ? positives.first : units.first;
+  }
+
+  ProductUnit? _findUnitByIdOrName(List<ProductUnit> units, String? idOrName) {
+    if (idOrName == null || idOrName.isEmpty) return null;
+    try {
+      return units.firstWhere((unit) => unit.id == idOrName);
+    } catch (_) {
+      try {
+        return units.firstWhere(
+          (unit) => unit.unitName.toLowerCase() == idOrName.toLowerCase(),
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  ProductUnit _selectDisplayUnit({
+    required ProductUnit baseUnit,
+    required ProductUnit defaultUnit,
+    required ProductUnit? selectedUnit,
+    required PriceDisplayMode mode,
+  }) {
+    switch (mode) {
+      case PriceDisplayMode.selectedUnit:
+        return selectedUnit ?? defaultUnit;
+      case PriceDisplayMode.defaultUnit:
+        return defaultUnit;
+    }
+  }
+
+  String _formatRatio(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
+    }
+    return value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(
+          RegExp(r'\.$'),
+          '',
+        );
   }
 }

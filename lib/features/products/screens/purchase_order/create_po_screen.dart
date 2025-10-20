@@ -5,7 +5,7 @@ import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/purchase_order_provider.dart';
-import '../../providers/product_provider.dart'; // ignore: unused_import
+import '../../providers/product_provider.dart'; // Required for type references
 import '../../providers/product_unit_provider.dart';
 import '../../models/company.dart';
 import '../../models/product.dart';
@@ -431,22 +431,17 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   Widget _buildCartItem(POCartItem item, PurchaseOrderProvider poProvider) {
     // 🔥 FIXED: Get actual product units instead of hard-coded list
     final isZeroQuantity = item.quantity == 0;
-    final hasConversion =
-        item.selectedUnitFactor != null &&
-        item.defaultUnitFactor != null &&
-        item.selectedUnitFactor! > 0 &&
-        item.defaultUnitFactor! > 0;
-    double? pricePerDefaultUnit = item.defaultSellingPrice;
-    if ((pricePerDefaultUnit == null || pricePerDefaultUnit <= 0) &&
-        item.sellingPrice != null &&
-        hasConversion) {
-      pricePerDefaultUnit = item.sellingPrice! *
-          (item.defaultUnitFactor! / item.selectedUnitFactor!);
-    }
-    final displayDefaultUnitName =
-        item.defaultUnitName?.isNotEmpty == true
+    final defaultSellingDisplay = poProvider.cartItemPriceDisplay(
+      item,
+      forSelling: true,
+      mode: PriceDisplayMode.defaultUnit,
+    );
+
+    final double? pricePerDefaultUnit = defaultSellingDisplay?.displayPrice;
+    final displayDefaultUnitName = defaultSellingDisplay?.unitLabel ??
+        (item.defaultUnitName?.isNotEmpty == true
             ? item.defaultUnitName
-            : item.unit;
+            : item.unit);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -674,7 +669,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         item.pricingSelection == PricingUnitSelection.container;
     final controller = isContainerMode
         ? item.sellingPriceController
-        : item.defaultSellingPriceController;
+        : item.displaySellingPriceController;
     final labelUnit = isContainerMode ? unitName : defaultUnitName;
     final helper = hasConversion
         ? (isContainerMode
@@ -722,7 +717,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
               poProvider.updatePOCartItem(
                 item.product.id,
                 newSellingPrice: containerPrice,
-                newDefaultSellingPrice: parsed,
+                newDisplaySellingPrice: parsed,
               );
             } else {
               final defaultPrice =
@@ -730,7 +725,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
               poProvider.updatePOCartItem(
                 item.product.id,
                 newSellingPrice: parsed,
-                newDefaultSellingPrice: defaultPrice,
+                newDisplaySellingPrice: defaultPrice,
               );
             }
           },
@@ -750,15 +745,15 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           },
         ),
         if (hasConversion &&
-            item.defaultSellingPrice != null &&
-            item.defaultSellingPrice! > 0 &&
+            item.displaySellingPrice != null &&
+            item.displaySellingPrice! > 0 &&
             item.sellingPrice != null &&
             item.sellingPrice! > 0 &&
             ratio != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              '${AppFormatter.formatCurrency(item.defaultSellingPrice ?? 0)} × ${_formatRatio(ratio)} = ${AppFormatter.formatCurrency(item.sellingPrice ?? 0)}',
+              '${AppFormatter.formatCurrency(item.displaySellingPrice ?? 0)} × ${_formatRatio(ratio)} = ${AppFormatter.formatCurrency(item.sellingPrice ?? 0)}',
               style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
           ),
@@ -900,7 +895,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 newDefaultUnitCost: parsed,
                 // Auto-calculate selling prices with markup
                 newSellingPrice: converted * DEFAULT_SELLING_MARKUP,
-                newDefaultSellingPrice: parsed * DEFAULT_SELLING_MARKUP,
+                newDisplaySellingPrice: parsed * DEFAULT_SELLING_MARKUP,
               );
             } else { // Container mode: user enters container unit cost
               final defaultCost =
@@ -911,7 +906,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 newDefaultUnitCost: defaultCost,
                 // Auto-calculate selling prices with markup
                 newSellingPrice: parsed * DEFAULT_SELLING_MARKUP,
-                newDefaultSellingPrice: defaultCost != null
+                newDisplaySellingPrice: defaultCost != null
                     ? defaultCost * DEFAULT_SELLING_MARKUP
                     : null,
               );

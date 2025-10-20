@@ -25,7 +25,7 @@ class ProductEntryBottomSheet extends StatefulWidget {
     String? defaultUnitName,
     double? selectedUnitFactor,
     double? defaultUnitFactor,
-    double? defaultSellingPrice,
+    double? displaySellingPrice,
     double? defaultUnitCost,
     bool allowsPricingToggle,
     PricingUnitSelection pricingSelection,
@@ -270,14 +270,14 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
     final sellingPrice = sellingPriceText.isEmpty
         ? null
         : double.tryParse(sellingPriceText);
-    double? defaultSellingPrice = sellingPrice;
+    double? displaySellingPrice = sellingPrice;
     double? defaultUnitCost = price;
     if (sellingPrice != null &&
         _selectedUnitFactor != null &&
         _defaultUnitFactor != null &&
         _selectedUnitFactor! > 0 &&
         _defaultUnitFactor! > 0) {
-      defaultSellingPrice =
+      displaySellingPrice =
           sellingPrice * (_defaultUnitFactor! / _selectedUnitFactor!);
     }
     if (_selectedUnitFactor != null &&
@@ -307,7 +307,7 @@ class _ProductEntryBottomSheetState extends State<ProductEntryBottomSheet> {
         _defaultUnitName,
         _selectedUnitFactor,
         _defaultUnitFactor,
-        defaultSellingPrice,
+        displaySellingPrice,
         defaultUnitCost,
         allowsPricingToggle,
         initialSelection,
