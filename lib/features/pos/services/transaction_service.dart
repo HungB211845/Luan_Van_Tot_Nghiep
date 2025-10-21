@@ -64,14 +64,6 @@ class TransactionService extends BaseService {
         return addStoreId(itemData);
       }).toList();
 
-      // 🔍 DEBUG: In ra itemsData trước khi INSERT vào database
-      print('🔍 [TransactionService.createTransaction] Inserting ${itemsData.length} items into database:');
-      for (var i = 0; i < itemsData.length; i++) {
-        final itemData = itemsData[i];
-        print('  Item ${i + 1}: unit_name="${itemData['unit_name']}", price=${itemData['price_at_sale']}, quantity=${itemData['quantity']}');
-        print('  Full JSON: $itemData');
-      }
-
       await _supabase
           .from('transaction_items')
           .insert(itemsData);
@@ -542,16 +534,20 @@ class TransactionService extends BaseService {
 
     // Create Transaction
     final transaction = Transaction(
-      id: response['id'] as String,
-      storeId: response['store_id'] as String,
-      customerId: response['customer_id'] as String?,
-      totalAmount: (response['total_amount'] as num).toDouble(),
-      paymentMethod: PaymentMethod.fromString(response['payment_method'] as String),
-      isDebt: response['is_debt'] as bool,
-      transactionDate: DateTime.parse(response['transaction_date'] as String),
-      notes: response['notes'] as String?,
-      invoiceNumber: response['invoice_number'] as String?,
-      createdAt: DateTime.parse(response['created_at'] as String),
+      id: _parseString(response['id']) ?? '',
+      storeId: _parseString(response['store_id']) ?? BaseService.getDefaultStoreId(),
+      customerId: _parseString(response['customer_id']),
+      totalAmount: _toDouble(response['total_amount']) ?? 0.0,
+      paymentMethod: PaymentMethod.fromString(
+        _parseString(response['payment_method']) ?? 'CASH',
+      ),
+      isDebt: response['is_debt'] as bool? ?? false,
+      transactionDate: _parseDateTime(response['transaction_date']) ??
+          _parseDateTime(response['created_at']) ??
+          DateTime.now(),
+      notes: _parseString(response['notes']),
+      invoiceNumber: _parseString(response['invoice_number']),
+      createdAt: _parseDateTime(response['created_at']) ?? DateTime.now(),
       customerName: customerName,
     );
 

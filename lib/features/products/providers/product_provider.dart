@@ -1229,7 +1229,6 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
           baseUnitQuantity: cartItem.baseUnitQuantity,
         );
 
-        debugPrint('✅ [TransactionItem] ${cartItem.productName}: unitName="${txItem.unitName}", price=${txItem.priceAtSale}');
         return txItem;
       }).toList();
 
@@ -1465,10 +1464,6 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
           productUnits = unitCache[product.id]!;
         }
 
-        debugPrint('🔍 [loadTransactionDetails] Item: ${product.name}');
-        debugPrint('🔍 [loadTransactionDetails] Raw item.unitName: "${item.unitName}"');
-        debugPrint('🔍 [loadTransactionDetails] Raw item.priceAtSale: ${item.priceAtSale}');
-
         // Tìm unit matching với unit đã bán (theo unitId hoặc unitName)
         ProductUnit? matchedUnit;
         if (productUnits.isNotEmpty) {
@@ -1477,7 +1472,6 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
               matchedUnit = productUnits.firstWhere(
                 (u) => u.id == item.unitId,
               );
-              debugPrint('🔍 [loadTransactionDetails] Matched by unitId: ${matchedUnit.unitName}');
             } catch (_) {
               matchedUnit = null;
             }
@@ -1487,9 +1481,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
               matchedUnit = productUnits.firstWhere(
                 (u) => u.unitName.toLowerCase() == item.unitName!.toLowerCase(),
               );
-              debugPrint('🔍 [loadTransactionDetails] Matched by unitName: ${matchedUnit.unitName}');
             } catch (_) {
-              debugPrint('⚠️ [loadTransactionDetails] No matching unit found for "${item.unitName}"');
               matchedUnit = null;
             }
           }
@@ -1525,8 +1517,6 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         // item.priceAtSale ĐÃ ĐÚNG từ lúc bán - không cần convert!
         String priceUnitName = matchedUnit?.unitName ?? item.unitName ?? baseUnitName;
         double pricePerDisplayUnit = item.priceAtSale;
-
-        debugPrint('✅ [loadTransactionDetails] priceUnitName: "$priceUnitName", pricePerDisplayUnit: $pricePerDisplayUnit');
 
         final double? baseUnitQuantity = item.baseUnitQuantity ??
             (selectedConversion != null

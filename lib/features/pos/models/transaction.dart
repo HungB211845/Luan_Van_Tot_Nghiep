@@ -1,3 +1,4 @@
+import '../../../shared/services/base_service.dart';
 import 'payment_method.dart';
 
 class Transaction {
@@ -36,40 +37,63 @@ class Transaction {
   factory Transaction.fromJson(Map<String, dynamic> json) {
     final customerData = json['customers'];
     return Transaction(
-      id: json['id'],
-      storeId: json['store_id'],
-      customerId: json['customer_id'],
+      id: _parseString(json['id']) ?? '',
+      storeId: _parseString(json['store_id']) ?? BaseService.getDefaultStoreId(),
+      customerId: _parseString(json['customer_id']),
       totalAmount: (json['total_amount'] as num? ?? 0).toDouble(),
       surchargeAmount: (json['surcharge_amount'] as num? ?? 0).toDouble(),
-      transactionDate: DateTime.parse(json['transaction_date']),
+      transactionDate: _parseDateTime(json['transaction_date']) ??
+          _parseDateTime(json['created_at']) ??
+          DateTime.now(),
       isDebt: json['is_debt'] ?? false,
       paymentMethod: PaymentMethod.fromString(json['payment_method'] ?? 'CASH'),
-      notes: json['notes'],
-      invoiceNumber: json['invoice_number'],
-      createdBy: json['created_by'],
-      createdAt: DateTime.parse(json['created_at']),
+      notes: _parseString(json['notes']),
+      invoiceNumber: _parseString(json['invoice_number']),
+      createdBy: _parseString(json['created_by']),
+      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
       // Handle nested customer data if available
-      customerName: customerData is Map ? customerData['name'] : null,
+      customerName:
+          customerData is Map ? _parseString(customerData['name']) : null,
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  static String? _parseString(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    return value.toString();
   }
   
   /// Factory constructor for data coming from the 'search_transactions' RPC
   factory Transaction.fromRpcJson(Map<String, dynamic> json) {
     return Transaction(
-      id: json['id'],
-      storeId: json['store_id'], // Fixed: use correct field name from RPC output
-      customerId: json['customer_id'],
+      id: _parseString(json['id']) ?? '',
+      storeId: _parseString(json['store_id']) ?? BaseService.getDefaultStoreId(),
+      customerId: _parseString(json['customer_id']),
       totalAmount: (json['total_amount'] as num? ?? 0).toDouble(),
       surchargeAmount: (json['surcharge_amount'] as num? ?? 0).toDouble(),
-      transactionDate: DateTime.parse(json['transaction_date']),
+      transactionDate: _parseDateTime(json['transaction_date']) ??
+          _parseDateTime(json['created_at']) ??
+          DateTime.now(),
       isDebt: json['is_debt'] ?? false,
       paymentMethod: PaymentMethod.fromString(json['payment_method'] ?? 'CASH'),
-      notes: json['notes'],
-      invoiceNumber: json['invoice_number'],
-      createdBy: json['created_by'],
-      createdAt: DateTime.parse(json['created_at']),
+      notes: _parseString(json['notes']),
+      invoiceNumber: _parseString(json['invoice_number']),
+      createdBy: _parseString(json['created_by']),
+      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
       // Enriched fields from the RPC
-      customerName: json['customer_name'],
+      customerName: _parseString(json['customer_name']),
     );
   }
   Map<String, dynamic> toJson() {
