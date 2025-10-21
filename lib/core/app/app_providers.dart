@@ -11,7 +11,9 @@ import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/providers/permission_provider.dart';
 import '../../features/auth/providers/store_provider.dart';
 import '../../features/auth/providers/session_provider.dart';
+import '../../features/auth/providers/store_business_info_provider.dart';
 import '../../features/debt/providers/debt_provider.dart';
+import '../../features/invoice/providers/invoice_provider.dart';
 import '../../presentation/home/providers/quick_access_provider.dart';
 import '../../presentation/home/providers/dashboard_provider.dart';
 import '../../features/reports/providers/report_provider.dart';
@@ -45,6 +47,11 @@ class AppProviders {
     ChangeNotifierProvider(create: (_) => DashboardProvider()),
     ChangeNotifierProvider(create: (_) => ReportProvider()),
     ChangeNotifierProvider(create: (_) => NavigationProvider()),
+
+    // Invoice & Business Info Providers
+    ChangeNotifierProvider(create: (_) => StoreBusinessInfoProvider()),
+    ChangeNotifierProvider(create: (_) => InvoiceProvider()),
+
     // Dễ dàng thêm providers mới ở đây
   ];
 }
