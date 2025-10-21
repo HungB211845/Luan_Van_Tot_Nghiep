@@ -83,6 +83,12 @@ class _TransactionSuccessScreenState extends State<TransactionSuccessScreen> {
           final transaction = provider.activeTransaction!;
           final items = provider.activeTransactionItems;
 
+          // Debug logging
+          debugPrint('📱 [TransactionSuccess] Displaying ${items.length} items');
+          for (final item in items) {
+            debugPrint('📱 [TransactionSuccess] ${item.productName}: unitLabel="${item.unitLabel}", priceUnit="${item.priceUnitName}", price=${item.pricePerDisplayUnit}');
+          }
+
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(

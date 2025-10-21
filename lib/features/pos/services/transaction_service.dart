@@ -64,6 +64,14 @@ class TransactionService extends BaseService {
         return addStoreId(itemData);
       }).toList();
 
+      // 🔍 DEBUG: In ra itemsData trước khi INSERT vào database
+      print('🔍 [TransactionService.createTransaction] Inserting ${itemsData.length} items into database:');
+      for (var i = 0; i < itemsData.length; i++) {
+        final itemData = itemsData[i];
+        print('  Item ${i + 1}: unit_name="${itemData['unit_name']}", price=${itemData['price_at_sale']}, quantity=${itemData['quantity']}');
+        print('  Full JSON: $itemData');
+      }
+
       await _supabase
           .from('transaction_items')
           .insert(itemsData);
@@ -393,6 +401,11 @@ class TransactionService extends BaseService {
         discountAmount: (data['discount_amount'] as num?)?.toDouble() ?? 0.0,
         storeId: data['store_id'],
         createdAt: DateTime.parse(data['created_at']),
+        // 🔥 FIX: Parse unit fields for Multi-UoM support
+        unitId: data['unit_id'] as String?,
+        unitName: data['unit_name'] as String?,
+        unitConversionFactor: (data['unit_conversion_factor'] as num?)?.toDouble(),
+        baseUnitQuantity: (data['base_unit_quantity'] as num?)?.toDouble(),
       )).toList();
     } catch (e) {
       throw Exception('Lỗi lấy transaction items: $e');
@@ -486,6 +499,14 @@ class TransactionService extends BaseService {
 
     for (final itemData in transactionItemsData) {
       final productData = itemData['products'] as Map<String, dynamic>? ?? {};
+
+      // 🔍 DEBUG: Print raw Supabase response để verify unit fields
+      print('🔍 [TransactionService] Raw itemData from Supabase:');
+      print('  unit_id: ${itemData['unit_id']}');
+      print('  unit_name: ${itemData['unit_name']}');
+      print('  unit_conversion_factor: ${itemData['unit_conversion_factor']}');
+      print('  base_unit_quantity: ${itemData['base_unit_quantity']}');
+      print('  Full itemData keys: ${itemData.keys.toList()}');
 
       // Create TransactionItem with product info
       final unitPrice = _toDouble(itemData['price_at_sale']) ??
