@@ -563,6 +563,24 @@ class TransactionService extends BaseService {
     return null;
   }
 
+  DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  String? _parseString(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    return value.toString();
+  }
+
   /// Lấy thông tin một giao dịch theo ID (DEPRECATED - use getTransactionWithItems for better performance)
   @deprecated
   Future<Transaction?> getTransactionById(String transactionId) async {
