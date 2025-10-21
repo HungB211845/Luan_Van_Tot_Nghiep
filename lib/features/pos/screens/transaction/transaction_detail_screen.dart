@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../products/providers/product_provider.dart';
+import '../../../invoice/providers/invoice_provider.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../models/transaction.dart';
@@ -49,6 +51,112 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       SnackBar(
         content: Text('Đã sao chép $label: $text'),
         backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _showPrintDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Chọn định dạng hóa đơn'),
+        content: const Text('Bạn muốn in hóa đơn dưới định dạng nào?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _generateInvoice('pdf');
+            },
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.picture_as_pdf, color: Colors.red),
+                SizedBox(width: 8),
+                Text('PDF'),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _generateInvoice('excel');
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.table_chart, color: Colors.green),
+                const SizedBox(width: 8),
+                const Text('Excel'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateInvoice(String format) async {
+    final invoiceProvider = context.read<InvoiceProvider>();
+
+    final file = await invoiceProvider.generateTransactionInvoice(
+      widget.transaction.id,
+      format,
+    );
+
+    if (mounted) {
+      if (file != null) {
+        final extension = format == 'pdf' ? 'PDF' : 'Excel';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ Đã tạo hóa đơn $extension'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Chia sẻ',
+              textColor: Colors.white,
+              onPressed: () => invoiceProvider.shareInvoice(file),
+            ),
+          ),
+        );
+
+        // For PDF, also show print option
+        if (format == 'pdf') {
+          _showPrintOption(file);
+        }
+      } else if (invoiceProvider.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(invoiceProvider.errorMessage!),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showPrintOption(File pdfFile) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('In hóa đơn'),
+        content: const Text('Bạn có muốn in hóa đơn này không?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Đóng'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context.read<InvoiceProvider>().printInvoice(pdfFile);
+            },
+            icon: const Icon(Icons.print),
+            label: const Text('In'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -313,12 +421,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ),
                         icon: const Icon(Icons.print),
                         label: const Text('In hóa đơn'),
-                        onPressed: () {
-                          // TODO: Implement print functionality
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Tính năng in sẽ được phát triển')),
-                          );
-                        },
+                        onPressed: _showPrintDialog,
                       ),
                     ),
                     const SizedBox(width: 12),
