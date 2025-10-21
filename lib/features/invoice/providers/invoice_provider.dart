@@ -192,6 +192,7 @@ class InvoiceProvider extends ChangeNotifier {
       if (transactions.isEmpty) {
         _isGenerating = false;
         _errorMessage = 'Không có giao dịch nào trong khoảng thời gian này.';
+        _progress = null;
         notifyListeners();
         return null;
       }

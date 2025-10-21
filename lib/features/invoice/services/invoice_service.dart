@@ -23,7 +23,17 @@ class InvoiceService extends BaseService {
         throw Exception('Không tìm thấy dữ liệu hóa đơn cho giao dịch $transactionId');
       }
 
-      return InvoiceData.fromTransactionRpc(response as Map<String, dynamic>);
+      final data = response as Map<String, dynamic>;
+
+      if (data['transaction'] == null) {
+        throw Exception('Giao dịch không tồn tại hoặc không thuộc cửa hàng hiện tại.');
+      }
+
+      if (data['store_info'] == null) {
+        throw Exception('Vui lòng cấu hình thông tin hộ kinh doanh trước khi in hóa đơn.');
+      }
+
+      return InvoiceData.fromTransactionRpc(data);
     } catch (e) {
       throw Exception('Lỗi lấy dữ liệu hóa đơn bán hàng: $e');
     }
@@ -46,7 +56,17 @@ class InvoiceService extends BaseService {
         throw Exception('Không tìm thấy dữ liệu hóa đơn cho đơn hàng $poId');
       }
 
-      return InvoiceData.fromPurchaseOrderRpc(response as Map<String, dynamic>);
+      final data = response as Map<String, dynamic>;
+
+      if (data['purchase_order'] == null) {
+        throw Exception('Đơn nhập hàng không tồn tại hoặc không thuộc cửa hàng hiện tại.');
+      }
+
+      if (data['store_info'] == null) {
+        throw Exception('Vui lòng cấu hình thông tin hộ kinh doanh trước khi in hóa đơn.');
+      }
+
+      return InvoiceData.fromPurchaseOrderRpc(data);
     } catch (e) {
       throw Exception('Lỗi lấy dữ liệu hóa đơn nhập hàng: $e');
     }

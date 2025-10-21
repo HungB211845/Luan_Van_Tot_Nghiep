@@ -46,7 +46,8 @@ BEGIN
         json_build_object(
           'id', poi.id,
           'product_id', poi.product_id,
-          'product_name', poi.product_name,
+          'product_name', COALESCE(p.name, poi.product_id::text),
+          'product_sku', p.sku,
           'quantity', poi.quantity,
           'unit', poi.unit,
           'unit_cost', poi.unit_cost,
@@ -56,6 +57,7 @@ BEGIN
         )
       )
       FROM public.purchase_order_items poi
+      LEFT JOIN public.products p ON poi.product_id = p.id
       WHERE poi.purchase_order_id = p_po_id
         AND poi.store_id = v_store_id
     )

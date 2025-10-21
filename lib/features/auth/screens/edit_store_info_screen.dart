@@ -4,7 +4,6 @@ import '../../../shared/utils/responsive.dart';
 import '../../../shared/utils/tax_code_validator.dart';
 import '../providers/store_business_info_provider.dart';
 import '../models/store_business_info.dart';
-import '../../../shared/services/base_service.dart';
 
 class EditStoreInfoScreen extends StatefulWidget {
   const EditStoreInfoScreen({super.key});
@@ -113,7 +112,7 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
 
     final info = StoreBusinessInfo(
       id: provider.storeBusinessInfo?.id ?? '',
-      storeId: BaseService.getDefaultStoreId(),
+      storeId: provider.storeBusinessInfo?.storeId ?? '',
       taxCode: cleanedTaxCode,
       businessName: _businessNameController.text.trim(),
       taxAuthority: _taxAuthorityController.text.trim().isNotEmpty ? _taxAuthorityController.text.trim() : null,

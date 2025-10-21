@@ -11,7 +11,7 @@ class StoreBusinessInfoService extends BaseService {
   Future<StoreBusinessInfo?> getStoreBusinessInfo() async {
     try {
       ensureAuthenticated();
-      final storeId = BaseService.getDefaultStoreId();
+      final storeId = getValidStoreId();
 
       final response = await _supabase
           .from('store_business_info')
@@ -35,7 +35,7 @@ class StoreBusinessInfoService extends BaseService {
   ) async {
     try {
       ensureAuthenticated();
-      final storeId = BaseService.getDefaultStoreId();
+      final storeId = getValidStoreId();
 
       // Validate tax code format
       if (!TaxCodeValidator.isValidFormat(info.taxCode)) {
@@ -140,7 +140,7 @@ class StoreBusinessInfoService extends BaseService {
   Future<void> deleteStoreBusinessInfo() async {
     try {
       ensureAuthenticated();
-      final storeId = BaseService.getDefaultStoreId();
+      final storeId = getValidStoreId();
 
       await _supabase
           .from('store_business_info')

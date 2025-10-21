@@ -184,7 +184,7 @@ class InvoiceItemData {
       id: json['id']?.toString() ?? '',
       productId: json['product_id']?.toString() ?? '',
       productName: json['product_name']?.toString() ?? 'Unknown Product',
-      productSku: null, // PO items don't have SKU in the RPC
+      productSku: json['product_sku']?.toString(),
       quantity: json['quantity'] as int? ?? 0,
       unitName: json['unit']?.toString(),
       unitConversionFactor: null, // PO uses different unit structure
