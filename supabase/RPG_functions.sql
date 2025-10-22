@@ -2719,60 +2719,57 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $function$
 DECLARE
-  v_store_id UUID;
-  v_is_active BOOLEAN;
-  v_message TEXT;
-  v_user_id UUID;
-  result JSON;
+  store_record public.stores%ROWTYPE;
 BEGIN
-  -- 1. Get user_id from the session
-  v_user_id := auth.uid();
-  IF v_user_id IS NULL THEN
-    RAISE EXCEPTION 'No authenticated user found.';
+  -- Validate input
+  IF store_code_param IS NULL OR trim(store_code_param) = '' THEN
+    RETURN json_build_object(
+      'valid', false,
+      'error', 'Store code is required'
+    );
   END IF;
 
-  -- 2. Find the store by its code
-  SELECT id, is_active INTO v_store_id, v_is_active
+  -- Find store by code (case-insensitive) and ensure active
+  SELECT *
+  INTO store_record
   FROM public.stores
-  WHERE store_code = store_code_param;
+  WHERE LOWER(store_code) = LOWER(trim(store_code_param))
+    AND is_active = true
+  LIMIT 1;
 
-  -- 3. Check if the store exists
-  IF v_store_id IS NULL THEN
-    result := json_build_object(
-      'is_valid', false,
-      'message', 'Mã cửa hàng không tồn tại'
+  IF NOT FOUND THEN
+    RETURN json_build_object(
+      'valid', false,
+      'error', 'Store not found or inactive'
     );
-    RETURN result;
   END IF;
 
-  -- 4. Check if the store is active
-  IF NOT v_is_active THEN
-    result := json_build_object(
-      'is_valid', false,
-      'message', 'Cửa hàng này đã bị khoá'
-    );
-    RETURN result;
-  END IF;
-
-  -- 5. Check if the user is associated with this store
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.user_profiles
-    WHERE user_profiles.id = v_user_id AND user_profiles.store_id = v_store_id
-  ) THEN
-    result := json_build_object(
-      'is_valid', false,
-      'message', 'Bạn không có quyền truy cập vào cửa hàng này'
-    );
-    RETURN result;
-  END IF;
-
-  -- 6. All checks passed
-  result := json_build_object(
-    'is_valid', true,
-    'message', 'Xác thực thành công'
+  RETURN json_build_object(
+    'valid', true,
+    'store_data', json_build_object(
+      'id', store_record.id,
+      'store_code', store_record.store_code,
+      'store_name', store_record.store_name,
+      'owner_name', store_record.owner_name,
+      'phone', store_record.phone,
+      'email', store_record.email,
+      'address', store_record.address,
+      'business_license', store_record.business_license,
+      'tax_code', store_record.tax_code,
+      'subscription_type', store_record.subscription_type,
+      'subscription_expires_at', store_record.subscription_expires_at,
+      'is_active', store_record.is_active,
+      'created_at', store_record.created_at,
+      'updated_at', store_record.updated_at
+    )
   );
-  RETURN result;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG 'Error in validate_store_for_login: %', SQLERRM;
+    RETURN json_build_object(
+      'valid', false,
+      'error', 'Internal server error'
+    );
 END;
 $function$;
 
@@ -2805,6 +2802,5 @@ BEGIN
   END IF;
 END;
 $function$;
-
 
 

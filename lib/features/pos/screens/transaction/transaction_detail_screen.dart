@@ -104,31 +104,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
 
     if (mounted) {
-      if (file != null) {
-        final extension = format == 'pdf' ? 'PDF' : 'Excel';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✓ Đã tạo hóa đơn $extension'),
-            backgroundColor: Colors.green,
-            action: SnackBarAction(
-              label: 'Chia sẻ',
-              textColor: Colors.white,
-              onPressed: () => invoiceProvider.shareInvoice(file),
-            ),
-          ),
-        );
-
-        // For PDF, also show print option
-        if (format == 'pdf') {
-          _showPrintOption(file);
-        }
-      } else if (invoiceProvider.errorMessage != null) {
+      // Only show error snackbar if generation failed
+      if (file == null && invoiceProvider.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(invoiceProvider.errorMessage!),
             backgroundColor: Colors.red,
           ),
         );
+      }
+
+      // For PDF, show print option after share (if successful)
+      if (file != null && format == 'pdf') {
+        _showPrintOption(file);
       }
     }
   }

@@ -26,7 +26,14 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
   final _bankNameController = TextEditingController();
   final _legalRepController = TextEditingController();
 
+  // Invoice controllers (NĐ 123/2020, TT 32/2025)
+  final _invoiceSymbolController = TextEditingController();
+  final _invoiceTemplateCodeController = TextEditingController();
+  final _bankBranchController = TextEditingController();
+  final _websiteController = TextEditingController();
+
   bool _isAutoFilled = false;
+  double _defaultVatRate = 0.0; // VAT rate 0-10%
 
   @override
   void initState() {
@@ -47,6 +54,10 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
     _bankAccountController.dispose();
     _bankNameController.dispose();
     _legalRepController.dispose();
+    _invoiceSymbolController.dispose();
+    _invoiceTemplateCodeController.dispose();
+    _bankBranchController.dispose();
+    _websiteController.dispose();
     super.dispose();
   }
 
@@ -65,6 +76,15 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
       _bankAccountController.text = info.bankAccount ?? '';
       _bankNameController.text = info.bankName ?? '';
       _legalRepController.text = info.legalRepresentative ?? '';
+
+      // Load invoice fields
+      _invoiceSymbolController.text = info.invoiceSymbol ?? '';
+      _invoiceTemplateCodeController.text = info.invoiceTemplateCode ?? '';
+      _bankBranchController.text = info.bankBranch ?? '';
+      _websiteController.text = info.website ?? '';
+      setState(() {
+        _defaultVatRate = info.defaultVatRate;
+      });
     }
   }
 
@@ -139,6 +159,13 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
       validationSource: validationSource,
       createdAt: provider.storeBusinessInfo?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
+      // Invoice fields (NĐ 123/2020, TT 32/2025)
+      invoiceSymbol: _invoiceSymbolController.text.trim().isNotEmpty ? _invoiceSymbolController.text.trim() : null,
+      invoiceTemplateCode: _invoiceTemplateCodeController.text.trim().isNotEmpty ? _invoiceTemplateCodeController.text.trim() : null,
+      bankBranch: _bankBranchController.text.trim().isNotEmpty ? _bankBranchController.text.trim() : null,
+      website: _websiteController.text.trim().isNotEmpty ? _websiteController.text.trim() : null,
+      defaultVatRate: _defaultVatRate,
+      logoUrl: provider.storeBusinessInfo?.logoUrl, // Preserve existing logo
     );
 
     final success = await provider.saveStoreBusinessInfo(info);
@@ -354,6 +381,141 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
                         labelText: 'Tên ngân hàng',
                         border: OutlineInputBorder(),
                       ),
+                    ),
+                    SizedBox(height: context.cardSpacing),
+                    TextFormField(
+                      controller: _bankBranchController,
+                      decoration: const InputDecoration(
+                        labelText: 'Chi nhánh ngân hàng',
+                        hintText: 'VD: Chi nhánh Hà Nội',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ]),
+
+                  SizedBox(height: context.sectionPadding),
+
+                  // Section 5: Thông tin hóa đơn điện tử (NĐ 123/2020, TT 32/2025)
+                  _buildSectionHeader('THÔNG TIN HÓA ĐƠN ĐIỆN TỬ (Tùy chọn)'),
+                  SizedBox(height: context.cardSpacing / 2),
+                  Text(
+                    'Theo Nghị định 123/2020 và Thông tư 32/2025 về hóa đơn GTGT',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                  ),
+                  SizedBox(height: context.cardSpacing),
+                  _buildGroupedInput([
+                    TextFormField(
+                      controller: _invoiceSymbolController,
+                      decoration: InputDecoration(
+                        labelText: 'Ký hiệu hóa đơn',
+                        hintText: 'VD: 1C25TYY',
+                        border: const OutlineInputBorder(),
+                        helperText: 'Định dạng: C/K + năm + T/D/L/M + code (TT 32/2025)',
+                        helperMaxLines: 2,
+                        suffixIcon: Tooltip(
+                          message: 'Ký hiệu hóa đơn theo mẫu TT 32/2025:\n'
+                              '• C (cơ sở) hoặc K (khởi tạo)\n'
+                              '• 2 số năm (VD: 25 = 2025)\n'
+                              '• T (GTGT) / D (bán hàng) / L (khác) / M (máy tính tiền)\n'
+                              '• 2-3 ký tự nhận dạng',
+                          child: const Icon(Icons.help_outline),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return null; // Optional field
+                        }
+                        // TT 32/2025 format validation: C/K + YY + T/D/L/M + alphanumeric code
+                        final pattern = RegExp(r'^[CK]\d{2}[TDLM][A-Z0-9]{2,3}$');
+                        if (!pattern.hasMatch(value.trim().toUpperCase())) {
+                          return 'Sai định dạng. VD: 1C25TYY hoặc 1K25DAB';
+                        }
+                        return null;
+                      },
+                      textCapitalization: TextCapitalization.characters,
+                    ),
+                    SizedBox(height: context.cardSpacing),
+                    TextFormField(
+                      controller: _invoiceTemplateCodeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Mẫu số hóa đơn',
+                        hintText: 'VD: 01GTKT3/001',
+                        border: OutlineInputBorder(),
+                        helperText: 'Mẫu hóa đơn đã được cấp bởi cơ quan thuế',
+                      ),
+                    ),
+                    SizedBox(height: context.cardSpacing),
+                    TextFormField(
+                      controller: _websiteController,
+                      decoration: const InputDecoration(
+                        labelText: 'Website',
+                        hintText: 'https://example.com',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.url,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return null; // Optional field
+                        }
+                        // Basic URL validation
+                        final urlPattern = RegExp(r'^https?://[^\s]+$');
+                        if (!urlPattern.hasMatch(value.trim())) {
+                          return 'URL không hợp lệ (phải bắt đầu bằng http:// hoặc https://)';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: context.cardSpacing),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Thuế GTGT mặc định',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _defaultVatRate > 0 ? Colors.green.shade50 : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _defaultVatRate > 0 ? Colors.green.shade200 : Colors.grey.shade300,
+                                ),
+                              ),
+                              child: Text(
+                                '${_defaultVatRate.toStringAsFixed(1)}%',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _defaultVatRate > 0 ? Colors.green.shade700 : Colors.grey.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Slider(
+                          value: _defaultVatRate,
+                          min: 0,
+                          max: 10,
+                          divisions: 20, // 0.5% increments
+                          activeColor: Colors.green,
+                          inactiveColor: Colors.grey.shade300,
+                          label: '${_defaultVatRate.toStringAsFixed(1)}%',
+                          onChanged: (value) {
+                            setState(() {
+                              _defaultVatRate = value;
+                            });
+                          },
+                        ),
+                        Text(
+                          'Tỷ lệ VAT thường dùng: 0%, 5%, 8%, 10%',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
                     ),
                   ]),
 

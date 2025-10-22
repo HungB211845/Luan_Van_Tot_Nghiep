@@ -15,9 +15,17 @@ class StoreBusinessInfo {
   // Banking Info (Optional)
   final String? bankAccount;
   final String? bankName;
+  final String? bankBranch;
 
   // Legal Info
   final String? legalRepresentative;
+
+  // Invoice Info (NĐ 123/2020, TT 32/2025)
+  final String? invoiceSymbol;           // Ký hiệu HĐDT (VD: 1C25TYY)
+  final String? invoiceTemplateCode;     // Mẫu số HĐDT (VD: 01GTKT3/001)
+  final double defaultVatRate;           // % VAT mặc định (0-100)
+  final String? website;
+  final String? logoUrl;
 
   // Validation Info
   final DateTime? validatedAt;
@@ -38,7 +46,13 @@ class StoreBusinessInfo {
     this.email,
     this.bankAccount,
     this.bankName,
+    this.bankBranch,
     this.legalRepresentative,
+    this.invoiceSymbol,
+    this.invoiceTemplateCode,
+    this.defaultVatRate = 0.0,
+    this.website,
+    this.logoUrl,
     this.validatedAt,
     this.validationSource,
     required this.createdAt,
@@ -57,7 +71,13 @@ class StoreBusinessInfo {
       email: json['email']?.toString(),
       bankAccount: json['bank_account']?.toString(),
       bankName: json['bank_name']?.toString(),
+      bankBranch: json['bank_branch']?.toString(),
       legalRepresentative: json['legal_representative']?.toString(),
+      invoiceSymbol: json['invoice_symbol']?.toString(),
+      invoiceTemplateCode: json['invoice_template_code']?.toString(),
+      defaultVatRate: (json['default_vat_rate'] as num?)?.toDouble() ?? 0.0,
+      website: json['website']?.toString(),
+      logoUrl: json['logo_url']?.toString(),
       validatedAt: json['validated_at'] != null
           ? DateTime.parse(json['validated_at'])
           : null,
@@ -83,7 +103,13 @@ class StoreBusinessInfo {
       'email': email,
       'bank_account': bankAccount,
       'bank_name': bankName,
+      'bank_branch': bankBranch,
       'legal_representative': legalRepresentative,
+      'invoice_symbol': invoiceSymbol,
+      'invoice_template_code': invoiceTemplateCode,
+      'default_vat_rate': defaultVatRate,
+      'website': website,
+      'logo_url': logoUrl,
       'validated_at': validatedAt?.toIso8601String(),
       'validation_source': validationSource,
       'created_at': createdAt.toIso8601String(),
@@ -102,7 +128,13 @@ class StoreBusinessInfo {
     String? email,
     String? bankAccount,
     String? bankName,
+    String? bankBranch,
     String? legalRepresentative,
+    String? invoiceSymbol,
+    String? invoiceTemplateCode,
+    double? defaultVatRate,
+    String? website,
+    String? logoUrl,
     DateTime? validatedAt,
     String? validationSource,
     DateTime? createdAt,
@@ -119,7 +151,13 @@ class StoreBusinessInfo {
       email: email ?? this.email,
       bankAccount: bankAccount ?? this.bankAccount,
       bankName: bankName ?? this.bankName,
+      bankBranch: bankBranch ?? this.bankBranch,
       legalRepresentative: legalRepresentative ?? this.legalRepresentative,
+      invoiceSymbol: invoiceSymbol ?? this.invoiceSymbol,
+      invoiceTemplateCode: invoiceTemplateCode ?? this.invoiceTemplateCode,
+      defaultVatRate: defaultVatRate ?? this.defaultVatRate,
+      website: website ?? this.website,
+      logoUrl: logoUrl ?? this.logoUrl,
       validatedAt: validatedAt ?? this.validatedAt,
       validationSource: validationSource ?? this.validationSource,
       createdAt: createdAt ?? this.createdAt,
@@ -132,6 +170,13 @@ class StoreBusinessInfo {
     return taxCode.isNotEmpty &&
         businessName.isNotEmpty &&
         (phoneNumber?.isNotEmpty ?? false);
+  }
+
+  /// Helper method to check if invoice info is ready (for compliant invoicing)
+  bool get isInvoiceReady {
+    return isComplete &&
+        (invoiceSymbol?.isNotEmpty ?? false) &&
+        (invoiceTemplateCode?.isNotEmpty ?? false);
   }
 
   /// Helper method to check if validated via API

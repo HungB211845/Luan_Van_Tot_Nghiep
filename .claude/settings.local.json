@@ -1,24 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)",
-      "Bash(flutter pub:*)",
-      "Bash(flutter analyze:*)",
-      "Bash(find:*)",
-      "Bash(flutter run:*)",
-      "Bash(timeout:*)",
-      "Bash(flutter build:*)",
-      "Bash(npx supabase stop:*)",
-      "Bash(npx supabase:*)",
-      "Bash(docker exec:*)",
-      "Bash(xargs -r docker stop)",
-      "Bash(curl:*)",
-      "Bash(cat:*)",
-      "Bash(grep:*)",
-      "Bash(r)",
-      "Bash(nc localhost 3000)",
-      "WebSearch",
-      "WebFetch(domain:provinces.open-api.vn)"
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

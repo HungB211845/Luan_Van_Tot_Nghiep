@@ -26,10 +26,11 @@ class InvoiceProvider extends ChangeNotifier {
   File? get generatedFile => _generatedFile;
   double? get progress => _progress;
 
-  /// Generate invoice for a transaction
+  /// Generate invoice for a transaction (with auto-share)
   ///
   /// Format: 'pdf' or 'excel'
   /// Returns File if successful, null otherwise
+  /// Automatically shares file via system share sheet after generation
   Future<File?> generateTransactionInvoice(
     String transactionId,
     String format,
@@ -66,6 +67,9 @@ class InvoiceProvider extends ChangeNotifier {
       _isGenerating = false;
       notifyListeners();
 
+      // Step 4: Auto-share (non-blocking)
+      await shareInvoice(file);
+
       return file;
     } catch (e) {
       _isGenerating = false;
@@ -76,10 +80,11 @@ class InvoiceProvider extends ChangeNotifier {
     }
   }
 
-  /// Generate invoice for a purchase order
+  /// Generate invoice for a purchase order (with auto-share)
   ///
   /// Format: 'pdf' or 'excel'
   /// Returns File if successful, null otherwise
+  /// Automatically shares file via system share sheet after generation
   Future<File?> generatePOInvoice(
     String poId,
     String format,
@@ -115,6 +120,9 @@ class InvoiceProvider extends ChangeNotifier {
       _generatedFile = file;
       _isGenerating = false;
       notifyListeners();
+
+      // Step 4: Auto-share (non-blocking)
+      await shareInvoice(file);
 
       return file;
     } catch (e) {
@@ -164,14 +172,15 @@ class InvoiceProvider extends ChangeNotifier {
     return await _exportTransactionsReport(startDate, endDate);
   }
 
-  /// Export custom date range transactions report to Excel
+  /// Export custom date range transactions report to Excel (with auto-share)
   ///
   /// Returns File if successful, null otherwise
+  /// Automatically shares file via system share sheet after generation
   Future<File?> exportCustomReport(DateTime startDate, DateTime endDate) async {
     return await _exportTransactionsReport(startDate, endDate);
   }
 
-  /// Internal method to export transactions report
+  /// Internal method to export transactions report (with auto-share)
   Future<File?> _exportTransactionsReport(DateTime startDate, DateTime endDate) async {
     _isGenerating = true;
     _errorMessage = null;
@@ -212,6 +221,9 @@ class InvoiceProvider extends ChangeNotifier {
       _generatedFile = file;
       _isGenerating = false;
       notifyListeners();
+
+      // Step 4: Auto-share (non-blocking)
+      await shareInvoice(file);
 
       return file;
     } catch (e) {

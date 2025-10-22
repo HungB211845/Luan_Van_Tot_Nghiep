@@ -87,22 +87,9 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
 
     final file = await invoiceProvider.exportCustomReport(startDate, endDate);
 
-    if (mounted) {
-      if (file != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✓ Đã xuất báo cáo: ${file.path.split('/').last}'),
-            backgroundColor: Colors.green,
-            action: SnackBarAction(
-              label: 'Chia sẻ',
-              textColor: Colors.white,
-              onPressed: () => invoiceProvider.shareInvoice(file),
-            ),
-          ),
-        );
-      } else if (invoiceProvider.errorMessage != null) {
-        _showError(invoiceProvider.errorMessage!);
-      }
+    // Only show error snackbar if export failed (auto-share will handle success)
+    if (mounted && file == null && invoiceProvider.errorMessage != null) {
+      _showError(invoiceProvider.errorMessage!);
     }
   }
 
