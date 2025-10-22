@@ -172,16 +172,25 @@ class InvoiceProvider extends ChangeNotifier {
     return await _exportTransactionsReport(startDate, endDate);
   }
 
-  /// Export custom date range transactions report to Excel (with auto-share)
+  /// Export custom date range transactions report (with auto-share)
   ///
+  /// Format: 'excel' or 'pdf' (default: 'excel')
   /// Returns File if successful, null otherwise
   /// Automatically shares file via system share sheet after generation
-  Future<File?> exportCustomReport(DateTime startDate, DateTime endDate) async {
-    return await _exportTransactionsReport(startDate, endDate);
+  Future<File?> exportCustomReport(
+    DateTime startDate,
+    DateTime endDate, {
+    String format = 'excel',
+  }) async {
+    return await _exportTransactionsReport(startDate, endDate, format: format);
   }
 
   /// Internal method to export transactions report (with auto-share)
-  Future<File?> _exportTransactionsReport(DateTime startDate, DateTime endDate) async {
+  Future<File?> _exportTransactionsReport(
+    DateTime startDate,
+    DateTime endDate, {
+    String format = 'excel',
+  }) async {
     _isGenerating = true;
     _errorMessage = null;
     _generatedFile = null;
@@ -206,15 +215,26 @@ class InvoiceProvider extends ChangeNotifier {
         return null;
       }
 
-      // Step 2: Generate Excel file
+      // Step 2: Generate file (Excel or PDF)
       _progress = 0.8;
       notifyListeners();
 
-      final file = await _exportService.exportTransactionsReport(
-        transactions: transactions,
-        startDate: startDate,
-        endDate: endDate,
-      );
+      final File file;
+      if (format == 'pdf') {
+        file = await _exportService.exportTransactionsReportPDF(
+          transactions: transactions,
+          startDate: startDate,
+          endDate: endDate,
+        );
+      } else if (format == 'excel') {
+        file = await _exportService.exportTransactionsReport(
+          transactions: transactions,
+          startDate: startDate,
+          endDate: endDate,
+        );
+      } else {
+        throw Exception('Invalid format: $format. Must be "pdf" or "excel".');
+      }
 
       // Step 3: Done
       _progress = 1.0;

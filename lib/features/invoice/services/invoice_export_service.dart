@@ -105,6 +105,32 @@ class InvoiceExportService {
     return file;
   }
 
+  /// Export multiple transactions to PDF report (2 pages: Summary + Detail)
+  ///
+  /// Page 1: "Tổng hợp theo ngày" - Grouped by date + product
+  /// Page 2: "Chi tiết hóa đơn" - All transaction details
+  Future<File> exportTransactionsReportPDF({
+    required List<Map<String, dynamic>> transactions,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    // Ensure fonts are loaded
+    await InvoiceTemplateBuilder.loadFonts();
+
+    final pdf = await InvoiceTemplateBuilder.buildTransactionsReportPDF(
+      transactions: transactions,
+      startDate: startDate,
+      endDate: endDate,
+    );
+
+    final directory = await getTemporaryDirectory();
+    final filename = 'bao_cao_${startDate.toString().split(' ')[0]}_to_${endDate.toString().split(' ')[0]}.pdf';
+    final file = File('${directory.path}/$filename');
+    await file.writeAsBytes(await pdf.save());
+
+    return file;
+  }
+
   /// Share file via system share sheet
   Future<void> shareFile(File file) async {
     await Share.shareXFiles([XFile(file.path)]);

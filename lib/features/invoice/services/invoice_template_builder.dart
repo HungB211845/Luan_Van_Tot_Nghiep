@@ -560,4 +560,250 @@ class InvoiceTemplateBuilder {
         return 'N/A';
     }
   }
+
+  /// Build Transactions Report PDF (2 pages: Summary + Detail)
+  ///
+  /// Page 1: Grouped summary by date + product
+  /// Page 2: Detail table of all transactions
+  static Future<pw.Document> buildTransactionsReportPDF({
+    required List<Map<String, dynamic>> transactions,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    await loadFonts();
+
+    final pdf = pw.Document();
+
+    // Page 1: Summary Report
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Title
+              pw.Center(
+                child: _text(
+                  'BÁO CÁO TỔNG HỢP THEO NGÀY',
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Center(
+                child: _text(
+                  'Từ ${AppFormatter.formatDate(startDate)} đến ${AppFormatter.formatDate(endDate)}',
+                  fontSize: 10,
+                ),
+              ),
+              pw.SizedBox(height: 16),
+
+              // Summary Table
+              _buildSummaryPDFTable(transactions),
+            ],
+          );
+        },
+      ),
+    );
+
+    // Page 2: Detail Report
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) {
+          return [
+            // Title
+            pw.Center(
+              child: _text(
+                'BÁO CÁO CHI TIẾT HÓA ĐƠN',
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Center(
+              child: _text(
+                'Từ ${AppFormatter.formatDate(startDate)} đến ${AppFormatter.formatDate(endDate)}',
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // Detail Table
+            _buildDetailPDFTable(transactions),
+          ];
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+  /// Build Summary PDF Table (grouped by date + product)
+  static pw.Widget _buildSummaryPDFTable(List<Map<String, dynamic>> transactions) {
+    // Group transactions by (date, product)
+    final Map<String, Map<String, dynamic>> grouped = {};
+
+    for (var txData in transactions) {
+      final tx = txData['transaction'] as Map<String, dynamic>;
+      final items = txData['items'] as List<dynamic>? ?? [];
+      final date = DateTime.parse(tx['transaction_date']).toIso8601String().split('T')[0];
+      final invoiceNumber = tx['invoice_number'] ?? 'N/A';
+
+      for (var itemData in items) {
+        final item = itemData as Map<String, dynamic>;
+        final productName = item['product_name'] ?? 'Unknown';
+        final key = '$date|$productName';
+
+        if (!grouped.containsKey(key)) {
+          grouped[key] = {
+            'date': date,
+            'product_name': productName,
+            'unit_name': item['unit_name'] ?? 'đvt',
+            'total_quantity': 0,
+            'total_subtotal': 0.0,
+            'total_tax': 0.0,
+            'total_gross': 0.0,
+            'invoice_numbers': <String>{},
+          };
+        }
+
+        grouped[key]!['total_quantity'] += item['quantity'] as int;
+        grouped[key]!['total_subtotal'] += (item['sub_total'] as num).toDouble();
+        grouped[key]!['total_tax'] += (item['tax_amount'] as num?)?.toDouble() ?? 0.0;
+        grouped[key]!['total_gross'] += (item['gross_amount'] as num?)?.toDouble() ?? 0.0;
+        (grouped[key]!['invoice_numbers'] as Set<String>).add(invoiceNumber);
+      }
+    }
+
+    // Sort by date DESC
+    final sortedEntries = grouped.entries.toList()
+      ..sort((a, b) => b.value['date'].compareTo(a.value['date']));
+
+    return pw.Table(
+      border: pw.TableBorder.all(width: 0.5),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(1.5),  // Ngày
+        1: const pw.FlexColumnWidth(2),    // Tên hàng
+        2: const pw.FlexColumnWidth(0.8),  // ĐVT
+        3: const pw.FlexColumnWidth(0.8),  // Tổng SL
+        4: const pw.FlexColumnWidth(1.5),  // Tổng tiền hàng
+        5: const pw.FlexColumnWidth(1.2),  // Tổng thuế
+        6: const pw.FlexColumnWidth(1.5),  // Tổng cộng
+        7: const pw.FlexColumnWidth(2),    // Danh sách số HĐ
+      },
+      children: [
+        // Header
+        pw.TableRow(
+          children: [
+            _tableCell('Ngày', bold: true, center: true),
+            _tableCell('Tên hàng', bold: true, center: true),
+            _tableCell('ĐVT', bold: true, center: true),
+            _tableCell('Tổng SL', bold: true, center: true),
+            _tableCell('Tổng tiền hàng', bold: true, right: true),
+            _tableCell('Tổng thuế', bold: true, right: true),
+            _tableCell('Tổng cộng', bold: true, right: true),
+            _tableCell('Danh sách số HĐ', bold: true, center: true),
+          ],
+        ),
+
+        // Data rows
+        ...sortedEntries.map((entry) {
+          final data = entry.value;
+          return pw.TableRow(
+            children: [
+              _tableCell(AppFormatter.formatDate(DateTime.parse(data['date']))),
+              _tableCell(data['product_name']),
+              _tableCell(data['unit_name'], center: true),
+              _tableCell(data['total_quantity'].toString(), center: true),
+              _tableCell(AppFormatter.formatCurrency(data['total_subtotal']), right: true),
+              _tableCell(AppFormatter.formatCurrency(data['total_tax']), right: true),
+              _tableCell(AppFormatter.formatCurrency(data['total_gross']), right: true),
+              _tableCell((data['invoice_numbers'] as Set<String>).join(', '), center: true),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  /// Build Detail PDF Table (all transaction line items)
+  static pw.Widget _buildDetailPDFTable(List<Map<String, dynamic>> transactions) {
+    final List<pw.TableRow> rows = [];
+
+    // Header
+    rows.add(
+      pw.TableRow(
+        children: [
+          _tableCell('STT', bold: true, center: true),
+          _tableCell('Ngày', bold: true, center: true),
+          _tableCell('Số HĐ', bold: true, center: true),
+          _tableCell('Khách hàng', bold: true, center: true),
+          _tableCell('Sản phẩm', bold: true, center: true),
+          _tableCell('Số lượng', bold: true, center: true),
+          _tableCell('Đơn giá', bold: true, right: true),
+          _tableCell('Thuế suất %', bold: true, center: true),
+          _tableCell('Tiền thuế', bold: true, right: true),
+          _tableCell('Thành tiền', bold: true, right: true),
+        ],
+      ),
+    );
+
+    // Data rows
+    int stt = 1;
+    for (var txData in transactions) {
+      final tx = txData['transaction'] as Map<String, dynamic>;
+      final customerName = txData['customer_name'] ?? 'Khách lẻ';
+      final items = txData['items'] as List<dynamic>? ?? [];
+
+      for (var itemData in items) {
+        final item = itemData as Map<String, dynamic>;
+        rows.add(
+          pw.TableRow(
+            children: [
+              _tableCell(stt.toString(), center: true),
+              _tableCell(AppFormatter.formatDate(DateTime.parse(tx['transaction_date']))),
+              _tableCell(tx['invoice_number'] ?? 'N/A', center: true),
+              _tableCell(customerName),
+              _tableCell(item['product_name'] ?? ''),
+              _tableCell('${item['quantity']} ${item['unit_name'] ?? ''}', center: true),
+              _tableCell(AppFormatter.formatCurrency((item['price_at_sale'] as num).toDouble()), right: true),
+              _tableCell(
+                ((item['tax_rate'] as num?)?.toDouble() ?? 0) > 0
+                    ? '${((item['tax_rate'] as num).toDouble()).toStringAsFixed(0)}%'
+                    : '-',
+                center: true,
+              ),
+              _tableCell(
+                ((item['tax_amount'] as num?)?.toDouble() ?? 0) > 0
+                    ? AppFormatter.formatCurrency((item['tax_amount'] as num).toDouble())
+                    : '-',
+                right: true,
+              ),
+              _tableCell(AppFormatter.formatCurrency((item['gross_amount'] as num).toDouble()), right: true),
+            ],
+          ),
+        );
+        stt++;
+      }
+    }
+
+    return pw.Table(
+      border: pw.TableBorder.all(width: 0.5),
+      columnWidths: {
+        0: const pw.FixedColumnWidth(30),   // STT
+        1: const pw.FlexColumnWidth(1.2),   // Ngày
+        2: const pw.FlexColumnWidth(1),     // Số HĐ
+        3: const pw.FlexColumnWidth(1.5),   // Khách hàng
+        4: const pw.FlexColumnWidth(2),     // Sản phẩm
+        5: const pw.FlexColumnWidth(1),     // Số lượng
+        6: const pw.FlexColumnWidth(1.2),   // Đơn giá
+        7: const pw.FlexColumnWidth(0.8),   // Thuế suất %
+        8: const pw.FlexColumnWidth(1),     // Tiền thuế
+        9: const pw.FlexColumnWidth(1.2),   // Thành tiền
+      },
+      children: rows,
+    );
+  }
 }

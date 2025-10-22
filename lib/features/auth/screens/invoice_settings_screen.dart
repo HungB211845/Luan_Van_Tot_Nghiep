@@ -51,7 +51,7 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
     }
   }
 
-  Future<void> _exportReport(String preset) async {
+  Future<void> _exportReport(String preset, String format) async {
     final invoiceProvider = context.read<InvoiceProvider>();
 
     final now = DateTime.now();
@@ -85,7 +85,11 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
         return;
     }
 
-    final file = await invoiceProvider.exportCustomReport(startDate, endDate);
+    final file = await invoiceProvider.exportCustomReport(
+      startDate,
+      endDate,
+      format: format,
+    );
 
     // Only show error snackbar if export failed (auto-share will handle success)
     if (mounted && file == null && invoiceProvider.errorMessage != null) {
@@ -205,19 +209,20 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
               ),
               SizedBox(height: context.cardSpacing),
 
-              // Preset buttons
+              // Preset buttons (3 columns: Month, Quarter, Year)
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: _buildPresetButton('Tháng này', 'month'),
+                    child: _buildPresetColumn('Tháng này', 'month'),
                   ),
                   SizedBox(width: context.cardSpacing),
                   Expanded(
-                    child: _buildPresetButton('Quý này', 'quarter'),
+                    child: _buildPresetColumn('Quý này', 'quarter'),
                   ),
                   SizedBox(width: context.cardSpacing),
                   Expanded(
-                    child: _buildPresetButton('Năm nay', 'year'),
+                    child: _buildPresetColumn('Năm nay', 'year'),
                   ),
                 ],
               ),
@@ -248,21 +253,46 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
                 SizedBox(height: context.cardSpacing),
                 Consumer<InvoiceProvider>(
                   builder: (context, provider, child) {
-                    return ElevatedButton.icon(
-                      onPressed: provider.isGenerating ? null : () => _exportReport('custom'),
-                      icon: provider.isGenerating
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.file_download),
-                      label: const Text('Xuất Excel'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.all(context.sectionPadding),
-                      ),
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: provider.isGenerating ? null : () => _exportReport('custom', 'excel'),
+                            icon: provider.isGenerating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.description),
+                            label: const Text('Xuất Excel'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.all(context.cardSpacing),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: context.cardSpacing),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: provider.isGenerating ? null : () => _exportReport('custom', 'pdf'),
+                            icon: provider.isGenerating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.picture_as_pdf),
+                            label: const Text('Xuất PDF'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.all(context.cardSpacing),
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -300,18 +330,48 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
     );
   }
 
-  Widget _buildPresetButton(String label, String preset) {
+  Widget _buildPresetColumn(String label, String preset) {
     return Consumer<InvoiceProvider>(
       builder: (context, provider, child) {
-        return ElevatedButton(
-          onPressed: provider.isGenerating ? null : () => _exportReport(preset),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green[50],
-            foregroundColor: Colors.green[700],
-            padding: EdgeInsets.all(context.cardSpacing),
-            elevation: 0,
-          ),
-          child: Text(label, textAlign: TextAlign.center),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: context.cardSpacing / 2),
+            ElevatedButton.icon(
+              onPressed: provider.isGenerating ? null : () => _exportReport(preset, 'excel'),
+              icon: const Icon(Icons.description, size: 16),
+              label: const Text('Excel', style: TextStyle(fontSize: 11)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(
+                  vertical: context.cardSpacing / 2,
+                  horizontal: context.cardSpacing / 2,
+                ),
+                elevation: 0,
+              ),
+            ),
+            SizedBox(height: context.cardSpacing / 2),
+            ElevatedButton.icon(
+              onPressed: provider.isGenerating ? null : () => _exportReport(preset, 'pdf'),
+              icon: const Icon(Icons.picture_as_pdf, size: 16),
+              label: const Text('PDF', style: TextStyle(fontSize: 11)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(
+                  vertical: context.cardSpacing / 2,
+                  horizontal: context.cardSpacing / 2,
+                ),
+                elevation: 0,
+              ),
+            ),
+          ],
         );
       },
     );
