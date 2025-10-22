@@ -89,8 +89,10 @@ class TaxCodeApiClient {
 
       // Other error codes - let fallback handle it
       return null;
-    } on http.ClientException {
-      // Network error - let fallback handle it
+    } catch (e) {
+      // Catch all exceptions: TimeoutException, SocketException, ClientException, FormatException, etc.
+      // Let fallback handle it
+      print('VietQR internal error: $e');
       return null;
     }
   }
@@ -133,8 +135,9 @@ class TaxCodeApiClient {
       }
 
       return null;
-    } on http.ClientException {
-      // Network error
+    } catch (e) {
+      // Catch all exceptions: TimeoutException, SocketException, ClientException, FormatException, etc.
+      print('Masothue internal error: $e');
       return null;
     }
   }
