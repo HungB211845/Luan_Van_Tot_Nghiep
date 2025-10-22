@@ -284,7 +284,7 @@ class InvoiceTemplateBuilder {
         _text('Tên: ${supplier?.name ?? 'N/A'}', fontSize: 9),
         if (supplier?.address != null) _text('Địa chỉ: ${supplier.address}', fontSize: 9),
         if (supplier?.phone != null) _text('SĐT: ${supplier.phone}', fontSize: 9),
-        if (supplier?.taxCode != null) _text('MST: ${supplier.taxCode}', fontSize: 9),
+        // NOTE: taxCode removed - Company model doesn't have this field
       ],
     );
   }
