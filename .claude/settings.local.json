@@ -17,7 +17,8 @@
       "Bash(grep:*)",
       "Bash(r)",
       "Bash(nc localhost 3000)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:provinces.open-api.vn)"
     ],
     "deny": [],
     "ask": []

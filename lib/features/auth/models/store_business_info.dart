@@ -136,6 +136,9 @@ class StoreBusinessInfo {
 
   /// Helper method to check if validated via API
   bool get isApiValidated {
-    return validationSource == 'API' && validatedAt != null;
+    return (validationSource == 'API' ||
+            validationSource == 'VIETQR' ||
+            validationSource == 'MASOTHUE') &&
+           validatedAt != null;
   }
 }

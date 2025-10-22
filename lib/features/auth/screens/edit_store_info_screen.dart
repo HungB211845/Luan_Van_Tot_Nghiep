@@ -80,19 +80,22 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
     final success = await provider.validateAndFetchTaxCode(taxCode);
 
     if (success && provider.autoFilledData != null) {
-      // Auto-fill fields
+      // Auto-fill all fields from lookup result
       setState(() {
         _isAutoFilled = true;
         _businessNameController.text = provider.autoFilledData!['business_name'] ?? '';
         _taxAuthorityController.text = provider.autoFilledData!['tax_authority'] ?? '';
-        _businessAddressController.text = provider.autoFilledData!['address'] ?? '';
+        _businessAddressController.text = provider.autoFilledData!['business_address'] ?? '';
         _legalRepController.text = provider.autoFilledData!['legal_representative'] ?? '';
+        _phoneController.text = provider.autoFilledData!['phone_number'] ?? '';
+        _emailController.text = provider.autoFilledData!['email'] ?? '';
       });
 
       if (mounted) {
+        final source = provider.validationSource ?? 'API';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✓ Đã tra cứu và điền thông tin tự động'),
+          SnackBar(
+            content: Text('✓ Đã tra cứu và điền thông tin tự động (qua $source)'),
             backgroundColor: Colors.green,
           ),
         );
@@ -110,6 +113,16 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
     final provider = context.read<StoreBusinessInfoProvider>();
     final cleanedTaxCode = TaxCodeValidator.clean(_taxCodeController.text.trim());
 
+    // Determine validation source
+    final String validationSource;
+    if (_isAutoFilled && provider.validationSource != null) {
+      validationSource = provider.validationSource!;
+    } else if (provider.storeBusinessInfo?.validationSource != null) {
+      validationSource = provider.storeBusinessInfo!.validationSource!;
+    } else {
+      validationSource = 'MANUAL';
+    }
+
     final info = StoreBusinessInfo(
       id: provider.storeBusinessInfo?.id ?? '',
       storeId: provider.storeBusinessInfo?.storeId ?? '',
@@ -123,7 +136,7 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
       bankName: _bankNameController.text.trim().isNotEmpty ? _bankNameController.text.trim() : null,
       legalRepresentative: _legalRepController.text.trim().isNotEmpty ? _legalRepController.text.trim() : null,
       validatedAt: _isAutoFilled ? DateTime.now() : provider.storeBusinessInfo?.validatedAt,
-      validationSource: _isAutoFilled ? 'API' : provider.storeBusinessInfo?.validationSource ?? 'MANUAL',
+      validationSource: validationSource,
       createdAt: provider.storeBusinessInfo?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -132,9 +145,10 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
 
     if (mounted) {
       if (success) {
+        final sourceText = validationSource != 'MANUAL' ? ' (xác thực qua $validationSource)' : '';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✓ Đã lưu thông tin hộ kinh doanh'),
+          SnackBar(
+            content: Text('✓ Đã lưu thông tin hộ kinh doanh$sourceText'),
             backgroundColor: Colors.green,
           ),
         );
@@ -212,6 +226,34 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
                       ],
                     ),
                   ]),
+
+                  // Validation badge
+                  if (_isAutoFilled && provider.validationSource != null) ...[
+                    SizedBox(height: context.cardSpacing),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.verified, color: Colors.green.shade700, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Đã xác thực qua ${provider.validationSource}',
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   SizedBox(height: context.sectionPadding),
 

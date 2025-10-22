@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/base_service.dart';
 import '../../../shared/utils/tax_code_validator.dart';
 import '../../../shared/services/tax_code_api_client.dart';
+import '../../../shared/models/tax_code_lookup_result.dart';
 import '../models/store_business_info.dart';
 
 class StoreBusinessInfoService extends BaseService {
@@ -97,16 +98,11 @@ class StoreBusinessInfoService extends BaseService {
     return TaxCodeValidator.isValidFormat(taxCode);
   }
 
-  /// Fetch tax code info from public API
+  /// Fetch tax code info from public APIs (VietQR → masothue)
   ///
-  /// Returns Map with auto-filled data if found:
-  /// - business_name
-  /// - tax_authority
-  /// - address
-  /// - legal_representative
-  ///
-  /// Returns null if not found or API unavailable
-  Future<Map<String, String>?> fetchTaxCodeInfo(String taxCode) async {
+  /// Returns TaxCodeLookupResult with source information if found
+  /// Returns null if not found in any source
+  Future<TaxCodeLookupResult?> fetchTaxCodeInfo(String taxCode) async {
     try {
       // Validate format first
       if (!TaxCodeValidator.isValidFormat(taxCode)) {
@@ -115,22 +111,10 @@ class StoreBusinessInfoService extends BaseService {
 
       final cleanedTaxCode = TaxCodeValidator.clean(taxCode);
 
-      // Call API
-      final taxCodeInfo = await TaxCodeApiClient.lookup(cleanedTaxCode);
+      // Call API with cascade fallback (VietQR → masothue)
+      final result = await TaxCodeApiClient.lookup(cleanedTaxCode);
 
-      if (taxCodeInfo == null) {
-        return null; // Not found
-      }
-
-      // Return auto-fill data
-      return {
-        'business_name': taxCodeInfo.businessName,
-        if (taxCodeInfo.taxAuthority != null)
-          'tax_authority': taxCodeInfo.taxAuthority!,
-        if (taxCodeInfo.address != null) 'address': taxCodeInfo.address!,
-        if (taxCodeInfo.legalRepresentative != null)
-          'legal_representative': taxCodeInfo.legalRepresentative!,
-      };
+      return result; // May be null if not found in any source
     } catch (e) {
       throw Exception('Lỗi tra cứu mã số thuế: $e');
     }

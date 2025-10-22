@@ -1,152 +1,152 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/tax_code_lookup_result.dart';
 
-/// Model for Tax Code Information returned from API
-class TaxCodeInfo {
-  final String taxCode;
-  final String businessName;
-  final String? taxAuthority;
-  final String? address;
-  final String? legalRepresentative;
-  final String? businessStatus; // 'active' | 'inactive' | 'suspended'
-  final DateTime? registrationDate;
-  final String source; // API source name
-
-  const TaxCodeInfo({
-    required this.taxCode,
-    required this.businessName,
-    this.taxAuthority,
-    this.address,
-    this.legalRepresentative,
-    this.businessStatus,
-    this.registrationDate,
-    required this.source,
-  });
-
-  factory TaxCodeInfo.fromJson(Map<String, dynamic> json, String source) {
-    return TaxCodeInfo(
-      taxCode: json['tax_code']?.toString() ?? '',
-      businessName: json['business_name']?.toString() ?? '',
-      taxAuthority: json['tax_authority']?.toString(),
-      address: json['address']?.toString(),
-      legalRepresentative: json['legal_representative']?.toString(),
-      businessStatus: json['business_status']?.toString(),
-      registrationDate: json['registration_date'] != null
-          ? DateTime.tryParse(json['registration_date'])
-          : null,
-      source: source,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'tax_code': taxCode,
-      'business_name': businessName,
-      'tax_authority': taxAuthority,
-      'address': address,
-      'legal_representative': legalRepresentative,
-      'business_status': businessStatus,
-      'registration_date': registrationDate?.toIso8601String(),
-      'source': source,
-    };
-  }
-}
-
-/// API Client for Tax Code lookup
+/// API Client for Tax Code lookup with cascade fallback
 ///
-/// Supports multiple API providers:
-/// 1. masothue.com (unofficial public API)
-/// 2. Custom internal API (if available)
+/// Supports multiple sources in priority order:
+/// 1. VietQR (https://api.vietqr.io) - Primary source, official GDT data
+/// 2. masothue.com - Fallback source
+///
+/// Returns TaxCodeLookupResult with source information
 class TaxCodeApiClient {
   static const Duration timeout = Duration(seconds: 10);
 
-  /// Lookup tax code information from public APIs
+  // Primary source: VietQR
+  static const String vietQRBaseUrl = 'https://api.vietqr.io/v2/business';
+
+  // Fallback source: masothue.com
+  static const String masothueBaseUrl = 'https://api.masothue.com/api/lookup';
+
+  /// Cascade lookup: VietQR → masothue → null
   ///
-  /// Returns TaxCodeInfo if found, null if not found
-  /// Throws Exception on API errors
-  static Future<TaxCodeInfo?> lookup(String taxCode) async {
-    // Try masothue.com API first
+  /// Returns TaxCodeLookupResult if found, null if not found
+  /// Silently catches errors and falls back to next provider
+  static Future<TaxCodeLookupResult?> lookup(String taxCode) async {
+    // Try VietQR first (official GDT data)
     try {
-      final result = await _lookupFromMasothue(taxCode);
-      if (result != null) return result;
+      final result = await _lookupVietQR(taxCode);
+      if (result != null) {
+        return result;
+      }
     } catch (e) {
-      print('Warning: masothue.com API failed: $e');
-      // Continue to next provider
+      print('VietQR lookup failed: $e');
+      // Continue to fallback
     }
 
-    // TODO: Add more API providers here
-    // Example:
-    // try {
-    //   final result = await _lookupFromGDT(taxCode);
-    //   if (result != null) return result;
-    // } catch (e) {
-    //   print('Warning: GDT API failed: $e');
-    // }
+    // Fallback to masothue.com
+    try {
+      final result = await _lookupMasothue(taxCode);
+      if (result != null) {
+        return result;
+      }
+    } catch (e) {
+      print('Masothue lookup failed: $e');
+    }
 
-    return null; // Not found in any provider
+    // All sources failed
+    return null;
   }
 
-  /// Lookup from masothue.com API
+  /// Lookup from VietQR API (Primary source)
   ///
-  /// API endpoint: https://api.masothue.com/api/lookup/{taxCode}
-  /// Note: This is an unofficial API and may change or require authentication
-  static Future<TaxCodeInfo?> _lookupFromMasothue(String taxCode) async {
-    final url = Uri.parse('https://api.masothue.com/api/lookup/$taxCode');
+  /// API: GET https://api.vietqr.io/v2/business/{taxCode}
+  ///
+  /// Response structure:
+  /// ```json
+  /// {
+  ///   "code": "00",
+  ///   "desc": "Success",
+  ///   "data": {
+  ///     "id": "0111256085",
+  ///     "name": "CÔNG TY CỔ PHẦN TRUYỀN THÔNG SHINEUP MEDIA",
+  ///     "address": "Lô số 2 Bái Sảy, Ngõ 195 Quang Trung, Phường Hà Đông, TP Hà Nội",
+  ///     "status": "NNT đang hoạt động"
+  ///   },
+  ///   "metadata": {
+  ///     "source": "gdt.gov.vn",
+  ///     "updatedAt": "2025-10-01T07:23:13.000Z"
+  ///   }
+  /// }
+  /// ```
+  static Future<TaxCodeLookupResult?> _lookupVietQR(String taxCode) async {
+    final url = Uri.parse('$vietQRBaseUrl/$taxCode');
 
     try {
       final response = await http.get(url).timeout(timeout);
 
       if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
-        // Check if data exists
-        if (data['success'] == true && data['data'] != null) {
-          final businessData = data['data'] as Map<String, dynamic>;
-
-          return TaxCodeInfo(
-            taxCode: taxCode,
-            businessName: businessData['name']?.toString() ?? '',
-            taxAuthority: businessData['tax_department']?.toString(),
-            address: businessData['address']?.toString(),
-            legalRepresentative: businessData['representative']?.toString(),
-            businessStatus: businessData['status']?.toString(),
-            registrationDate: businessData['registration_date'] != null
-                ? DateTime.tryParse(businessData['registration_date'])
-                : null,
-            source: 'masothue.com',
-          );
+        // Check success code
+        if (json['code'] == '00' && json['data'] != null) {
+          return TaxCodeLookupResult.fromVietQR(json);
         }
       } else if (response.statusCode == 404) {
-        return null; // Not found
-      } else {
-        throw Exception('API returned status ${response.statusCode}');
+        // Not found in VietQR
+        return null;
       }
-    } catch (e) {
-      if (e is http.ClientException || e.toString().contains('SocketException')) {
-        throw Exception('Không thể kết nối đến server tra cứu MST');
-      }
-      rethrow;
+
+      // Other error codes - let fallback handle it
+      return null;
+    } on http.ClientException {
+      // Network error - let fallback handle it
+      return null;
     }
-
-    return null;
   }
 
-  /// Lookup from Tổng cục Thuế Vietnam (GDT) API
+  /// Lookup from masothue.com API (Fallback source)
   ///
-  /// TODO: Research and implement official GDT API if available
-  /// Current GDT website: https://tracuunnt.gdt.gov.vn/tcnnt/mstcn.jsp
-  static Future<TaxCodeInfo?> _lookupFromGDT(String taxCode) async {
-    // TODO: Implement official GDT API lookup
-    // This may require web scraping if no official API exists
-    throw UnimplementedError('GDT API lookup not yet implemented');
+  /// API: GET https://api.masothue.com/api/lookup/{taxCode}
+  ///
+  /// Expected response structure:
+  /// ```json
+  /// {
+  ///   "success": true,
+  ///   "data": {
+  ///     "mst": "2500756648",
+  ///     "ten": "BẢO HIỂM XÃ HỘI CƠ SỞ VĨNH PHÚC",
+  ///     "dia_chi_thue": "Số 8, đường Hai Bà Trưng, Phường Vĩnh Phúc, Tỉnh Phú Thọ",
+  ///     "quan_ly_boi": "Thuế cơ sở 8 tỉnh Phú Thọ",
+  ///     "nguoi_dai_dien": "...",
+  ///     "dien_thoai": "0974881987"
+  ///   }
+  /// }
+  /// ```
+  static Future<TaxCodeLookupResult?> _lookupMasothue(String taxCode) async {
+    final url = Uri.parse('$masothueBaseUrl/$taxCode');
+
+    try {
+      final response = await http.get(url).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+        // Check if data exists
+        if (json['success'] == true && json['data'] != null) {
+          final data = json['data'] as Map<String, dynamic>;
+          return TaxCodeLookupResult.fromMasothue(data);
+        }
+      } else if (response.statusCode == 404) {
+        // Not found
+        return null;
+      }
+
+      return null;
+    } on http.ClientException {
+      // Network error
+      return null;
+    }
   }
 
-  /// Check if API service is available
+  /// Check if API services are available
+  ///
+  /// Tests with a known valid tax code
   static Future<bool> checkAvailability() async {
     try {
-      // Test with a known valid tax code (example)
-      final result = await lookup('0100109106');
-      return true; // If no exception, service is available
+      // Test with known valid MST
+      final result = await lookup('0111256085');
+      return result != null;
     } catch (e) {
       return false;
     }
