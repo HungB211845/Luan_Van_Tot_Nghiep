@@ -999,10 +999,6 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
 
           // Expense Breakdown Card
           _buildExpenseBreakdownCard(taxSummary),
-          const SizedBox(height: 16),
-
-          // Actions Section
-          _buildTaxActionsCard(),
         ],
       ),
     );
@@ -1233,19 +1229,22 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Lợi nhuận thực (sau thuế)',
-                        style: TextStyle(fontSize: 13, color: Colors.black87),
-                      ),
-                      Text(
-                        '${taxSummary.profitMargin.toStringAsFixed(1)}% biên lợi nhuận',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Lợi nhuận thực (sau thuế)',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                        Text(
+                          '${taxSummary.profitMargin.toStringAsFixed(1)}% biên lợi nhuận',
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     AppFormatter.formatCurrency(taxSummary.netProfit),
                     style: const TextStyle(
@@ -1263,92 +1262,6 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     );
   }
 
-  /// Widget 5: Actions Card with Export Functionality
-  Widget _buildTaxActionsCard() {
-    return Consumer<ReportProvider>(
-      builder: (context, provider, child) {
-        // Platform-specific subtitle text
-        String getExportSubtitle() {
-          if (kIsWeb) {
-            return 'Chức năng xuất file chưa hỗ trợ trên web, vui lòng sử dụng ứng dụng mobile';
-          } else if (context.isMobile) {
-            return 'Chia sẻ qua AirDrop, Email hoặc lưu vào Files';
-          } else {
-            return 'Lưu file CSV vào máy tính của bạn';
-          }
-        }
-
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Column(
-            children: [
-              ListTile(
-                leading: provider.isExporting
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.download, color: Colors.green),
-                title: const Text('Xuất Bảng kê Bán hàng'),
-                subtitle: Text(
-                  provider.isExporting
-                      ? 'Đang tạo và xử lý file...'
-                      : getExportSubtitle(),
-                ),
-                trailing: provider.isExporting
-                    ? null
-                    : const Icon(Icons.chevron_right),
-                onTap: provider.isExporting
-                    ? null
-                    : () async {
-                        await provider.exportSalesLedgerAction();
-                        
-                        // Show error snackbar if export failed
-                        if (provider.exportError != null && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(provider.exportError!),
-                              backgroundColor: Colors.red,
-                              action: SnackBarAction(
-                                label: 'Thử lại',
-                                textColor: Colors.white,
-                                onPressed: () => provider.exportSalesLedgerAction(),
-                              ),
-                            ),
-                          );
-                        } else if (provider.exportError == null && context.mounted) {
-                          // Show success message for desktop (mobile has native feedback)
-                          if (!context.isMobile && !kIsWeb) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('✅ File đã được lưu thành công!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        }
-                      },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.description, color: Colors.blue),
-                title: const Text('Xuất Tờ khai Thuế (Mẫu 01/CNKD)'),
-                subtitle: const Text('Xem và sao chép thông tin cho tờ khai'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Màn hình tờ khai sẽ được triển khai sau')),
-                  );
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   /// Helper widget for tax summary rows
   Widget _buildTaxSummaryRow({
