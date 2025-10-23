@@ -569,10 +569,22 @@ class ReportProvider with ChangeNotifier {
     _isLoadingInventory = true;
 
     try {
-      _inventoryAnalytics = await _reportService.getInventoryAnalytics();
+      // Load BOTH analytics summary AND analytics lists (like loadInventoryData does)
+      final results = await Future.wait([
+        _reportService.getInventoryAnalytics(),
+        _reportService.getInventoryAnalyticsLists(),
+      ]);
+
+      _inventoryAnalytics = results[0] as InventoryAnalytics;
+
+      final analyticsLists = results[1] as Map<String, List<InventoryProduct>>;
+      _topValueProducts = analyticsLists['top_value'] ?? [];
+      _fastTurnoverProducts = analyticsLists['fast_turnover'] ?? [];
+      _slowTurnoverProducts = analyticsLists['slow_turnover'] ?? [];
+
       _inventoryLoaded = true;
-      
-      if (kDebugMode) print('✅ [SILENT] Inventory data loaded');
+
+      if (kDebugMode) print('✅ [SILENT] Inventory data loaded (summary + lists)');
     } catch (e) {
       _errorMessage = e.toString();
       if (kDebugMode) print('❌ [SILENT] Error loading inventory data: $e');
