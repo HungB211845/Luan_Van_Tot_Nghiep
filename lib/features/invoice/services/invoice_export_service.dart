@@ -4,6 +4,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../shared/utils/formatter.dart';
+import '../../../shared/utils/file_naming_helper.dart';
+import '../../auth/screens/invoice_settings_screen.dart'; // For DateRangePreset
 import '../models/invoice_data.dart';
 import 'invoice_template_builder.dart';
 
@@ -17,9 +19,18 @@ class InvoiceExportService {
     // Use new template builder for VAT-compliant invoice
     final pdf = await InvoiceTemplateBuilder.buildVATInvoicePDF(data);
 
+    // Generate accounting-compliant filename
+    final businessName = data.storeInfo?.businessName ?? FileNamingHelper.getFallbackBusinessName();
+    final invoiceNumber = data.invoiceNumber ?? 'INV${DateTime.now().millisecondsSinceEpoch}';
+    final filename = FileNamingHelper.generateTransactionInvoiceFilename(
+      businessName: businessName,
+      invoiceNumber: invoiceNumber,
+      format: 'pdf',
+    );
+
     // Save to temp directory
     final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/invoice_${data.invoiceNumber ?? DateTime.now().millisecondsSinceEpoch}.pdf');
+    final file = File('${directory.path}/$filename');
     await file.writeAsBytes(await pdf.save());
 
     return file;
@@ -32,9 +43,18 @@ class InvoiceExportService {
 
     _buildTransactionExcelContent(sheet, data);
 
+    // Generate accounting-compliant filename
+    final businessName = data.storeInfo?.businessName ?? FileNamingHelper.getFallbackBusinessName();
+    final invoiceNumber = data.invoiceNumber ?? 'INV${DateTime.now().millisecondsSinceEpoch}';
+    final filename = FileNamingHelper.generateTransactionInvoiceFilename(
+      businessName: businessName,
+      invoiceNumber: invoiceNumber,
+      format: 'xlsx',
+    );
+
     // Save to temp directory
     final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/invoice_${data.invoiceNumber ?? DateTime.now().millisecondsSinceEpoch}.xlsx');
+    final file = File('${directory.path}/$filename');
     final bytes = excel.encode();
     if (bytes != null) {
       await file.writeAsBytes(bytes);
@@ -48,8 +68,17 @@ class InvoiceExportService {
     // Use new template builder for PO invoice
     final pdf = await InvoiceTemplateBuilder.buildPOInvoicePDF(data);
 
+    // Generate accounting-compliant filename
+    final businessName = data.storeInfo?.businessName ?? FileNamingHelper.getFallbackBusinessName();
+    final poNumber = data.invoiceNumber ?? 'PO${DateTime.now().millisecondsSinceEpoch}';
+    final filename = FileNamingHelper.generatePOInvoiceFilename(
+      businessName: businessName,
+      poNumber: poNumber,
+      format: 'pdf',
+    );
+
     final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/po_invoice_${data.invoiceNumber ?? DateTime.now().millisecondsSinceEpoch}.pdf');
+    final file = File('${directory.path}/$filename');
     await file.writeAsBytes(await pdf.save());
 
     return file;
@@ -62,8 +91,17 @@ class InvoiceExportService {
 
     _buildPOExcelContent(sheet, data);
 
+    // Generate accounting-compliant filename
+    final businessName = data.storeInfo?.businessName ?? FileNamingHelper.getFallbackBusinessName();
+    final poNumber = data.invoiceNumber ?? 'PO${DateTime.now().millisecondsSinceEpoch}';
+    final filename = FileNamingHelper.generatePOInvoiceFilename(
+      businessName: businessName,
+      poNumber: poNumber,
+      format: 'xlsx',
+    );
+
     final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/po_invoice_${data.invoiceNumber ?? DateTime.now().millisecondsSinceEpoch}.xlsx');
+    final file = File('${directory.path}/$filename');
     final bytes = excel.encode();
     if (bytes != null) {
       await file.writeAsBytes(bytes);
@@ -80,6 +118,8 @@ class InvoiceExportService {
     required List<Map<String, dynamic>> transactions,
     required DateTime startDate,
     required DateTime endDate,
+    String? businessName,
+    DateRangePreset? preset,
   }) async {
     final excel = excel_pkg.Excel.createExcel();
 
@@ -94,8 +134,17 @@ class InvoiceExportService {
     final detailSheet = excel['Chi tiết hóa đơn'];
     _buildDetailSheet(detailSheet, transactions, startDate, endDate);
 
+    // Generate accounting-compliant filename
+    final name = businessName ?? FileNamingHelper.getFallbackBusinessName();
+    final filename = FileNamingHelper.generateTransactionReportFilename(
+      businessName: name,
+      startDate: startDate,
+      endDate: endDate,
+      format: 'xlsx',
+      preset: preset,
+    );
+
     final directory = await getTemporaryDirectory();
-    final filename = 'bao_cao_${startDate.toString().split(' ')[0]}_to_${endDate.toString().split(' ')[0]}.xlsx';
     final file = File('${directory.path}/$filename');
     final bytes = excel.encode();
     if (bytes != null) {
@@ -113,6 +162,8 @@ class InvoiceExportService {
     required List<Map<String, dynamic>> transactions,
     required DateTime startDate,
     required DateTime endDate,
+    String? businessName,
+    DateRangePreset? preset,
   }) async {
     // Ensure fonts are loaded
     await InvoiceTemplateBuilder.loadFonts();
@@ -123,8 +174,17 @@ class InvoiceExportService {
       endDate: endDate,
     );
 
+    // Generate accounting-compliant filename
+    final name = businessName ?? FileNamingHelper.getFallbackBusinessName();
+    final filename = FileNamingHelper.generateTransactionReportFilename(
+      businessName: name,
+      startDate: startDate,
+      endDate: endDate,
+      format: 'pdf',
+      preset: preset,
+    );
+
     final directory = await getTemporaryDirectory();
-    final filename = 'bao_cao_${startDate.toString().split(' ')[0]}_to_${endDate.toString().split(' ')[0]}.pdf';
     final file = File('${directory.path}/$filename');
     await file.writeAsBytes(await pdf.save());
 

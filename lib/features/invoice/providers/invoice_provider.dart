@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/invoice_data.dart';
 import '../services/invoice_service.dart';
 import '../services/invoice_export_service.dart';
+import '../../auth/screens/invoice_settings_screen.dart'; // For DateRangePreset
 
 /// Provider for managing invoice generation and export
 ///
@@ -175,14 +176,21 @@ class InvoiceProvider extends ChangeNotifier {
   /// Export custom date range transactions report (with auto-share)
   ///
   /// Format: 'excel' or 'pdf' (default: 'excel')
+  /// Preset: Date range preset for proper filename formatting
   /// Returns File if successful, null otherwise
   /// Automatically shares file via system share sheet after generation
   Future<File?> exportCustomReport(
     DateTime startDate,
     DateTime endDate, {
     String format = 'excel',
+    DateRangePreset? preset,
   }) async {
-    return await _exportTransactionsReport(startDate, endDate, format: format);
+    return await _exportTransactionsReport(
+      startDate,
+      endDate,
+      format: format,
+      preset: preset,
+    );
   }
 
   /// Internal method to export transactions report (with auto-share)
@@ -190,6 +198,7 @@ class InvoiceProvider extends ChangeNotifier {
     DateTime startDate,
     DateTime endDate, {
     String format = 'excel',
+    DateRangePreset? preset,
   }) async {
     _isGenerating = true;
     _errorMessage = null;
@@ -198,8 +207,14 @@ class InvoiceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Step 1: Fetch transactions data
-      _progress = 0.4;
+      // Step 1: Fetch business name for filename
+      _progress = 0.2;
+      notifyListeners();
+
+      final businessName = await _invoiceService.getStoreBusinessName();
+
+      // Step 2: Fetch transactions data
+      _progress = 0.5;
       notifyListeners();
 
       final transactions = await _invoiceService.getTransactionsExportData(
@@ -215,7 +230,7 @@ class InvoiceProvider extends ChangeNotifier {
         return null;
       }
 
-      // Step 2: Generate file (Excel or PDF)
+      // Step 3: Generate file (Excel or PDF) with accounting-compliant filename
       _progress = 0.8;
       notifyListeners();
 
@@ -225,24 +240,28 @@ class InvoiceProvider extends ChangeNotifier {
           transactions: transactions,
           startDate: startDate,
           endDate: endDate,
+          businessName: businessName,
+          preset: preset,
         );
       } else if (format == 'excel') {
         file = await _exportService.exportTransactionsReport(
           transactions: transactions,
           startDate: startDate,
           endDate: endDate,
+          businessName: businessName,
+          preset: preset,
         );
       } else {
         throw Exception('Invalid format: $format. Must be "pdf" or "excel".');
       }
 
-      // Step 3: Done
+      // Step 4: Done
       _progress = 1.0;
       _generatedFile = file;
       _isGenerating = false;
       notifyListeners();
 
-      // Step 4: Auto-share (non-blocking)
+      // Step 5: Auto-share (non-blocking)
       await shareInvoice(file);
 
       return file;

@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/base_service.dart';
 import '../models/invoice_data.dart';
 import '../../pos/models/transaction.dart';
+import '../../auth/models/store_business_info.dart';
 
 class InvoiceService extends BaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -132,6 +133,31 @@ class InvoiceService extends BaseService {
       return data.map((item) => item as Map<String, dynamic>).toList();
     } catch (e) {
       throw Exception('Lỗi lấy dữ liệu xuất báo cáo: $e');
+    }
+  }
+
+  /// Get store business info for file naming
+  ///
+  /// Returns business name for generating accounting-compliant filenames
+  Future<String> getStoreBusinessName() async {
+    try {
+      ensureAuthenticated();
+
+      final storeId = getValidStoreId();
+
+      final response = await _supabase
+          .from('store_business_info')
+          .select('business_name')
+          .eq('store_id', storeId)
+          .maybeSingle();
+
+      if (response == null) {
+        return 'UnknownBusiness'; // Fallback
+      }
+
+      return response['business_name'] as String? ?? 'UnknownBusiness';
+    } catch (e) {
+      return 'UnknownBusiness'; // Fallback on error
     }
   }
 }
