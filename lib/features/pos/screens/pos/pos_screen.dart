@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/formatter.dart';
-import '../../../../shared/utils/formatter.dart';
-import '../../../../shared/utils/formatter.dart';
 import '../../../products/models/product.dart';
 import '../../../products/models/product_unit.dart';
 import '../../../products/widgets/unit_selection_sheet.dart';
@@ -95,6 +93,20 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     _tabController?.removeListener(_handleTabSelection);
     _tabController?.dispose();
     super.dispose();
+  }
+
+  String _formatPosCurrency(num amount, {bool compactForMillions = true}) {
+    final value = amount.toDouble();
+    if (compactForMillions && value >= 10000000) {
+      final millions = value / 1000000;
+      final formatted = millions.truncateToDouble() == millions
+          ? millions.toStringAsFixed(0)
+          : millions.toStringAsFixed(1);
+      final trimmed = formatted.replaceAll(RegExp(r'\.?0+$'), '');
+      return '$trimmed M đ';
+    }
+    final formatted = AppFormatter.formatCurrencyWithSymbol(value, symbol: '');
+    return '${formatted.trim()} đ';
   }
 
   @override
@@ -422,7 +434,10 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    AppFormatter.formatCurrency(_viewModel!.productProvider.getCurrentPrice(product.id)),
+                    _formatPosCurrency(
+                      _viewModel!.productProvider.getCurrentPrice(product.id),
+                      compactForMillions: true,
+                    ),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green),
                     textAlign: TextAlign.center,
                     softWrap: false,
@@ -661,7 +676,10 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
               children: [
                 Text(item.productName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text(AppFormatter.formatCurrency(item.priceAtSale), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(
+                  _formatPosCurrency(item.priceAtSale, compactForMillions: false),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
                 // Multi-UoM: Display unit name if available
                 if (item.selectedUnitName != null) ...[
                   const SizedBox(height: 2),
@@ -722,7 +740,13 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Tổng cộng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey[700])),
-              Flexible(child: Text(AppFormatter.formatCurrency(total), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green), overflow: TextOverflow.ellipsis)),
+              Flexible(
+                child: Text(
+                  _formatPosCurrency(total, compactForMillions: false),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),

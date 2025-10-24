@@ -751,8 +751,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
                             future: _getStockDisplayString(product, baseStock, provider),
                             builder: (context, snapshot) {
                               final stockDisplay = snapshot.data ?? '$baseStock ${product.unit}';
+                              final priceLabel = _formatListPrice(price);
                               return Text(
-                                'Tồn kho: $stockDisplay • ${AppFormatter.formatCurrency(price)}',
+                                'Tồn kho: $stockDisplay • $priceLabel',
                                 style: TextStyle(
                                   fontSize: 15,
                                   color: isSelected 
@@ -836,6 +837,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
           ? AppFormatter.formatNumber(baseStock)
           : '$baseStock ${_normalizeBaseUnit(baseUnitName)}';
     }
+  }
+
+  String _formatListPrice(double price) {
+    final value = price.toDouble();
+    if (value >= 10000000) {
+      final millions = value / 1000000;
+      final formatted = millions.truncateToDouble() == millions
+          ? millions.toStringAsFixed(0)
+          : millions.toStringAsFixed(1);
+      final trimmed = formatted.replaceAll(RegExp(r'\.?0+$'), '');
+      return '$trimmed M đ';
+    }
+    final formatted = AppFormatter.formatCurrencyWithSymbol(value, symbol: '');
+    return '${formatted.trim()} đ';
   }
 
 
