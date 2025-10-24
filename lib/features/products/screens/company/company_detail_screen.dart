@@ -1,7 +1,9 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/routing/route_names.dart';
@@ -33,6 +35,31 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
   bool _showContactInfo = true;
+  bool _isFabVisible = true;
+
+  static const _fabAnimationDuration = Duration(milliseconds: 220);
+
+  double get _fabYOffset => _isFabVisible ? 0 : 1.4;
+
+  _StockDisplayData _fallbackStockDisplayData(Product product, int baseStock) {
+    final baseUnitName = _normalizeBaseUnit(product.effectiveBaseUnit);
+    final formatted = _formatQuantityDisplay(baseStock.toDouble());
+    final display = baseUnitName.isEmpty ? formatted : '$formatted $baseUnitName';
+    final full = '$baseStock${baseUnitName.isEmpty ? '' : ' $baseUnitName'}';
+    return _StockDisplayData(display: display, full: full);
+  }
+
+  String _formatQuantityDisplay(double value) {
+    final fixed = value.toStringAsFixed(2);
+    final parts = fixed.split('.');
+    if (parts.length != 2) {
+      return fixed;
+    }
+    final integerPart = int.tryParse(parts.first) ?? value.truncate();
+    final formattedInteger = AppFormatter.formatNumber(integerPart);
+    final decimalPart = parts.last;
+    return '$formattedInteger.$decimalPart';
+  }
 
   @override
   void initState() {
@@ -55,7 +82,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     });
   }
 
-  Future<String> _getStockDisplayString(
+  Future<_StockDisplayData> _getStockDisplayData(
     Product product,
     int baseStock,
     ProductProvider provider,
@@ -64,7 +91,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
       final units = await provider.getProductUnits(product.id);
 
       if (units.isEmpty) {
-        return _fallbackStockDisplay(product, baseStock);
+        return _fallbackStockDisplayData(product, baseStock);
       }
 
       final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
@@ -79,24 +106,26 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
       );
 
       if (preferred == null) {
-        return _fallbackStockDisplay(product, baseStock);
+        return _fallbackStockDisplayData(product, baseStock);
       }
 
-      final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+      final truncated = _formatQuantityDisplay(preferred.primaryQuantity);
       final label = UnitDisplayFormatter.simpleUnitName(preferred.unit);
-      return '$value $label';
-    } catch (_) {
-      return _fallbackStockDisplay(product, baseStock);
-    }
-  }
+      final preciseQuantity = preferred.primaryQuantity.toString();
+      final fallbackBase = _normalizeBaseUnit(product.effectiveBaseUnit);
+      final baseDisplay = AppFormatter.formatNumber(baseStock);
 
-  String _fallbackStockDisplay(Product product, int baseStock) {
-    final baseUnitName = _normalizeBaseUnit(product.effectiveBaseUnit);
-    final formatted = AppFormatter.formatNumber(baseStock);
-    if (baseUnitName.isEmpty) {
-      return formatted;
+      final full = fallbackBase.isEmpty
+          ? '$preciseQuantity $label'
+          : '$preciseQuantity $label • $baseDisplay $fallbackBase';
+
+      return _StockDisplayData(
+        display: '$truncated $label',
+        full: full,
+      );
+    } catch (_) {
+      return _fallbackStockDisplayData(product, baseStock);
     }
-    return '$formatted $baseUnitName';
   }
 
   String _normalizeBaseUnit(String baseUnitName) {
@@ -124,6 +153,23 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
 
   void _onTabChanged() {
     setState(() {}); // Rebuild to apply filter
+  }
+
+  bool _handleUserScroll(UserScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+
+    if (notification.direction == ScrollDirection.reverse && _isFabVisible) {
+      setState(() => _isFabVisible = false);
+    } else if (notification.direction == ScrollDirection.forward && !_isFabVisible) {
+      setState(() => _isFabVisible = true);
+    } else if (notification.direction == ScrollDirection.idle &&
+        notification.metrics.pixels <= notification.metrics.minScrollExtent &&
+        !_isFabVisible) {
+      setState(() => _isFabVisible = true);
+    }
+    return false;
   }
 
   Future<void> _makePhoneCall(Company company) async {
@@ -463,18 +509,21 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                     return _buildEmptyWidget();
                   }
 
-                  return RefreshIndicator(
-                    onRefresh: () async {
-                      await provider.loadCompanyProducts(liveCompany.id);
-                    },
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: EdgeInsets.all(context.sectionPadding),
-                      itemCount: filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = filteredProducts[index];
-                        return _buildProductCard(context, product, provider);
+                  return NotificationListener<UserScrollNotification>(
+                    onNotification: _handleUserScroll,
+                    child: RefreshIndicator(
+                      onRefresh: () async {
+                        await provider.loadCompanyProducts(liveCompany.id);
                       },
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.all(context.sectionPadding),
+                        itemCount: filteredProducts.length,
+                        itemBuilder: (context, index) {
+                          final product = filteredProducts[index];
+                          return _buildProductCard(context, product, provider);
+                        },
+                      ),
                     ),
                   );
                 },
@@ -482,12 +531,24 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => _addBulkProducts(liveCompany),
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-          tooltip: 'Thêm nhiều sản phẩm cùng lúc',
-          child: const Icon(Icons.add_box),
+        floatingActionButton: AnimatedSlide(
+          duration: _fabAnimationDuration,
+          curve: Curves.easeOut,
+          offset: Offset(0, _fabYOffset),
+          child: AnimatedOpacity(
+            duration: _fabAnimationDuration,
+            opacity: _isFabVisible ? 1 : 0,
+            child: IgnorePointer(
+              ignoring: !_isFabVisible,
+              child: FloatingActionButton(
+                onPressed: () => _addBulkProducts(liveCompany),
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                tooltip: 'Thêm nhiều sản phẩm cùng lúc',
+                child: const Icon(CupertinoIcons.plus),
+              ),
+            ),
+          ),
         ),
       );
   }
@@ -585,6 +646,14 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
 
     final isLowStock = stock <= 10;
     final isBanned = product.isBanned;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final categoryColor = _getCategoryColor(product.category);
+    final priceColor = currentPrice > 0 ? Colors.green[700]! : Colors.grey[600]!;
+    final currencyText = currentPrice > 0
+        ? AppFormatter.formatCurrencyWithSymbol(currentPrice)
+        : 'Chưa có giá';
+    final fallbackStockData = _fallbackStockDisplayData(product, stock);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -613,12 +682,12 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: _getCategoryColor(product.category).withValues(alpha: 0.1),
+                      color: categoryColor.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       _getCategoryIcon(product.category),
-                      color: _getCategoryColor(product.category),
+                      color: categoryColor,
                       size: 24,
                     ),
                   ),
@@ -634,11 +703,15 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                             Expanded(
                               child: Text(
                                 product.name,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
+                                style: textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.colorScheme.onSurface,
+                                    ) ??
+                                    const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -676,11 +749,15 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                           ),
                         Text(
                           product.categoryDisplayName,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _getCategoryColor(product.category),
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: textTheme.bodySmall?.copyWith(
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ) ??
+                              TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
                         ),
                       ],
                     ),
@@ -702,81 +779,71 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
 
               // Price and stock row
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Price
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green[200]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.attach_money,
-                            color: Colors.green,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            currentPrice > 0
-                                ? AppFormatter.formatCurrency(currentPrice)
-                                : 'Chưa có giá',
-                            style: TextStyle(
-                              fontSize: 14,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        currencyText,
+                        style: textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: Colors.green,
+                              color: priceColor,
+                            ) ??
+                            TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: priceColor,
                             ),
-                          ),
-                        ],
                       ),
                     ),
                   ),
 
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 16),
 
-                  // Stock
                   Expanded(
-                    child: FutureBuilder<String>(
-                      future: _getStockDisplayString(product, stock, productProvider),
+                    child: FutureBuilder<_StockDisplayData>(
+                      future: _getStockDisplayData(product, stock, productProvider),
                       builder: (context, snapshot) {
-                        final backgroundColor = isLowStock ? Colors.orange[50] : Colors.blue[50];
-                        final borderColor =
-                            isLowStock ? Colors.orange[200]! : Colors.blue[200]!;
-                        final iconColor =
-                            isLowStock ? Colors.orange[700]! : Colors.blue[700]!;
-                        final displayText = snapshot.data ??
-                            _fallbackStockDisplay(product, stock);
+                        final data = snapshot.data ?? fallbackStockData;
+                        final isLow = isLowStock;
+                        final color = isLow ? Colors.orange[700]! : Colors.blue[600]!;
+                        final icon = isLow
+                            ? CupertinoIcons.exclamationmark_triangle_fill
+                            : CupertinoIcons.cube_box_fill;
 
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: backgroundColor,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: borderColor),
-                          ),
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: () {
+                            final messenger = ScaffoldMessenger.of(context);
+                            messenger
+                              ..removeCurrentSnackBar()
+                              ..showSnackBar(
+                                SnackBar(
+                                  content: Text('SL chính xác: ${data.full}'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                          },
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                isLowStock ? Icons.warning : Icons.inventory_2,
-                                color: iconColor,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'SL: $displayText',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: iconColor,
+                              Icon(icon, color: color, size: 18),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'SL: ${data.display}',
+                                  style: textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: color,
+                                      ) ??
+                                      TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: color,
+                                      ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -853,4 +920,14 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
         return Colors.brown;
     }
   }
+}
+
+class _StockDisplayData {
+  final String display;
+  final String full;
+
+  const _StockDisplayData({
+    required this.display,
+    required this.full,
+  });
 }

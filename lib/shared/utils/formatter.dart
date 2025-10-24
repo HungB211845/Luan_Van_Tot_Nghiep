@@ -14,6 +14,16 @@ class AppFormatter {
     symbol: 'VND',
   );
 
+  static String formatCurrencyWithSymbol(num amount, {String symbol = '₫'}) {
+    final isInteger = amount % 1 == 0;
+    final formatter = NumberFormat.currency(
+      locale: 'vi_VN',
+      symbol: symbol,
+      decimalDigits: isInteger ? 0 : 2,
+    );
+    return formatter.format(amount);
+  }
+
   /// Định dạng một số (double hoặc int) thành chuỗi tiền tệ VND.
   ///
   /// Tự động chọn định dạng phù hợp (có hoặc không có phần thập phân).
