@@ -10,6 +10,9 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
+    <!-- Phone call permission (needed for direct dialing) -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+
     <!-- Camera feature (optional, not required) -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 

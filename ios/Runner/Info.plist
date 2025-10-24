@@ -41,6 +41,7 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
+		<string>telprompt</string>
 		<string>sms</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>

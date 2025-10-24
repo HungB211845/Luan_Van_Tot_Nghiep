@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +15,7 @@ import '../../providers/product_provider.dart';
 import '../products/product_detail_screen.dart';
 import 'company_transaction_history_screen.dart';
 import 'bulk_product_add_screen.dart';
+import '../../utils/unit_display_formatter.dart';
 
 class CompanyDetailScreen extends StatefulWidget {
   final Company company;
@@ -52,6 +55,57 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     });
   }
 
+  Future<String> _getStockDisplayString(
+    Product product,
+    int baseStock,
+    ProductProvider provider,
+  ) async {
+    try {
+      final units = await provider.getProductUnits(product.id);
+
+      if (units.isEmpty) {
+        return _fallbackStockDisplay(product, baseStock);
+      }
+
+      final baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
+        units: units,
+        fallback: product.effectiveBaseUnit,
+      );
+
+      final preferred = UnitDisplayFormatter.preferredQuantity(
+        baseQuantity: baseStock.toDouble(),
+        units: units,
+        baseUnitName: baseUnitName,
+      );
+
+      if (preferred == null) {
+        return _fallbackStockDisplay(product, baseStock);
+      }
+
+      final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+      final label = UnitDisplayFormatter.simpleUnitName(preferred.unit);
+      return '$value $label';
+    } catch (_) {
+      return _fallbackStockDisplay(product, baseStock);
+    }
+  }
+
+  String _fallbackStockDisplay(Product product, int baseStock) {
+    final baseUnitName = _normalizeBaseUnit(product.effectiveBaseUnit);
+    final formatted = AppFormatter.formatNumber(baseStock);
+    if (baseUnitName.isEmpty) {
+      return formatted;
+    }
+    return '$formatted $baseUnitName';
+  }
+
+  String _normalizeBaseUnit(String baseUnitName) {
+    if (baseUnitName.isEmpty || baseUnitName.toLowerCase() == 'đơn vị') {
+      return '';
+    }
+    return baseUnitName.toLowerCase();
+  }
+
   @override
   void didUpdateWidget(CompanyDetailScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -81,16 +135,71 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
       return;
     }
 
-    final uri = Uri.parse('tel:$phone');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không thể gọi điện thoại'), backgroundColor: Colors.red),
-        );
+    final telUri = Uri(scheme: 'tel', path: phone);
+    final telPromptUri = Uri(scheme: 'telprompt', path: phone);
+
+    Future<bool> attemptLaunch(Uri uri, LaunchMode mode, String label) async {
+      try {
+        final result = await launchUrl(uri, mode: mode);
+        debugPrint('📞 launch attempt [$label] => $result');
+        return result;
+      } catch (err) {
+        debugPrint('❌ launch attempt [$label] threw $err');
+        return false;
       }
     }
+
+    try {
+      debugPrint('📞 Attempting to launch phone call for $phone');
+      final canLaunchTel = await canLaunchUrl(telUri);
+      debugPrint('📞 canLaunchUrl tel result: $canLaunchTel');
+    } catch (err) {
+      debugPrint('❌ canLaunchUrl threw $err');
+    }
+
+    final attempts = <Map<String, dynamic>>[
+      {
+        'uri': telUri,
+        'mode': LaunchMode.platformDefault,
+        'label': 'tel/platformDefault',
+      },
+      if (Platform.isIOS)
+        {
+          'uri': telPromptUri,
+          'mode': LaunchMode.platformDefault,
+          'label': 'telprompt/platformDefault',
+        },
+      {
+        'uri': telUri,
+        'mode': LaunchMode.externalApplication,
+        'label': 'tel/externalApplication',
+      },
+      if (Platform.isIOS)
+        {
+          'uri': telPromptUri,
+          'mode': LaunchMode.externalApplication,
+          'label': 'telprompt/externalApplication',
+        },
+    ];
+
+    for (final attempt in attempts) {
+      final launched = await attemptLaunch(
+        attempt['uri'] as Uri,
+        attempt['mode'] as LaunchMode,
+        attempt['label'] as String,
+      );
+      if (launched) {
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    final message = Platform.isIOS
+        ? 'Simulator không hỗ trợ gọi điện. Hãy kiểm tra trên thiết bị thật.'
+        : 'Không thể mở ứng dụng điện thoại.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   Future<void> _deleteCompany(Company company) async {
@@ -472,6 +581,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
     // The list is refreshed by CompanyProvider, so this data is fresh.
     final stock = product.availableStock ?? 0;
     final currentPrice = product.currentSellingPrice;
+    final productProvider = context.read<ProductProvider>();
 
     final isLowStock = stock <= 10;
     final isBanned = product.isBanned;
@@ -555,13 +665,15 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          'SKU: ${product.sku}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        if (product.sku != null &&
+                            product.sku!.trim().isNotEmpty)
+                          Text(
+                            'SKU: ${product.sku}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
                         Text(
                           product.categoryDisplayName,
                           style: TextStyle(
@@ -578,8 +690,8 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                   IconButton(
                     onPressed: () => _showEditPriceDialog(product),
                     icon: Icon(
-                      Icons.price_change,
-                      color: Colors.blue[700],
+                      Icons.attach_money,
+                      color: Colors.green[700],
                     ),
                     tooltip: 'Chỉnh sửa giá bán',
                   ),
@@ -607,7 +719,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                         children: [
                           Icon(
                             Icons.attach_money,
-                            color: Colors.green[700],
+                            color: Colors.green,
                             size: 16,
                           ),
                           const SizedBox(width: 4),
@@ -618,7 +730,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: Colors.green[700],
+                              color: Colors.green,
                             ),
                           ),
                         ],
@@ -630,90 +742,56 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen>
 
                   // Stock
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isLowStock ? Colors.orange[50] : Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isLowStock ? Colors.orange[200]! : Colors.blue[200]!,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isLowStock ? Icons.warning : Icons.inventory_2,
-                            color: isLowStock ? Colors.orange[700] : Colors.blue[700],
-                            size: 16,
+                    child: FutureBuilder<String>(
+                      future: _getStockDisplayString(product, stock, productProvider),
+                      builder: (context, snapshot) {
+                        final backgroundColor = isLowStock ? Colors.orange[50] : Colors.blue[50];
+                        final borderColor =
+                            isLowStock ? Colors.orange[200]! : Colors.blue[200]!;
+                        final iconColor =
+                            isLowStock ? Colors.orange[700]! : Colors.blue[700]!;
+                        final displayText = snapshot.data ??
+                            _fallbackStockDisplay(product, stock);
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'SL: $stock',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: isLowStock ? Colors.orange[700] : Colors.blue[700],
-                            ),
+                          decoration: BoxDecoration(
+                            color: backgroundColor,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: borderColor),
                           ),
-                        ],
-                      ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isLowStock ? Icons.warning : Icons.inventory_2,
+                                color: iconColor,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'SL: $displayText',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: iconColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
               ),
-
-              // Attributes preview
-              if (product.attributes.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _buildAttributesPreview(product),
-              ],
             ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildAttributesPreview(Product product) {
-    switch (product.category) {
-      case ProductCategory.FERTILIZER:
-        final attrs = product.fertilizerAttributes;
-        if (attrs != null) {
-          return Text(
-            'NPK: ${attrs.npkRatio} • ${attrs.weight}${attrs.unit} • ${attrs.type}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          );
-        }
-        break;
-      case ProductCategory.PESTICIDE:
-        final attrs = product.pesticideAttributes;
-        if (attrs != null) {
-          return Text(
-            'Hoạt chất: ${attrs.activeIngredient} • ${attrs.concentration}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          );
-        }
-        break;
-      case ProductCategory.SEED:
-        final attrs = product.seedAttributes;
-        if (attrs != null) {
-          return Text(
-            'Giống: ${attrs.strain} • ${attrs.origin}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          );
-        }
-        break;
-    }
-    return const SizedBox.shrink();
   }
 
   Widget _buildEmptyWidget() {
