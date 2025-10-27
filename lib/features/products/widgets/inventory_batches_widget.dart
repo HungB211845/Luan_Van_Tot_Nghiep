@@ -162,9 +162,12 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
   }
 
   Widget _buildBatchesList(BuildContext context) {
+    final isStandalone = !widget.showTitle;
     return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: !isStandalone,
+      physics: isStandalone
+          ? const AlwaysScrollableScrollPhysics()
+          : const NeverScrollableScrollPhysics(),
       itemCount: widget.batches.length,
       separatorBuilder: (context, index) => const Divider(height: 1),
       itemBuilder: (context, index) {
