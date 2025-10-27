@@ -393,11 +393,13 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     final bool isLowStock = stock <= (product.minStockLevel ?? 10);
 
     return GestureDetector(
-      onTap: () => _handleProductTap(product, quantityInCart),
-      onLongPress: () {
+      onTap: () => _handleQuickAdd(product),
+      onLongPress: () async {
         if (inCart) {
           _viewModel?.updateCartItemQuantity(product, 0);
           HapticFeedback.heavyImpact();
+        } else {
+          await _showUnitSelector(product, quantityInCart);
         }
       },
       child: Container(
@@ -480,36 +482,65 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     );
   }
 
-  /// Handle product tap with Multi-UoM support
-  /// Shows unit selector if product has multiple units, otherwise adds directly
-  Future<void> _handleProductTap(Product product, int quantityInCart) async {
+  /// Quick add using default selling unit when available
+  Future<void> _handleQuickAdd(Product product) async {
+    final provider = _viewModel!.productProvider;
+
+    try {
+      final units = await provider.getProductUnits(product.id);
+
+      await context.read<ProductProvider>().addToCart(
+        product,
+        1,
+        selectedUnit: units.isNotEmpty
+            ? units.firstWhere(
+                (unit) => unit.isDefaultSellingUnit,
+                orElse: () => units.first,
+              )
+            : null,
+      );
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Lỗi tải đơn vị: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+    }
+  }
+
+  /// Shows unit selector when user needs to choose selling unit
+  Future<void> _showUnitSelector(Product product, int quantityInCart) async {
     final provider = _viewModel!.productProvider;
     final stock = provider.getProductStock(product.id);
 
     try {
-      // Load available units for this product (cached)
       final units = await provider.getProductUnits(product.id);
 
       if (units.isEmpty) {
-        // No units configured, add with default behavior (quantity only)
-        _viewModel?.updateCartItemQuantity(product, quantityInCart + 1);
+        await context.read<ProductProvider>().addToCart(
+          product,
+          1,
+        );
         HapticFeedback.lightImpact();
         return;
       }
 
       if (units.length == 1) {
-        // Only one unit, add directly with that unit
         final unit = units.first;
         await context.read<ProductProvider>().addToCart(
           product,
-          quantityInCart + 1,
+          1,
           selectedUnit: unit,
         );
         HapticFeedback.lightImpact();
         return;
       }
 
-      // Multiple units available, show selector sheet
       HapticFeedback.selectionClick();
 
       if (!mounted) return;
@@ -526,16 +557,14 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
       );
 
       if (selectedUnit != null && mounted) {
-        // Add to cart with selected unit
         await context.read<ProductProvider>().addToCart(
           product,
-          quantityInCart + 1,
+          1,
           selectedUnit: selectedUnit,
         );
         HapticFeedback.lightImpact();
       }
     } catch (e) {
-      // Error loading units, fallback to default behavior
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
