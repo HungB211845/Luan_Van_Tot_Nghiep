@@ -2,12 +2,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../providers/product_provider.dart';
 import '../../widgets/product_image_widget.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/responsive.dart';
 import '../../utils/unit_display_formatter.dart';
 import '../../../../core/config/cache_config.dart';
@@ -226,6 +228,105 @@ class _ProductListScreenState extends State<ProductListScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showEditPriceDialog(Product product) async {
+    final productProvider = context.read<ProductProvider>();
+    final currentPrice = productProvider.getCurrentPrice(product.id);
+    final controller = TextEditingController(
+      text: AppFormatter.formatNumber(currentPrice),
+    );
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Chỉnh sửa giá bán',
+            style: TextStyle(
+              color: Colors.green[800],
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Giá bán mới',
+                prefixText: 'đ ',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                CurrencyInputFormatter(),
+              ],
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Vui lòng nhập giá';
+                }
+                return null;
+              },
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey[700],
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    child: const Text('Hủy'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (!formKey.currentState!.validate()) {
+                        return;
+                      }
+                      final parsed =
+                          double.tryParse(controller.text.replaceAll('.', '')) ?? 0;
+                      final success = await productProvider.updateProductPrice(
+                        product.id,
+                        parsed,
+                      );
+                      if (!mounted) return;
+                      Navigator.of(dialogContext).pop();
+                      ScaffoldMessenger.of(context)
+                        ..removeCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              success
+                                  ? 'Cập nhật giá thành công!'
+                                  : 'Lỗi: ${productProvider.errorMessage}',
+                            ),
+                            backgroundColor: success ? Colors.green : Colors.red,
+                          ),
+                        );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Lưu'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -911,10 +1012,21 @@ class _ProductListScreenState extends State<ProductListScreen> {
                           if (showChevron)
                             Padding(
                               padding: const EdgeInsets.only(left: 8),
-                              child: const Icon(
-                                CupertinoIcons.chevron_right,
-                                color: CupertinoColors.systemGrey3,
-                                size: 18,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _showEditPriceDialog(product),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.attach_money,
+                                    size: 16,
+                                    color: Colors.green,
+                                  ),
+                                ),
                               ),
                             ),
                         ],

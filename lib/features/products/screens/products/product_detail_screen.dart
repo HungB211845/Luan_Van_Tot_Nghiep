@@ -984,7 +984,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           tooltip: 'Cài đặt sản phẩm',
         ),
         IconButton(
-          icon: const Icon(Icons.edit, size: 24, color: Colors.green),
+          icon: const Icon(Icons.attach_money, size: 24, color: Colors.green),
           onPressed: _enterEditMode,
           tooltip: 'Chỉnh sửa giá bán',
         ),
@@ -1065,7 +1065,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           tooltip: 'Cài đặt sản phẩm',
         ),
         IconButton(
-          icon: const Icon(Icons.edit, size: 24),
+          icon: const Icon(Icons.attach_money, size: 24),
           onPressed: _enterEditMode,
           tooltip: 'Chỉnh sửa giá bán',
         ),
