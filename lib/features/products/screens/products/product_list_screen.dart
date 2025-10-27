@@ -93,6 +93,162 @@ class _ProductListScreenState extends State<ProductListScreen> {
     _searchController.addListener(_onSearchChanged);
   }
 
+  Widget _buildLeadingMedia(Product product, bool isChecked) {
+    const double size = 56;
+
+    if (_isSelectionMode) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Icon(
+          isChecked ? CupertinoIcons.check_mark_circled_solid : CupertinoIcons.circle,
+          color: isChecked ? Colors.green : CupertinoColors.systemGrey3,
+          size: 28,
+        ),
+      );
+    }
+
+    final imageUrl = product.imageUrl?.trim() ?? '';
+    if (imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: ProductImageWidget(
+          imageUrl: imageUrl,
+          size: ProductImageSize.list,
+          width: size,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    final color = _getCategoryColor(product.category);
+    final icon = _getCategoryIcon(product.category);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, color: color, size: 26),
+    );
+  }
+
+  Widget _buildBannedChip() {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.red,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: const Text(
+        'CẤM',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPriceAndStockRow({
+    required Product product,
+    required ProductProvider provider,
+    required int baseStock,
+    required double price,
+    required bool isLowStock,
+  }) {
+    final priceLabel = _formatListPrice(price);
+    final hasPrice = price > 0;
+    final priceColor = hasPrice ? Colors.green[700]! : CupertinoColors.systemGrey;
+    final fallbackStockUnitRaw =
+        product.unit.trim().isNotEmpty ? product.unit : product.effectiveBaseUnit;
+    final fallbackStock = '$baseStock ${_normalizeBaseUnit(fallbackStockUnitRaw)}'.trim();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            hasPrice ? priceLabel : 'Chưa có giá',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: priceColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FutureBuilder<String>(
+            future: _getStockDisplayString(product, baseStock, provider),
+            builder: (context, snapshot) {
+              final stockDisplay = snapshot.data ?? fallbackStock;
+              final color = isLowStock ? Colors.orange[700]! : Colors.blue[600]!;
+              final icon = isLowStock
+                  ? CupertinoIcons.exclamationmark_triangle_fill
+                  : CupertinoIcons.cube_box_fill;
+
+              return GestureDetector(
+                onLongPress: () => _showExactStockSnack(
+                  context,
+                  product: product,
+                  baseStock: baseStock,
+                ),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, color: color, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'SL: $stockDisplay',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: color,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showExactStockSnack(
+    BuildContext context, {
+    required Product product,
+    required int baseStock,
+  }) {
+    final baseUnit = _normalizeBaseUnit(product.effectiveBaseUnit);
+    final baseValue = AppFormatter.formatNumber(baseStock);
+    final precise = baseUnit.isEmpty ? baseValue : '$baseValue $baseUnit';
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Tồn kho chính xác: $precise'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
   // 🎯 FIXED: Debounced search handler to prevent excessive API calls
   Timer? _searchDebounce;
   
@@ -675,119 +831,118 @@ class _ProductListScreenState extends State<ProductListScreen> {
     final price = provider.getCurrentPrice(product.id);
     final isSelected = isMasterDetail && provider.selectedProduct?.id == product.id;
     final isChecked = _selectedProductIds.contains(product.id);
+    final isLowStock = baseStock <= (product.minStockLevel ?? 10);
+    final highlight = isSelected || isChecked;
+    final borderColor = highlight ? Colors.green : Colors.grey[200]!;
+    final backgroundColor = isSelected
+        ? Colors.green.withOpacity(0.08)
+        : (isChecked ? Colors.green.withOpacity(0.05) : Colors.white);
+    final showChevron = !_isSelectionMode && !isMasterDetail;
+    final horizontalPadding = isMasterDetail ? 16.0 : context.sectionPadding;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isSelected ? Colors.green.withOpacity(0.12) : Colors.transparent,
-        border: isSelected ? Border(
-          left: BorderSide(color: Colors.green, width: 3),
-        ) : null,
-      ),
-      child: Column(
-        children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                if (_isSelectionMode) {
-                  _toggleProductSelection(product.id);
-                } else {
-                  provider.selectProduct(product);
-                  if (!isMasterDetail) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ProductDetailScreen()),
-                    );
-                  }
-                }
-              },
-              onLongPress: () {
-                if (!_isSelectionMode && !isMasterDetail) {
-                  _toggleSelectionMode(initialProductId: product.id);
-                }
-              },
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isMasterDetail ? 16 : context.sectionPadding,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: [
-                    if (_isSelectionMode)
-                      Container(
-                        width: 50,
-                        height: 50,
-                        alignment: Alignment.center,
-                        child: Icon(
-                          isChecked ? CupertinoIcons.check_mark_circled_solid : CupertinoIcons.circle,
-                          color: isChecked ? Colors.green : CupertinoColors.systemGrey3,
-                          size: 28,
-                        ),
-                      )
-                    else
-                      ProductImageWidget(
-                        imageUrl: product.imageUrl,
-                        size: ProductImageSize.list,
-                        width: 50,
-                      ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 8, horizontalPadding, 0),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleProductSelection(product.id);
+            } else {
+              provider.selectProduct(product);
+              if (!isMasterDetail) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProductDetailScreen()),
+                );
+              }
+            }
+          },
+          onLongPress: () {
+            if (!_isSelectionMode && !isMasterDetail) {
+              _toggleSelectionMode(initialProductId: product.id);
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor, width: highlight ? 1.5 : 1),
+              boxShadow: [
+                if (!highlight)
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLeadingMedia(product, isChecked),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            product.name,
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                              color: CupertinoColors.black,
+                          Expanded(
+                            child: Text(
+                              product.name,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                color: CupertinoColors.black,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 3),
-                          // 🔥 FIXED: Display stock in selling units instead of base units
-                          FutureBuilder<String>(
-                            future: _getStockDisplayString(product, baseStock, provider),
-                            builder: (context, snapshot) {
-                              final stockDisplay = snapshot.data ?? '$baseStock ${product.unit}';
-                              final priceLabel = _formatListPrice(price);
-                              return Text(
-                                'Tồn kho: $stockDisplay • $priceLabel',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: isSelected 
-                                    ? CupertinoColors.systemGrey.withOpacity(1.0)
-                                    : CupertinoColors.systemGrey.withOpacity(0.9),
-                                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-                                ),
-                              );
-                            },
-                          ),
+                          if (product.isBanned)
+                            _buildBannedChip(),
+                          if (showChevron)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: const Icon(
+                                CupertinoIcons.chevron_right,
+                                color: CupertinoColors.systemGrey3,
+                                size: 18,
+                              ),
+                            ),
                         ],
                       ),
-                    ),
-                    // Apple HIG: Only show chevron for navigation, not selection
-                    if (!_isSelectionMode && !isMasterDetail)
-                      const Icon(
-                        CupertinoIcons.chevron_right,
-                        color: CupertinoColors.systemGrey3,
-                        size: 20,
+                      const SizedBox(height: 4),
+                      Text(
+                        product.categoryDisplayName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: CupertinoColors.systemGrey,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                  ],
+                      const SizedBox(height: 12),
+                      _buildPriceAndStockRow(
+                        product: product,
+                        provider: provider,
+                        baseStock: baseStock,
+                        price: price,
+                        isLowStock: isLowStock,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-          // Apple HIG: Separator line (inset from left)
-          Container(
-            margin: EdgeInsets.only(
-              left: isMasterDetail ? 78 : (context.responsive.isMobile ? 78 : 16),
-            ),
-            height: 0.5,
-            color: CupertinoColors.separator,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -841,6 +996,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   String _formatListPrice(double price) {
     final value = price.toDouble();
+    if (value <= 0) {
+      return 'Chưa có giá';
+    }
     if (value >= 10000000) {
       final millions = value / 1000000;
       final formatted = millions.truncateToDouble() == millions
@@ -851,6 +1009,28 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
     final formatted = AppFormatter.formatCurrencyWithSymbol(value, symbol: '');
     return '${formatted.trim()} đ';
+  }
+
+  Color _getCategoryColor(ProductCategory category) {
+    switch (category) {
+      case ProductCategory.FERTILIZER:
+        return Colors.green;
+      case ProductCategory.PESTICIDE:
+        return Colors.orange;
+      case ProductCategory.SEED:
+        return Colors.brown;
+    }
+  }
+
+  IconData _getCategoryIcon(ProductCategory category) {
+    switch (category) {
+      case ProductCategory.FERTILIZER:
+        return Icons.eco;
+      case ProductCategory.PESTICIDE:
+        return Icons.bug_report;
+      case ProductCategory.SEED:
+        return Icons.grass;
+    }
   }
 
 
