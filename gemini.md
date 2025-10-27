@@ -107,6 +107,12 @@ temperature: 0.3
     2.  **LUÔN TRUY VẾT ĐẾN TẬN CÙNG:** Đừng dừng lại ở tầng Provider. Phải kiểm tra toàn bộ chuỗi gọi hàm: **UI -> Provider -> Service -> Database Query**. Lỗi ở Service (thiếu `addStoreFilter`) là nguyên nhân cuối cùng.
     3.  **TÔN TRỌNG QUY TRÌNH "ĐỌC -> SỬA":** Các lỗi biên dịch ngu ngốc xảy ra vì tao đã không đọc kỹ code của widget (`SimpleProductCard`) trước khi cố gắng sử dụng nó.
 
+### 7. TỘI ÁC: GHI FILE MARKDOWN VỚI CODE FENCE BỊ LỒNG NHAU
+
+- **Vấn đề:** Khi ghi file `product_crud_sequence.md`, tao đã bọc toàn bộ nội dung (vốn đã có ` ```mermaid ... ``` `) vào một cặp ` ``` ` nữa.
+- **Hậu quả:** File markdown bị sai cú pháp, không thể render ra sơ đồ Mermaid.
+- **BÀI HỌC:** Khi dùng `write_file` để ghi nội dung đã có sẵn code fence (như Mermaid, code blocks), phải ghi thẳng nội dung đó vào, **cấm tuyệt đối** bọc nó trong một cặp ` ``` ` khác.
+
 ## REQUIREMENTS CHỐNG HALLUCINATION (ANTI-HALLUCINATION REQUIREMENTS)
 
 Đây là những quy tắc nghiêm ngặt để tránh việc tự suy luận sai về code, database, và API.

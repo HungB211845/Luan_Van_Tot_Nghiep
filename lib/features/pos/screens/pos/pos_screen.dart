@@ -422,11 +422,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                 children: [
                   Flexible(
                     flex: 3, // Give image higher priority for space
-                    child: ProductImageWidget(
-                      imageUrl: product.imageUrl,
-                      size: ProductImageSize.grid,
-                      width: double.infinity,
-                    ),
+                    child: _buildProductTileImage(product),
                   ),
                   Text(
                     product.name,
@@ -478,6 +474,38 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProductTileImage(Product product) {
+    final imageUrl = (product.imageUrl ?? '').trim();
+    if (imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: ProductImageWidget(
+          imageUrl: imageUrl,
+          size: ProductImageSize.grid,
+          width: double.infinity,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    final color = _getCategoryColor(product.category);
+    final icon = _getCategoryIcon(product.category);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        icon,
+        color: color,
+        size: 36,
       ),
     );
   }
@@ -575,6 +603,28 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
       }
       _viewModel?.updateCartItemQuantity(product, quantityInCart + 1);
       HapticFeedback.lightImpact();
+    }
+  }
+
+  Color _getCategoryColor(ProductCategory category) {
+    switch (category) {
+      case ProductCategory.FERTILIZER:
+        return Colors.green;
+      case ProductCategory.PESTICIDE:
+        return Colors.orange;
+      case ProductCategory.SEED:
+        return Colors.brown;
+    }
+  }
+
+  IconData _getCategoryIcon(ProductCategory category) {
+    switch (category) {
+      case ProductCategory.FERTILIZER:
+        return Icons.eco;
+      case ProductCategory.PESTICIDE:
+        return Icons.bug_report;
+      case ProductCategory.SEED:
+        return Icons.grass;
     }
   }
 
