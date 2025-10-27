@@ -286,7 +286,6 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
             selected: _selectedCategory == null,
             onSelected: (selected) {
               setState(() => _selectedCategory = null);
-              _viewModel?.filterProductsByCategory(null);
             },
             selectedColor: Colors.green.withOpacity(0.2),
             checkmarkColor: Colors.green,
@@ -300,7 +299,6 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                 selected: _selectedCategory == category,
                 onSelected: (selected) {
                   setState(() => _selectedCategory = selected ? category : null);
-                  _viewModel?.filterProductsByCategory(selected ? category : null);
                 },
                 selectedColor: Colors.green.withOpacity(0.2),
                 checkmarkColor: Colors.green,
@@ -321,9 +319,15 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
         // When search field has >= 2 chars, show search results (even if empty)
         final searchQuery = _searchController.text.trim();
         final isSearching = searchQuery.isNotEmpty && searchQuery.length >= 2;
-        final productsToShow = isSearching 
+        final sourceProducts = isSearching 
             ? productProvider.posSearchResults
             : productProvider.products;
+
+        final productsToShow = _selectedCategory == null
+            ? sourceProducts
+            : sourceProducts
+                .where((product) => product.category == _selectedCategory)
+                .toList();
         
         if (productProvider.isLoading && productsToShow.isEmpty) {
           return const Center(child: LoadingWidget());
