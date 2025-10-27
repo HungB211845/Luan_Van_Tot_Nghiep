@@ -314,7 +314,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return '${baseStock.toInt()} $baseUnit';
     }
 
-    final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+    final value = _formatPreferredQuantity(preferred.primaryQuantity);
     final unitLabel = UnitDisplayFormatter.simpleUnitName(preferred.unit);
     return '$value $unitLabel';
   }
@@ -428,6 +428,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         );
       },
     );
+  }
+
+  String _formatPreferredQuantity(double quantity) {
+    if (quantity >= 100) {
+      return AppFormatter.formatNumber(quantity.round());
+    }
+    if (quantity >= 10) {
+      return _trimTrailingZeros(quantity.toStringAsFixed(1));
+    }
+    return _trimTrailingZeros(quantity.toStringAsFixed(2));
+  }
+
+  String _trimTrailingZeros(String value) {
+    return value.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
   }
 
   Widget _buildPriceHistoryExpansionTile() {
@@ -720,7 +734,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return '${AppFormatter.formatNumber(batch.quantity)} ${baseUnitName.toLowerCase()}';
     }
 
-    final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+    final value = _formatPreferredQuantity(preferred.primaryQuantity);
     final label = UnitDisplayFormatter.simpleUnitName(preferred.unit);
     return '$value $label';
   }

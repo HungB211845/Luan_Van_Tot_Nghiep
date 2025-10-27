@@ -1093,7 +1093,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
             : '$baseStock $fallbackName';
       }
 
-      final value = UnitDisplayFormatter.formatQuantityValue(preferred.primaryQuantity);
+      final value = _formatPreferredQuantity(preferred.primaryQuantity);
       final label = UnitDisplayFormatter.simpleUnitName(preferred.unit);
       return '$value $label';
     } catch (e) {
@@ -1121,6 +1121,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
     final formatted = AppFormatter.formatCurrencyWithSymbol(value, symbol: '');
     return '${formatted.trim()} đ';
+  }
+
+  String _formatPreferredQuantity(double quantity) {
+    if (quantity >= 100) {
+      return AppFormatter.formatNumber(quantity.round());
+    }
+    if (quantity >= 10) {
+      return _trimTrailingZeros(quantity.toStringAsFixed(1));
+    }
+    return _trimTrailingZeros(quantity.toStringAsFixed(2));
+  }
+
+  String _trimTrailingZeros(String value) {
+    return value.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
   }
 
   Color _getCategoryColor(ProductCategory category) {
