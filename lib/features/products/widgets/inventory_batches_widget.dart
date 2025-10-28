@@ -370,10 +370,11 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
       baseLabel = fallbackBase.toLowerCase();
     }
 
-    final buffer = StringBuffer(baseText);
-    if (baseLabel.isNotEmpty && baseLabel != 'đơn vị') {
-      buffer.write(' / $baseLabel');
-    }
+    final baseSuffix =
+        (baseLabel.isNotEmpty && baseLabel != 'đơn vị')
+            ? '/$baseLabel'
+            : '';
+    final buffer = StringBuffer('$baseText$baseSuffix');
 
     if (units.isNotEmpty) {
       final defaultUnit = UnitDisplayFormatter.defaultUnit(units);
@@ -384,7 +385,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
         );
         final containerLabel =
             UnitDisplayFormatter.simpleUnitName(defaultUnit).toLowerCase();
-        buffer.write(' • $containerCost / $containerLabel');
+        buffer.write(' • $containerCost/${containerLabel.toLowerCase()}');
       }
     }
 

@@ -427,30 +427,33 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     final buffer = StringBuffer();
     final baseCost =
         AppFormatter.formatCurrencyWithSymbol(batch.costPrice, symbol: 'đ');
-    buffer.write(baseCost);
 
     final baseUnit = _units.isNotEmpty
         ? UnitDisplayFormatter.baseUnit(_units)
         : null;
     final baseLabel = baseUnit != null
         ? _normalizeUnitLabel(UnitDisplayFormatter.simpleUnitName(baseUnit))
-        : _normalizeUnitLabel(_baseUnitName.isNotEmpty ? _baseUnitName : _fallbackBaseUnit());
-    if (baseLabel.isNotEmpty) {
-      buffer.write(' mỗi $baseLabel');
-    }
+        : _normalizeUnitLabel(
+            _baseUnitName.isNotEmpty ? _baseUnitName : _fallbackBaseUnit(),
+          );
+    final baseSuffix =
+        baseLabel.isNotEmpty ? '/${baseLabel.toLowerCase()}' : '';
+    buffer.write('$baseCost$baseSuffix');
 
     final defaultUnit =
         _units.isNotEmpty ? UnitDisplayFormatter.defaultUnit(_units) : null;
     if (defaultUnit != null && defaultUnit.conversionFactor > 0) {
-      final perContainer =
-          batch.costPrice * defaultUnit.conversionFactor;
+      final perContainer = batch.costPrice * defaultUnit.conversionFactor;
       final containerCost = AppFormatter.formatCurrencyWithSymbol(
         perContainer,
         symbol: 'đ',
       );
-      final containerLabel =
-          _normalizeUnitLabel(UnitDisplayFormatter.simpleUnitName(defaultUnit));
-      buffer.write(' • $containerCost mỗi $containerLabel');
+      final containerLabel = _normalizeUnitLabel(
+        UnitDisplayFormatter.simpleUnitName(defaultUnit),
+      );
+      final containerSuffix =
+          containerLabel.isNotEmpty ? '/${containerLabel.toLowerCase()}' : '';
+      buffer.write(' • $containerCost$containerSuffix');
     }
 
     return buffer.toString();
