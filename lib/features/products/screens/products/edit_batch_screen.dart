@@ -885,7 +885,18 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
         notes: _notesController.text.trim(),
       );
 
+      debugPrint(
+        'EditBatchScreen::_updateBatch -> payload '
+        'quantity=${updatedBatch.quantity}, cost=${updatedBatch.costPrice}',
+      );
+      debugPrint('EditBatchScreen::_updateBatch -> json ${updatedBatch.toJson()}');
+
       final result = await provider.updateProductBatch(updatedBatch);
+
+      debugPrint(
+        'EditBatchScreen::_updateBatch -> provider response '
+        '${result != null ? 'quantity=${result.quantity}, cost=${result.costPrice}' : 'null'}',
+      );
 
       if (!mounted) return;
 

@@ -675,13 +675,22 @@ class ProductService extends BaseService {
   Future<ProductBatch> updateProductBatch(ProductBatch batch) async {
     try {
       ensureAuthenticated();
+      final payload = batch.toJson();
+      debugPrint(
+        'ProductService::updateProductBatch -> payload: $payload',
+      );
+
       final response = await _supabase
           .from('product_batches')
-          .update(batch.toJson())
+          .update(payload)
           .eq('id', batch.id)
           .eq('store_id', currentStoreId!)
           .select()
           .single();
+
+      debugPrint(
+        'ProductService::updateProductBatch -> response: $response',
+      );
       return ProductBatch.fromJson(response);
     } catch (e) {
       throw Exception('Lỗi cập nhật lô hàng: $e');

@@ -205,19 +205,23 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
         ],
       ),
       child: InkWell(
-        onTap: () {
+        onTap: () async {
           final resolvedBaseUnit = _baseUnitName.isNotEmpty
               ? _baseUnitName
               : (widget.productBaseUnit ?? '');
-          Navigator.of(context).push(
+          final updated = await Navigator.of(context).push<ProductBatch>(
             MaterialPageRoute(
               builder: (context) => BatchDetailScreen(
                 batch: batch,
                 units: _cachedUnits,
-                baseUnitName: resolvedBaseUnit.isEmpty ? null : resolvedBaseUnit,
+                baseUnitName:
+                    resolvedBaseUnit.isEmpty ? null : resolvedBaseUnit,
               ),
             ),
           );
+          if (updated != null) {
+            widget.onBatchUpdated?.call();
+          }
         },
         borderRadius: BorderRadius.circular(8),
         child: Container(

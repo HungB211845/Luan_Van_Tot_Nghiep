@@ -68,6 +68,7 @@ import '../../models/company.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/services/base_service.dart';
+import 'batch_detail_screen.dart';
 
 class BatchHistoryScreen extends StatefulWidget {
   final String productId;
@@ -97,9 +98,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final productProvider = context.read<ProductProvider>();
-      await productProvider.resetBatchesPagination(productId: widget.productId, pageSize: 20);
-      await productProvider.loadProductBatchesPaginated(productId: widget.productId, pageSize: 20);
+      await _reloadBatches();
       // NCC for filter
       await context.read<CompanyProvider>().loadCompanies();
     });
@@ -134,6 +133,18 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
     }
   }
 
+  Future<void> _reloadBatches() async {
+    final productProvider = context.read<ProductProvider>();
+    await productProvider.resetBatchesPagination(
+      productId: widget.productId,
+      pageSize: 20,
+    );
+    await productProvider.loadProductBatchesPaginated(
+      productId: widget.productId,
+      pageSize: 20,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = widget.title ?? 'Lịch sử Lô hàng';
@@ -160,10 +171,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
               _buildFilterChips(companyProvider),
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: () async {
-                    await productProvider.resetBatchesPagination(productId: widget.productId, pageSize: 20);
-                    await productProvider.loadProductBatchesPaginated(productId: widget.productId, pageSize: 20);
-                  },
+                  onRefresh: _reloadBatches,
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
@@ -505,13 +513,26 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       orElse: () => Company(id: '', name: 'Không xác định', createdAt: DateTime.now(), updatedAt: DateTime.now(), storeId: BaseService.getDefaultStoreId()),
     );
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return InkWell(
+      onTap: () async {
+        final updated = await Navigator.of(context).push<ProductBatch>(
+          MaterialPageRoute(
+            builder: (context) => BatchDetailScreen(batch: batch),
+          ),
+        );
+
+        if (updated != null && mounted) {
+          await _reloadBatches();
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             GestureDetector(
               onLongPress: () async {
                 final text = batch.batchNumber ?? '';
@@ -532,7 +553,8 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
             _buildInfoRow('Ngày nhập', AppFormatter.formatDate(batch.receivedDate)),
             if (batch.expiryDate != null) _buildInfoRow('Hạn sử dụng', AppFormatter.formatDate(batch.expiryDate!)),
             if (batch.supplierId != null) _buildInfoRow('Nhà cung cấp', supplier.name),
-          ],
+            ],
+          ),
         ),
       ),
     );
