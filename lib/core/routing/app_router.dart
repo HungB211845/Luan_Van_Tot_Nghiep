@@ -49,6 +49,8 @@ import '../../presentation/home/screens/global_search_screen.dart';
 import '../../features/debt/screens/debt_list_screen.dart';
 import '../../features/pos/screens/transaction/transaction_detail_screen.dart';
 import '../../features/customers/screens/customers/customer_detail_screen.dart';
+import '../../features/notification/screens/notification_screen.dart';
+import '../../features/notification/screens/notification_settings_screen.dart';
 
 class AppRouter {
   static const String home = RouteNames.home;
@@ -195,6 +197,18 @@ class AppRouter {
         final poNumber = settings.arguments as String?;
         return IOSPageRoute(
           child: POReceiveSuccessScreen(poNumber: poNumber),
+          settings: settings,
+        );
+
+      case RouteNames.notifications:
+        return IOSPageRoute(
+          child: const NotificationScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.notificationSettings:
+        return IOSPageRoute(
+          child: const NotificationSettingsScreen(),
           settings: settings,
         );
 

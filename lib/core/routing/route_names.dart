@@ -47,4 +47,6 @@ class RouteNames {
   static const String logout = '/logout';
   static const String editQuickAccess = '/home/edit-quick-access';
   static const String globalSearch = '/home/global-search';
+  static const String notifications = '/notifications';
+  static const String notificationSettings = '/notification-settings';
 }

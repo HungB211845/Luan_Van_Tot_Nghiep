@@ -19,6 +19,8 @@ import '../../presentation/home/providers/dashboard_provider.dart';
 import '../../features/reports/providers/report_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../../services/cache_manager.dart';
+import '../../features/notification/providers/notification_provider.dart';
+import '../../features/notification/providers/notification_settings_provider.dart';
 
 class AppProviders {
   static List<SingleChildWidget> get list => [
@@ -47,6 +49,8 @@ class AppProviders {
     ChangeNotifierProvider(create: (_) => DashboardProvider()),
     ChangeNotifierProvider(create: (_) => ReportProvider()),
     ChangeNotifierProvider(create: (_) => NavigationProvider()),
+    ChangeNotifierProvider(create: (_) => NotificationProvider()),
+    ChangeNotifierProvider(create: (_) => NotificationSettingsProvider()),
 
     // Invoice & Business Info Providers
     ChangeNotifierProvider(create: (_) => StoreBusinessInfoProvider()),

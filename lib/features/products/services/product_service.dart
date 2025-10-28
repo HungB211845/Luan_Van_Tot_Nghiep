@@ -676,9 +676,6 @@ class ProductService extends BaseService {
     try {
       ensureAuthenticated();
       final payload = batch.toJson();
-      debugPrint(
-        'ProductService::updateProductBatch -> payload: $payload',
-      );
 
       final response = await _supabase
           .from('product_batches')
@@ -687,10 +684,6 @@ class ProductService extends BaseService {
           .eq('store_id', currentStoreId!)
           .select()
           .single();
-
-      debugPrint(
-        'ProductService::updateProductBatch -> response: $response',
-      );
       return ProductBatch.fromJson(response);
     } catch (e) {
       throw Exception('Lỗi cập nhật lô hàng: $e');
@@ -799,8 +792,14 @@ class ProductService extends BaseService {
   }
 
   /// Lấy danh sách sản phẩm sắp hết hàng
-  Future<List<Map<String, dynamic>>> getLowStockProducts() async {
+  Future<List<Map<String, dynamic>>> getLowStockProducts({
+    bool forceFallback = false,
+  }) async {
     try {
+      if (forceFallback) {
+        return await _getLowStockProductsFallback();
+      }
+
       // Try using view first, fallback to manual query if view doesn't exist
       try {
         final response =

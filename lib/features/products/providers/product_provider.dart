@@ -819,15 +819,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   Future<ProductBatch?> updateProductBatch(ProductBatch batch) async {
     _setStatus(ProductStatus.loading);
     try {
-      debugPrint(
-        'ProductProvider::updateProductBatch -> request '
-        'quantity=${batch.quantity}, cost=${batch.costPrice}',
-      );
       final updatedBatch = await _productService.updateProductBatch(batch);
-      debugPrint(
-        'ProductProvider::updateProductBatch -> response '
-        'quantity=${updatedBatch.quantity}, cost=${updatedBatch.costPrice}',
-      );
 
       bool didUpdate = false;
       final legacyIndex =
@@ -855,12 +847,6 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         _productBatches.add(updatedBatch);
       }
 
-      final debugMatch =
-          _productBatches.firstWhere((b) => b.id == updatedBatch.id);
-      debugPrint(
-        'ProductProvider::updateProductBatch -> cache synced '
-        'quantity=${debugMatch.quantity}, cost=${debugMatch.costPrice}',
-      );
 
       await _updateProductStock(batch.productId);
       _setStatus(ProductStatus.success);

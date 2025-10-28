@@ -14,6 +14,7 @@ import 'providers/quick_access_provider.dart';
 import '../../features/reports/providers/report_provider.dart';
 import 'package:intl/intl.dart';
 import '../../features/reports/models/daily_revenue.dart';
+import '../../features/notification/providers/notification_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,12 +48,14 @@ class _HomeScreenState extends State<HomeScreen> {
       
       // Load weekly revenue specifically for "7 ngày" widget
       context.read<ReportProvider>().loadWeeklyRevenueForHome();
-      
+
       // PRELOAD: Background load all report data for faster Reports screen access
       // Delay slightly to not interfere with critical HomeScreen data
       Future.delayed(const Duration(milliseconds: 500), () {
         context.read<ReportProvider>().preloadAllReportData();
       });
+
+      context.read<NotificationProvider>().refresh();
     });
   }
 
@@ -125,10 +128,44 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           actions: [
-            IconButton(
-              icon: const Icon(CupertinoIcons.bell),
-              onPressed: () {
-                // TODO: Navigate to notifications screen
+            Consumer<NotificationProvider>(
+              builder: (context, provider, child) {
+                final unread = provider.unreadCount;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      icon: const Icon(CupertinoIcons.bell),
+                      onPressed: () {
+                        Navigator.of(context, rootNavigator: true)
+                            .pushNamed(RouteNames.notifications);
+                      },
+                    ),
+                    if (unread > 0)
+                      Positioned(
+                        right: 10,
+                        top: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            unread > 9 ? '9+' : unread.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
               },
             ),
           ],
