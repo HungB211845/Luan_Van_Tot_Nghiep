@@ -373,6 +373,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               value: quantityDisplay.primary,
               unit: quantityDisplay.secondary,
               color: _getStockColor(batch.quantity.toDouble()),
+              emphasizePrimary: true,
             ),
             const Divider(height: 24),
             _buildInfoRow(
@@ -381,6 +382,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               value: costDisplay,
               color: Colors.orange[600]!,
               isMultiLine: true,
+              emphasizePrimary: true,
             ),
             const Divider(height: 24),
             _buildInfoRow(
@@ -388,6 +390,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               label: 'Ngày nhập',
               value: _formatDate(batch.receivedDate),
               color: Colors.blue[600]!,
+              valueHighlight: Colors.blue[600]!,
             ),
             if (batch.expiryDate != null) ...[
               const Divider(height: 24),
@@ -396,6 +399,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                 label: 'Hạn sử dụng',
                 value: _formatDate(batch.expiryDate!),
                 color: _getExpiryColor(batch.expiryDate!),
+                valueHighlight: _getExpiryColor(batch.expiryDate!),
               ),
             ],
             if (batch.supplierBatchId != null && batch.supplierBatchId!.isNotEmpty) ...[
@@ -484,65 +488,41 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
             if (batch.supplierName != null && batch.purchaseOrderId != null)
               const Divider(height: 24),
             if (batch.purchaseOrderId != null)
-              InkWell(
-                onTap: _isNavigatingToPO
-                    ? null
-                    : () => _openPurchaseOrder(context, batch.purchaseOrderId!),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.green[600]!.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.receipt_long,
-                          color: Colors.green[600]!,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Đơn nhập hàng gốc',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              batch.purchaseOrderId!,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      _isNavigatingToPO
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(
-                              Icons.chevron_right,
-                              color: Colors.grey[400],
-                              size: 24,
-                            ),
-                    ],
+              Center(
+                child: ElevatedButton.icon(
+                  onPressed: _isNavigatingToPO
+                      ? null
+                      : () => _openPurchaseOrder(
+                            context,
+                            batch.purchaseOrderId!,
+                          ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: _isNavigatingToPO
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.receipt_long, size: 20),
+                  label: const Text(
+                    'Xem đơn nhập hàng',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -686,23 +666,13 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     String? unit,
     required Color color,
     bool isMultiLine = false,
+    Color? valueHighlight,
+    bool emphasizePrimary = false,
   }) {
     return Row(
       crossAxisAlignment: isMultiLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 20,
-          ),
-        ),
+        Icon(icon, color: Colors.grey[700], size: 24),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -717,33 +687,47 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                 ),
               ),
               const SizedBox(height: 2),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                      maxLines: isMultiLine ? null : 1,
-                      overflow: isMultiLine ? null : TextOverflow.ellipsis,
-                    ),
+              if (valueHighlight != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: valueHighlight,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  if (unit != null && unit.isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      unit,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
-                      ),
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
                     ),
-                  ],
-                ],
-              ),
+                    maxLines: isMultiLine ? null : 1,
+                    overflow: isMultiLine ? null : TextOverflow.ellipsis,
+                  ),
+                )
+              else if (emphasizePrimary)
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                  maxLines: isMultiLine ? null : 1,
+                  overflow: isMultiLine ? null : TextOverflow.ellipsis,
+                )
+              else
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                  maxLines: isMultiLine ? null : 1,
+                  overflow: isMultiLine ? null : TextOverflow.ellipsis,
+                ),
             ],
           ),
         ),

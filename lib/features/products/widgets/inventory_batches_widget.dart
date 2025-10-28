@@ -272,9 +272,9 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                     const SizedBox(height: 4),
                     Text(
                       'Số lượng: ${_formatBatchQuantity(batch)} | Giá vốn: ${_formatBatchCost(batch)}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        color: Colors.black,
                       ),
                     ),
                     if (batch.receivedDate != null) ...[
