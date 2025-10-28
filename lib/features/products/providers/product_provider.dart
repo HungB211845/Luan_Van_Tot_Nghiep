@@ -816,20 +816,44 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
-  Future<bool> updateProductBatch(ProductBatch batch) async {
+  Future<ProductBatch?> updateProductBatch(ProductBatch batch) async {
     _setStatus(ProductStatus.loading);
     try {
       final updatedBatch = await _productService.updateProductBatch(batch);
-      final index = _productBatches.indexWhere((b) => b.id == batch.id);
-      if (index != -1) {
-        _productBatches[index] = updatedBatch;
+
+      bool didUpdate = false;
+      final legacyIndex =
+          _productBatches.indexWhere((existing) => existing.id == batch.id);
+      if (legacyIndex != -1) {
+        final updatedList = List<ProductBatch>.from(_productBatches);
+        updatedList[legacyIndex] = updatedBatch;
+        _productBatches = updatedList;
+        didUpdate = true;
       }
-      await _updateProductStock(batch.productId); // Cập nhật lại tồn kho
+
+      if (_paginatedBatches != null) {
+        final items = List<ProductBatch>.from(_paginatedBatches!.items);
+        final paginatedIndex =
+            items.indexWhere((existing) => existing.id == batch.id);
+        if (paginatedIndex != -1) {
+          items[paginatedIndex] = updatedBatch;
+          _paginatedBatches = _paginatedBatches!.copyWith(items: items);
+          _productBatches = List<ProductBatch>.from(items);
+          didUpdate = true;
+        }
+      }
+
+      if (!didUpdate) {
+        _productBatches.add(updatedBatch);
+      }
+
+      await _updateProductStock(batch.productId);
       _setStatus(ProductStatus.success);
-      return true;
+      notifyListeners();
+      return updatedBatch;
     } catch (e) {
       _setError(e.toString());
-      return false;
+      return null;
     }
   }
 

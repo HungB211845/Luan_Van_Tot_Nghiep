@@ -267,7 +267,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Số lượng: ${_formatBatchQuantity(batch)} | Giá vốn: ${_formatPrice(batch.costPrice)} VNĐ',
+                      'Số lượng: ${_formatBatchQuantity(batch)} | Giá vốn: ${_formatBatchCost(batch)}',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[600],
@@ -348,14 +348,43 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
     );
   }
 
-  String _formatPrice(double price) {
-    if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(1)}M';
-    } else if (price >= 1000) {
-      return '${(price / 1000).toStringAsFixed(0)}K';
-    } else {
-      return price.toStringAsFixed(0);
+  String _formatBatchCost(ProductBatch batch) {
+    final baseText =
+        AppFormatter.formatCurrencyWithSymbol(batch.costPrice, symbol: 'đ');
+    final units = widget.productUnits ?? _cachedUnits;
+    final fallbackBase = widget.productBaseUnit ?? _baseUnitName;
+
+    String baseLabel = '';
+    if (units.isNotEmpty) {
+      final baseUnit = UnitDisplayFormatter.baseUnit(units);
+      if (baseUnit != null) {
+        baseLabel =
+            UnitDisplayFormatter.simpleUnitName(baseUnit).toLowerCase();
+      }
     }
+    if (baseLabel.isEmpty && fallbackBase.isNotEmpty) {
+      baseLabel = fallbackBase.toLowerCase();
+    }
+
+    final buffer = StringBuffer(baseText);
+    if (baseLabel.isNotEmpty && baseLabel != 'đơn vị') {
+      buffer.write(' / $baseLabel');
+    }
+
+    if (units.isNotEmpty) {
+      final defaultUnit = UnitDisplayFormatter.defaultUnit(units);
+      if (defaultUnit != null && defaultUnit.conversionFactor > 0) {
+        final containerCost = AppFormatter.formatCurrencyWithSymbol(
+          batch.costPrice * defaultUnit.conversionFactor,
+          symbol: 'đ',
+        );
+        final containerLabel =
+            UnitDisplayFormatter.simpleUnitName(defaultUnit).toLowerCase();
+        buffer.write(' • $containerCost / $containerLabel');
+      }
+    }
+
+    return buffer.toString();
   }
 
   String _formatBatchQuantity(ProductBatch batch) {
@@ -430,15 +459,21 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
         return;
       }
 
-      final result = await Navigator.push(
+      final result = await Navigator.push<ProductBatch>(
         context,
         MaterialPageRoute(
           builder: (context) => EditBatchScreen(batch: batch),
         ),
       );
 
-      if (mounted && result == true) {
+      if (mounted && result != null) {
         widget.onBatchUpdated?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cập nhật lô hàng thành công'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {

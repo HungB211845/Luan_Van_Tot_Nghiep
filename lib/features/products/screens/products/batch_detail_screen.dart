@@ -29,6 +29,7 @@ class BatchDetailScreen extends StatefulWidget {
 }
 
 class _BatchDetailScreenState extends State<BatchDetailScreen> {
+  ProductBatch? _batchOverride;
   Product? _product;
   List<ProductUnit> _units = [];
   String _baseUnitName = '';
@@ -51,7 +52,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final batch = widget.batch;
+    final batch = _batchOverride ?? widget.batch;
 
     return Scaffold(
       appBar: AppBar(
@@ -67,10 +68,23 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit, size: 24),
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              final updated = await Navigator.of(context).push<ProductBatch>(
                 MaterialPageRoute(
                   builder: (context) => EditBatchScreen(batch: batch),
+                ),
+              );
+
+              if (!mounted || updated == null) return;
+
+              setState(() {
+                _batchOverride = updated;
+              });
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Cập nhật lô hàng thành công'),
+                  backgroundColor: Colors.green,
                 ),
               );
             },
@@ -102,7 +116,9 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
 
     final provider = context.read<ProductProvider>();
     try {
-      final fetchedUnits = await provider.getProductUnits(widget.batch.productId);
+      final fetchedUnits = await provider.getProductUnits(
+        (_batchOverride ?? widget.batch).productId,
+      );
       final resolvedProduct = _product ?? _findProductById(provider);
       if (!mounted) return;
       setState(() {
@@ -123,13 +139,14 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
 
   Product? _findProductById(ProductProvider provider) {
     final selected = provider.selectedProduct;
-    if (selected?.id == widget.batch.productId) {
+    final currentBatch = _batchOverride ?? widget.batch;
+    if (selected?.id == currentBatch.productId) {
       return selected;
     }
 
     try {
       for (final product in provider.products) {
-        if (product.id == widget.batch.productId) {
+        if (product.id == currentBatch.productId) {
           return product;
         }
       }
@@ -334,6 +351,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   Widget _buildInfoSection(BuildContext context, ProductBatch batch) {
     final quantityDisplay = _formatQuantityDisplay(batch.quantity);
     final formattedNotes = _formatNotes(batch);
+    final costDisplay = _formatCostDisplay(batch);
 
     return Card(
       child: Padding(
@@ -360,8 +378,9 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
             _buildInfoRow(
               icon: Icons.attach_money,
               label: 'Giá vốn',
-              value: AppFormatter.formatCompactCurrency(batch.costPrice),
+              value: costDisplay,
               color: Colors.orange[600]!,
+              isMultiLine: true,
             ),
             const Divider(height: 24),
             _buildInfoRow(
@@ -402,6 +421,39 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         ),
       ),
     );
+  }
+
+  String _formatCostDisplay(ProductBatch batch) {
+    final buffer = StringBuffer();
+    final baseCost =
+        AppFormatter.formatCurrencyWithSymbol(batch.costPrice, symbol: 'đ');
+    buffer.write(baseCost);
+
+    final baseUnit = _units.isNotEmpty
+        ? UnitDisplayFormatter.baseUnit(_units)
+        : null;
+    final baseLabel = baseUnit != null
+        ? _normalizeUnitLabel(UnitDisplayFormatter.simpleUnitName(baseUnit))
+        : _normalizeUnitLabel(_baseUnitName.isNotEmpty ? _baseUnitName : _fallbackBaseUnit());
+    if (baseLabel.isNotEmpty) {
+      buffer.write(' mỗi $baseLabel');
+    }
+
+    final defaultUnit =
+        _units.isNotEmpty ? UnitDisplayFormatter.defaultUnit(_units) : null;
+    if (defaultUnit != null && defaultUnit.conversionFactor > 0) {
+      final perContainer =
+          batch.costPrice * defaultUnit.conversionFactor;
+      final containerCost = AppFormatter.formatCurrencyWithSymbol(
+        perContainer,
+        symbol: 'đ',
+      );
+      final containerLabel =
+          _normalizeUnitLabel(UnitDisplayFormatter.simpleUnitName(defaultUnit));
+      buffer.write(' • $containerCost mỗi $containerLabel');
+    }
+
+    return buffer.toString();
   }
 
   Widget _buildOriginSection(BuildContext context, ProductBatch batch) {
