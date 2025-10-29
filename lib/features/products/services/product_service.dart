@@ -396,15 +396,16 @@ class ProductService extends BaseService {
     try {
       final paginationParams = params ?? PaginationParams.first();
 
+      final orderField = paginationParams.sortBy ?? 'received_date';
+
       final response =
           await addStoreFilter(_supabase.from('product_batches').select('*'))
               .eq('product_id', productId)
               .eq('is_available', true)
-              .gt('quantity', 0)
               .order(
-                'received_date',
-                ascending: false,
-              ) // Newest first for display
+                orderField,
+                ascending: paginationParams.ascending,
+              )
               .range(
                 paginationParams.offset,
                 paginationParams.offset + paginationParams.pageSize - 1,
@@ -416,8 +417,7 @@ class ProductService extends BaseService {
             .from('product_batches')
             .select('id')
             .eq('product_id', productId)
-            .eq('is_available', true)
-            .gt('quantity', 0),
+            .eq('is_available', true),
       );
 
       final totalCount = countResponse.length;

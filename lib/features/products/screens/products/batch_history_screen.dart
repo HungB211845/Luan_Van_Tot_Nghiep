@@ -189,15 +189,18 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       ),
       body: Consumer3<ProductProvider, CompanyProvider, NotificationProvider>(
         builder: (context, productProvider, companyProvider, notificationProvider, child) {
-          if (productProvider.isLoading && productProvider.productBatches.isEmpty) {
+          final fifoBatches = productProvider.fifoBatches;
+          if (productProvider.isLoading && fifoBatches.isEmpty) {
             return const Center(child: LoadingWidget());
           }
 
+          final activeBatchId =
+              _resolveActiveBatchId(fifoBatches);
           final filtered = _applyFilters(
-            productProvider.productBatches,
+            fifoBatches,
             notificationProvider,
           );
-          final grouped = _groupByDateWithCount(filtered);
+          final grouped = _groupByDateWithCount(filtered, activeBatchId: activeBatchId);
           final showFooter = productProvider.hasMoreBatches;
 
           return Column(
@@ -227,7 +230,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
                           ),
                         );
                       }
-                      return _buildBatchCard(context, item.batch!);
+                      return _buildBatchCard(context, item.batch!, item.isActive);
                     },
                   ),
                 ),
@@ -441,7 +444,10 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
     );
   }
 
-  List<_GroupedItem> _groupByDateWithCount(List<ProductBatch> batches) {
+  List<_GroupedItem> _groupByDateWithCount(
+    List<ProductBatch> batches, {
+    String? activeBatchId,
+  }) {
     final List<_GroupedItem> result = [];
     String? currentDateStr;
     int currentCount = 0;
@@ -457,11 +463,20 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
         pushHeader();
         currentDateStr = ds;
       }
-      result.add(_GroupedItem.item(b));
+      result.add(_GroupedItem.item(b, isActive: b.id == activeBatchId));
       currentCount += 1;
     }
     pushHeader();
     return result;
+  }
+
+  String? _resolveActiveBatchId(List<ProductBatch> batches) {
+    for (final batch in batches) {
+      if (batch.quantity > 0) {
+        return batch.id;
+      }
+    }
+    return batches.isNotEmpty ? batches.first.id : null;
   }
 
   List<ProductBatch> _applyFilters(
@@ -531,7 +546,13 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       return diff >= 0 && diff <= 90;
     }
 
-    var results = batches;
+    var results = List<ProductBatch>.from(batches);
+
+    final keepZeroQuantity =
+        _selectedFilter == 'out_of_stock' || _selectedFilter == 'expired';
+    if (!keepZeroQuantity) {
+      results = results.where((b) => b.quantity > 0).toList();
+    }
 
     if (_supplierFilters.isNotEmpty) {
       results = results
@@ -630,22 +651,22 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
         break;
     }
 
+    int compareExpiring(ProductBatch a, ProductBatch b) {
+      final da = expiryDaysMap[a.batchNumber] ??
+          (a.expiryDate != null ? a.expiryDate!.difference(now).inDays : 9999);
+      final db = expiryDaysMap[b.batchNumber] ??
+          (b.expiryDate != null ? b.expiryDate!.difference(now).inDays : 9999);
+      return da.compareTo(db);
+    }
+
     if (_selectedFilter == 'expiring' || _selectedFilter == 'expired') {
-      results.sort((a, b) {
-        final da = expiryDaysMap[a.batchNumber] ??
-            (a.expiryDate != null ? a.expiryDate!.difference(now).inDays : 9999);
-        final db = expiryDaysMap[b.batchNumber] ??
-            (b.expiryDate != null ? b.expiryDate!.difference(now).inDays : 9999);
-        return da.compareTo(db);
-      });
-    } else {
-      results.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+      results.sort(compareExpiring);
     }
 
     return results;
   }
 
-  Widget _buildBatchCard(BuildContext context, ProductBatch batch) {
+  Widget _buildBatchCard(BuildContext context, ProductBatch batch, bool isActive) {
     final companyProvider = context.watch<CompanyProvider>();
     final supplier = companyProvider.companies.firstWhere(
       (c) => c.id == batch.supplierId,
@@ -656,6 +677,14 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
     final costLabel = _formatUnitCost(batch);
     final secondaryLabel = _formatSecondaryInfo(batch);
     final statusColor = _getChipColor(batch);
+
+    final backgroundColor = isActive ? Colors.green[600] : Colors.white;
+    final titleColor = isActive ? Colors.white : Colors.black;
+    final subtitleColor = isActive ? Colors.white70 : Colors.grey[600];
+    final badgeBg = isActive ? Colors.white.withOpacity(0.2) : statusColor.withOpacity(0.12);
+    final badgeText = isActive ? Colors.white : statusColor;
+    final iconBg = isActive ? Colors.white.withOpacity(0.2) : _getTileIconBackground(batch, statusColor);
+    final iconColor = isActive ? Colors.white : statusColor;
 
     return InkWell(
       onTap: () async {
@@ -672,6 +701,17 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       borderRadius: BorderRadius.circular(12),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
+        color: backgroundColor,
+        surfaceTintColor: isActive ? Colors.green[600] : null,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isActive ? Colors.green[700]! : Colors.transparent,
+            width: isActive ? 2 : 0,
+          ),
+        ),
+        elevation: isActive ? 0 : null,
+        clipBehavior: Clip.antiAlias,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -679,6 +719,20 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
             children: [
               Row(
                 children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: iconBg,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(
+                      _getBatchIcon(batch),
+                      color: iconColor,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: GestureDetector(
                       onLongPress: () async {
@@ -694,7 +748,9 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
                       },
                       child: Text(
                         _shortenBatchCode(batch.batchNumber),
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: titleColor,
+                            ),
                       ),
                     ),
                   ),
@@ -702,7 +758,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.12),
+                      color: badgeBg,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -710,7 +766,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: statusColor,
+                        color: badgeText,
                       ),
                     ),
                   ),
@@ -719,9 +775,10 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
               const SizedBox(height: 12),
               Text(
                 costLabel,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
+                  color: titleColor,
                 ),
               ),
               const SizedBox(height: 6),
@@ -729,7 +786,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
                 secondaryLabel,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: subtitleColor,
                 ),
               ),
               if (batch.supplierId != null && supplier.name.isNotEmpty) ...[
@@ -738,7 +795,7 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
                   'NCC: ${supplier.name}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[500],
+                    color: subtitleColor,
                   ),
                 ),
               ],
@@ -747,6 +804,19 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
         ),
       ),
     );
+  }
+
+  Color _getTileIconBackground(ProductBatch batch, Color statusColor) {
+    if (batch.quantity <= 0) {
+      return Colors.red[600]!.withOpacity(0.12);
+    }
+    if (batch.isExpired) {
+      return Colors.red[600]!.withOpacity(0.12);
+    }
+    if (batch.isExpiringSoon || batch.quantity <= 10) {
+      return Colors.orange[600]!.withOpacity(0.12);
+    }
+    return statusColor.withOpacity(0.12);
   }
 
   String _shortenBatchCode(String? code) {
@@ -816,8 +886,11 @@ class _GroupedItem {
   final String? headerText;
   final int? count;
   final ProductBatch? batch;
+  final bool isActive;
 
-  _GroupedItem._(this.isHeader, this.headerText, this.count, this.batch);
-  factory _GroupedItem.header(String text, int count) => _GroupedItem._(true, text, count, null);
-  factory _GroupedItem.item(ProductBatch b) => _GroupedItem._(false, null, null, b);
+  _GroupedItem._(this.isHeader, this.headerText, this.count, this.batch, this.isActive);
+  factory _GroupedItem.header(String text, int count) =>
+      _GroupedItem._(true, text, count, null, false);
+  factory _GroupedItem.item(ProductBatch b, {bool isActive = false}) =>
+      _GroupedItem._(false, null, null, b, isActive);
 }

@@ -322,7 +322,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _buildInventoryExpansionTile() {
     return Consumer<ProductProvider>(
       builder: (context, provider, child) {
-        final batches = provider.productBatches;
+        final batches = provider.fifoBatches;
+        final sortedBatches = List<ProductBatch>.from(batches);
+        final List<ProductBatch> highlighted = [];
+        if (sortedBatches.isNotEmpty) {
+          var currentIndex = sortedBatches.indexWhere((batch) => batch.quantity > 0);
+          if (currentIndex == -1) {
+            currentIndex = sortedBatches.length - 1;
+          }
+          if (currentIndex < 0) {
+            currentIndex = 0;
+          }
+
+          highlighted.add(sortedBatches[currentIndex]);
+          for (var offset = 1; offset <= 2; offset++) {
+            final nextIndex = currentIndex + offset;
+            if (nextIndex >= sortedBatches.length) break;
+            highlighted.add(sortedBatches[nextIndex]);
+          }
+        }
+
         final totalBatches = batches.length;
         final activeBatches = batches.where((b) => b.quantity > 0).length;
         final totalStock = batches.fold<int>(0, (sum, batch) => sum + batch.quantity);
@@ -405,7 +424,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 )
               else ...[
                 // Show top 3 most recent batches
-                ...batches.take(3).map((batch) => _buildBatchPreviewItem(batch, product)),
+                if (highlighted.isEmpty)
+                  ...sortedBatches.reversed
+                      .take(3)
+                      .map((batch) => _buildBatchPreviewItem(batch, product))
+                else
+                  ...highlighted.map((batch) => _buildBatchPreviewItem(batch, product)),
                 // "View all" button
                 ListTile(
                   leading: const Icon(Icons.list, color: Colors.green),
@@ -544,11 +568,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       ),
       title: Text(
-        batch.batchNumber,
+        _shortenBatchCode(batch.batchNumber),
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
-        'SL: ${_formatBatchPreviewQuantity(batch, product)} | Giá vốn: ${AppFormatter.formatCompactCurrency(batch.costPrice)}',
+        'SL: ${_formatBatchPreviewQuantity(batch, product)} | Giá vốn: ${_formatUnitCost(batch, product)}',
         style: const TextStyle(fontSize: 12),
       ),
       trailing: Text(
@@ -571,6 +595,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         );
       },
     );
+  }
+
+  String _shortenBatchCode(String code) {
+    if (code.length <= 12) return code;
+    final prefix = code.substring(0, 4);
+    final suffix = code.substring(code.length - 4);
+    return '$prefix...$suffix';
+  }
+
+  String _formatUnitCost(ProductBatch batch, Product? product) {
+    final units = _productUnits;
+    final baseUnit = product?.effectiveBaseUnit ?? 'đơn vị';
+
+    if (units.isEmpty) {
+      final normalized = baseUnit.toLowerCase();
+      final baseCost = AppFormatter.formatCurrencyWithSymbol(
+        batch.costPrice,
+        symbol: 'đ',
+      );
+      return '$baseCost/$normalized';
+    }
+
+    final defaultUnit = UnitDisplayFormatter.defaultUnit(units) ?? units.first;
+    final conversion = defaultUnit.conversionFactor <= 0 ? 1 : defaultUnit.conversionFactor;
+    final costPerDefault = AppFormatter.formatCurrencyWithSymbol(
+      batch.costPrice * conversion,
+      symbol: 'đ',
+    );
+    final unitLabel = UnitDisplayFormatter.simpleUnitName(defaultUnit).toLowerCase();
+    return '$costPerDefault/$unitLabel';
   }
 
   Widget _buildPriceHistoryItem(PriceHistoryItem item) {

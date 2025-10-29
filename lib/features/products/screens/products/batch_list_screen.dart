@@ -33,18 +33,19 @@ class _BatchListScreenState extends State<BatchListScreen> {
       ),
       body: Consumer<ProductProvider>(
         builder: (context, provider, child) {
-          if (provider.isLoading && provider.productBatches.isEmpty) {
+          if (provider.isLoading && provider.fifoBatches.isEmpty) {
             return const Center(child: LoadingWidget());
           }
-          if (provider.productBatches.isEmpty) {
+          if (provider.fifoBatches.isEmpty) {
             return const Center(child: Text('Không có lô hàng nào.'));
           }
 
+          final batches = provider.fifoBatches;
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: provider.productBatches.length,
+            itemCount: batches.length,
             itemBuilder: (context, index) {
-              final batch = provider.productBatches[index];
+              final batch = batches[index];
               return _buildBatchListItem(batch);
             },
           );

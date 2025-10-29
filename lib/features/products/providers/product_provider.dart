@@ -128,7 +128,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     final allProducts = _productsByCategory[null] ?? _products;
     return allProducts.where((product) => product.category == category).toList();
   }
-  List<ProductBatch> get productBatches => _productBatches;
+  List<ProductBatch> get productBatches => List.unmodifiable(_productBatches);
+  List<ProductBatch> get fifoBatches => List.unmodifiable(_productBatches);
   List<SeasonalPrice> get seasonalPrices => _seasonalPrices;
   List<BannedSubstance> get bannedSubstances => _bannedSubstances;
 
@@ -173,6 +174,66 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   bool get hasMoreBatches => _paginatedBatches?.hasNextPage ?? false;
   PaginationParams get currentBatchPaginationParams =>
       _currentBatchPaginationParams;
+
+  int _compareBatches(ProductBatch a, ProductBatch b) {
+    final dateCompare = a.receivedDate.compareTo(b.receivedDate);
+    if (dateCompare != 0) return dateCompare;
+    return a.createdAt.compareTo(b.createdAt);
+  }
+
+  List<ProductBatch> _sortBatchesFifo(Iterable<ProductBatch> batches) {
+    final sorted = List<ProductBatch>.from(batches);
+    sorted.sort(_compareBatches);
+    return sorted;
+  }
+
+  void _applyPaginatedBatches(PaginatedResult<ProductBatch> result) {
+    final sortedItems = _sortBatchesFifo(result.items);
+    _paginatedBatches = result.copyWith(items: sortedItems);
+    _productBatches = sortedItems;
+  }
+
+  void _setProductBatches(List<ProductBatch> batches) {
+    _productBatches = _sortBatchesFifo(batches);
+  }
+
+  void _upsertProductBatch(ProductBatch batch) {
+    final updated = List<ProductBatch>.from(_productBatches);
+    final existingIndex =
+        updated.indexWhere((existing) => existing.id == batch.id);
+    if (existingIndex != -1) {
+      updated[existingIndex] = batch;
+    } else {
+      updated.add(batch);
+    }
+    _productBatches = _sortBatchesFifo(updated);
+
+    if (_paginatedBatches != null) {
+      final paginatedItems = List<ProductBatch>.from(_paginatedBatches!.items);
+      final paginatedIndex =
+          paginatedItems.indexWhere((existing) => existing.id == batch.id);
+      if (paginatedIndex != -1) {
+        paginatedItems[paginatedIndex] = batch;
+        paginatedItems.sort(_compareBatches);
+        _paginatedBatches =
+            _paginatedBatches!.copyWith(items: paginatedItems);
+      }
+    }
+  }
+
+  void _removeProductBatchById(String batchId) {
+    if (_productBatches.isEmpty) return;
+    final updated = List<ProductBatch>.from(_productBatches)
+      ..removeWhere((batch) => batch.id == batchId);
+    _productBatches = _sortBatchesFifo(updated);
+
+    if (_paginatedBatches != null) {
+      final paginatedItems = List<ProductBatch>.from(_paginatedBatches!.items)
+        ..removeWhere((batch) => batch.id == batchId);
+      _paginatedBatches =
+          _paginatedBatches!.copyWith(items: _sortBatchesFifo(paginatedItems));
+    }
+  }
 
   // Utility getters
   int getProductStock(String productId) => _stockMap[productId] ?? 0;
@@ -727,24 +788,25 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     required String productId,
     int pageSize = 20,
     String? sortBy,
-    bool ascending = false, // Default: newest first
+    bool ascending = true,
   }) async {
     _setStatus(ProductStatus.loading);
     try {
-      _currentBatchPaginationParams = PaginationParams(
+      final params = PaginationParams(
         page: 1,
         pageSize: pageSize,
-        sortBy: sortBy,
+        sortBy: sortBy ?? 'received_date',
         ascending: ascending,
       );
 
-      _paginatedBatches = await _productService.getProductBatchesPaginated(
+      _currentBatchPaginationParams = params;
+
+      final result = await _productService.getProductBatchesPaginated(
         productId: productId,
-        params: _currentBatchPaginationParams,
+        params: params,
       );
 
-      // Update legacy _productBatches list for backward compatibility
-      _productBatches = _paginatedBatches!.items;
+      _applyPaginatedBatches(result);
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -768,12 +830,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         params: nextParams,
       );
 
-      // Merge results
-      _paginatedBatches = _paginatedBatches!.merge(nextPage);
+      final merged = _paginatedBatches!.merge(nextPage);
       _currentBatchPaginationParams = nextParams;
 
-      // Update legacy _productBatches list
-      _productBatches = _paginatedBatches!.items;
+      _applyPaginatedBatches(merged);
 
       _isBatchesLoadingMore = false;
       _clearError();
@@ -793,7 +853,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     if (isLoading) return; // Prevent overlapping calls
     _setStatusSilent(ProductStatus.loading); // Use silent set
     try {
-      _productBatches = await _productService.getProductBatches(productId);
+      final batches = await _productService.getProductBatches(productId);
+      _setProductBatches(batches);
       _setStatus(ProductStatus.success); // Notify UI only when all data is ready
     } catch (e) {
       _setError(e.toString());
@@ -803,7 +864,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   Future<bool> addProductBatch(ProductBatch batch) async {
     try {
       final newBatch = await _productService.addProductBatch(batch);
-      _productBatches.add(newBatch);
+      _upsertProductBatch(newBatch);
 
       // Update stock for this product
       await _updateProductStock(batch.productId);
@@ -820,32 +881,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     _setStatus(ProductStatus.loading);
     try {
       final updatedBatch = await _productService.updateProductBatch(batch);
-
-      bool didUpdate = false;
-      final legacyIndex =
-          _productBatches.indexWhere((existing) => existing.id == batch.id);
-      if (legacyIndex != -1) {
-        final updatedList = List<ProductBatch>.from(_productBatches);
-        updatedList[legacyIndex] = updatedBatch;
-        _productBatches = updatedList;
-        didUpdate = true;
-      }
-
-      if (_paginatedBatches != null) {
-        final items = List<ProductBatch>.from(_paginatedBatches!.items);
-        final paginatedIndex =
-            items.indexWhere((existing) => existing.id == batch.id);
-        if (paginatedIndex != -1) {
-          items[paginatedIndex] = updatedBatch;
-          _paginatedBatches = _paginatedBatches!.copyWith(items: items);
-          _productBatches = List<ProductBatch>.from(items);
-          didUpdate = true;
-        }
-      }
-
-      if (!didUpdate) {
-        _productBatches.add(updatedBatch);
-      }
+      _upsertProductBatch(updatedBatch);
 
 
       await _updateProductStock(batch.productId);
@@ -923,7 +959,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     _setStatus(ProductStatus.loading);
     try {
       await _productService.deleteProductBatch(batchId);
-      _productBatches.removeWhere((b) => b.id == batchId);
+      _removeProductBatchById(batchId);
       await _updateProductStock(productId); // Cập nhật lại tồn kho
       _setStatus(ProductStatus.success);
       return true;
@@ -1767,7 +1803,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     required String productId,
     int pageSize = 20,
     String? sortBy,
-    bool ascending = false,
+    bool ascending = true,
   }) async {
     _paginatedBatches = null;
     _isBatchesLoadingMore = false;

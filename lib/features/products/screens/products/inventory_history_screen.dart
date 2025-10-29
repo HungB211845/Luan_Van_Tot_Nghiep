@@ -71,7 +71,7 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
       final provider = context.read<ProductProvider>();
       await provider.loadProductBatches(widget.product.id);
 
-      _allBatches = List.from(provider.productBatches);
+      _allBatches = List.from(provider.fifoBatches);
       final units = await provider.getProductUnits(widget.product.id);
       _productUnits = units;
       _baseUnitName = UnitDisplayFormatter.resolveBaseUnitName(
@@ -169,6 +169,10 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
 
         if (!matchesSearch) return false;
 
+        if (_selectedFilter == 'all' && batch.quantity <= 0) {
+          return false;
+        }
+
         // Status filter
         switch (_selectedFilter) {
           case 'active':
@@ -211,8 +215,6 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
                   : 9999);
           return da.compareTo(db);
         });
-      } else {
-        _filteredBatches.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
       }
     });
   }
@@ -433,6 +435,7 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
       onRefresh: _loadBatches,
       child: Consumer<ProductProvider>(
         builder: (context, provider, child) {
+          final activeBatchId = _resolveActiveBatchId(provider.fifoBatches);
           return InventoryBatchesWidget(
             batches: _filteredBatches,
             onBatchUpdated: _loadBatches,
@@ -442,10 +445,20 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
             lowStockThreshold: _currentLowStockThreshold,
             lowStockBatchIds: _lowStockBatchIds,
             lowStockBatchNumbers: _lowStockBatchNumbers,
+            activeBatchId: activeBatchId,
           );
         },
       ),
     );
+  }
+
+  String? _resolveActiveBatchId(List<ProductBatch> batches) {
+    for (final batch in batches) {
+      if (batch.quantity > 0) {
+        return batch.id;
+      }
+    }
+    return null;
   }
 
   String _formatQuantity(double baseQuantity) {

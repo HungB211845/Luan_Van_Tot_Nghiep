@@ -20,6 +20,7 @@ class InventoryBatchesWidget extends StatefulWidget {
   final double lowStockThreshold;
   final Set<String> lowStockBatchIds;
   final Set<String> lowStockBatchNumbers;
+  final String? activeBatchId;
 
   const InventoryBatchesWidget({
     Key? key,
@@ -31,6 +32,7 @@ class InventoryBatchesWidget extends StatefulWidget {
     this.lowStockThreshold = 10,
     this.lowStockBatchIds = const <String>{},
     this.lowStockBatchNumbers = const <String>{},
+    this.activeBatchId,
   }) : super(key: key);
 
   @override
@@ -190,6 +192,8 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
     final isOutOfStock = batch.quantity <= 0;
     final isLowStock = _isLowStock(batch);
     final isLoading = _loadingBatches.contains(batch.id);
+    final isActive =
+        widget.activeBatchId != null && widget.activeBatchId == batch.id;
 
     return Slidable(
       key: ValueKey(batch.id),
@@ -233,10 +237,14 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
         },
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.green[600] : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
           child: Row(
             children: [
-              _buildBatchIcon(batch, isExpiringSoon, isLowStock),
+              _buildBatchIcon(batch, isExpiringSoon, isLowStock, isActive),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -249,9 +257,10 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                         Flexible(
                           child: Text(
                             _shortenBatchCode(batch.batchNumber),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
+                              color: isActive ? Colors.white : Colors.black,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -272,9 +281,9 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                     const SizedBox(height: 4),
                     Text(
                       _formatBatchCost(batch),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Colors.black,
+                        color: isActive ? Colors.white : Colors.black,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -283,7 +292,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                       _buildSecondaryLabel(batch),
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[500],
+                        color: isActive ? Colors.white : Colors.grey[500],
                       ),
                     ),
                   ],
@@ -296,16 +305,17 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getStockColor(batch)
-                          .withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
+                      color: isActive
+                          ? Colors.white
+                          : _getStockColor(batch).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       _formatBatchQuantity(batch),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: _getStockColor(batch),
+                        color: isActive ? Colors.green[700]! : _getStockColor(batch),
                       ),
                     ),
                   ),
@@ -335,11 +345,19 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
     return quantity <= widget.lowStockThreshold;
   }
 
-  Widget _buildBatchIcon(ProductBatch batch, bool isExpiringSoon, bool isLowStock) {
+  Widget _buildBatchIcon(
+    ProductBatch batch,
+    bool isExpiringSoon,
+    bool isLowStock,
+    bool isActive,
+  ) {
     Color iconColor;
     IconData iconData;
 
-    if (batch.quantity <= 0) {
+    if (isActive && batch.quantity > 0) {
+      iconColor = Colors.green[700]!;
+      iconData = Icons.playlist_add_check;
+    } else if (batch.quantity <= 0) {
       iconColor = Colors.red[600]!;
       iconData = Icons.error;
     } else if (isExpiringSoon) {
@@ -357,12 +375,12 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: iconColor.withOpacity(0.1),
+        color: isActive ? Colors.white : iconColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
         iconData,
-        color: iconColor,
+        color: isActive ? Colors.green[700]! : iconColor,
         size: 20,
       ),
     );
