@@ -98,8 +98,10 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
           children: [
             _buildInfoSection(context, batch),
             const SizedBox(height: 16),
-            _buildOriginSection(context, batch),
-            const SizedBox(height: 16),
+            if (_shouldShowOrigin(batch)) ...[
+              _buildOriginSection(context, batch),
+              const SizedBox(height: 16),
+            ],
             _buildStatusSection(context, batch),
           ],
         ),
@@ -461,6 +463,13 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     }
 
     return buffer.toString();
+  }
+
+  bool _shouldShowOrigin(ProductBatch batch) {
+    final hasSupplier = (batch.supplierName != null && batch.supplierName!.trim().isNotEmpty) ||
+        (batch.supplierId != null && batch.supplierId!.trim().isNotEmpty);
+    final hasPurchaseOrder = batch.purchaseOrderId != null && batch.purchaseOrderId!.trim().isNotEmpty;
+    return hasSupplier || hasPurchaseOrder;
   }
 
   Widget _buildOriginSection(BuildContext context, ProductBatch batch) {

@@ -652,6 +652,50 @@ class ProductService extends BaseService {
     }
   }
 
+  /// Lấy chi tiết 1 lô hàng theo ID
+  Future<ProductBatch?> getProductBatchById(String batchId) async {
+    try {
+      final response = await addStoreFilter(
+        _supabase
+            .from('product_batches')
+            .select('*')
+            .eq('id', batchId),
+      ).maybeSingle();
+
+      if (response == null) {
+        return null;
+      }
+
+      return ProductBatch.fromJson(response);
+    } catch (e) {
+      throw Exception('Lỗi lấy chi tiết lô hàng: $e');
+    }
+  }
+
+  /// Lấy chi tiết 1 lô hàng theo mã lô + productId
+  Future<ProductBatch?> getProductBatchByNumber({
+    required String productId,
+    required String batchNumber,
+  }) async {
+    try {
+      final query = addStoreFilter(
+        _supabase.from('product_batches').select('*'),
+      )
+          .eq('product_id', productId)
+          .eq('batch_number', batchNumber);
+
+      final response = await query.maybeSingle();
+
+      if (response == null) {
+        return null;
+      }
+
+      return ProductBatch.fromJson(response);
+    } catch (e) {
+      throw Exception('Lỗi lấy chi tiết lô hàng theo mã: $e');
+    }
+  }
+
   /// Thêm batch mới (nhập kho)
   Future<ProductBatch> addProductBatch(ProductBatch batch) async {
     try {

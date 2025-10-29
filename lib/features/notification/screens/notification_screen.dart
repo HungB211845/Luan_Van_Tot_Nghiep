@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../notification/models/notification_message.dart';
 import '../../notification/providers/notification_provider.dart';
+import '../../products/providers/product_provider.dart';
+import '../../products/models/product_batch.dart';
+import '../../products/screens/products/batch_detail_screen.dart';
 import '../../../core/routing/route_names.dart';
 
 enum _NotificationTab { all, inventory }
@@ -100,7 +103,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _NotificationTile(
                         notification: notification,
-                        onTap: () => provider.markAsRead(notification.id),
+                        onTap: () {
+                          _handleNotificationTap(notification);
+                        },
                       ),
                     ),
                   ),
@@ -124,6 +129,68 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return grouped;
   }
 
+  Future<void> _handleNotificationTap(NotificationMessage notification) async {
+    context.read<NotificationProvider>().markAsRead(notification.id);
+
+    final shouldNavigate =
+        notification.topic == NotificationTopic.batchLowStock ||
+            notification.topic == NotificationTopic.batchExpiry ||
+            (notification.batchId != null &&
+                notification.batchId!.isNotEmpty) ||
+            (notification.batchNumber != null && notification.productId != null);
+
+    if (!shouldNavigate) {
+      return;
+    }
+
+    try {
+      final productProvider = context.read<ProductProvider>();
+
+      ProductBatch? batch;
+      if (notification.batchId != null &&
+          notification.batchId!.isNotEmpty) {
+        batch = await productProvider.fetchBatchById(notification.batchId!);
+      }
+
+      if (batch == null &&
+          notification.productId != null &&
+          notification.batchNumber != null) {
+        batch = await productProvider.fetchBatchByNumber(
+          notification.productId!,
+          notification.batchNumber!,
+        );
+      }
+
+      if (batch == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không tìm thấy dữ liệu của lô hàng'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      final resolvedBatch = batch;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BatchDetailScreen(batch: resolvedBatch),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi mở chi tiết lô hàng: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   List<NotificationMessage> _filterNotifications(
     List<NotificationMessage> notifications,
   ) {
@@ -141,6 +208,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Widget _buildHeader(ThemeData theme, int total, int unread) {
+    final hasUnread = unread > 0;
+    final title = hasUnread
+        ? 'Bạn có $unread thông báo chưa đọc'
+        : (total > 0 ? 'Không có thông báo mới' : 'Chưa có thông báo nào');
+    final subtitle = hasUnread
+        ? 'Tổng cộng $total thông báo'
+        : (total > 0 ? '$total thông báo đã đọc' : 'Hãy tiếp tục công việc nhé');
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -174,16 +249,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Bạn có $total thông báo',
+                  title,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  unread > 0
-                      ? '$unread thông báo chưa đọc'
-                      : 'Tất cả thông báo đã đọc',
+                  subtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),

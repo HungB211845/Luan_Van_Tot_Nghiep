@@ -8,6 +8,7 @@ import '../screens/products/edit_batch_screen.dart';
 import '../screens/products/batch_detail_screen.dart';
 import '../services/inventory_adjustment_service.dart';
 import '../utils/unit_display_formatter.dart';
+import '../../notification/utils/inventory_threshold_helper.dart';
 import '../../../shared/utils/formatter.dart';
 
 class InventoryBatchesWidget extends StatefulWidget {
@@ -16,6 +17,9 @@ class InventoryBatchesWidget extends StatefulWidget {
   final bool showTitle;
   final List<ProductUnit>? productUnits;
   final String? productBaseUnit;
+  final double lowStockThreshold;
+  final Set<String> lowStockBatchIds;
+  final Set<String> lowStockBatchNumbers;
 
   const InventoryBatchesWidget({
     Key? key,
@@ -24,6 +28,9 @@ class InventoryBatchesWidget extends StatefulWidget {
     this.showTitle = true,
     this.productUnits,
     this.productBaseUnit,
+    this.lowStockThreshold = 10,
+    this.lowStockBatchIds = const <String>{},
+    this.lowStockBatchNumbers = const <String>{},
   }) : super(key: key);
 
   @override
@@ -180,7 +187,8 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
   Widget _buildBatchItem(BuildContext context, ProductBatch batch) {
     final isExpiringSoon = batch.expiryDate != null &&
         batch.expiryDate!.difference(DateTime.now()).inDays <= 30;
-    final isLowStock = batch.quantity <= 10;
+    final isOutOfStock = batch.quantity <= 0;
+    final isLowStock = _isLowStock(batch);
     final isLoading = _loadingBatches.contains(batch.id);
 
     return Slidable(
@@ -240,7 +248,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                         // FIXED: Flexible instead of Expanded for better space usage
                         Flexible(
                           child: Text(
-                            batch.batchNumber,
+                            _shortenBatchCode(batch.batchNumber),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -249,44 +257,35 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                           ),
                         ),
                         if (isExpiringSoon) ...[
-                          const SizedBox(width: 4), // Reduced spacing
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.orange[100],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Sắp hết hạn',
-                              style: TextStyle(
-                                fontSize: 9, // Smaller font
-                                color: Colors.orange[700],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
+                          const SizedBox(width: 4),
+                          _buildStatusChip('Sắp hết hạn', Colors.orange[600]!),
+                        ],
+                        if (isOutOfStock) ...[
+                          const SizedBox(width: 4),
+                          _buildStatusChip('Hết hàng', Colors.red[600]!),
+                        ] else if (isLowStock) ...[
+                          const SizedBox(width: 4),
+                          _buildStatusChip('Sắp hết', Colors.orange[600]!),
                         ],
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Số lượng: ${_formatBatchQuantity(batch)} | Giá vốn: ${_formatBatchCost(batch)}',
+                      _formatBatchCost(batch),
                       style: const TextStyle(
                         fontSize: 14,
                         color: Colors.black,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    if (batch.receivedDate != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        'Nhập: ${_formatDate(batch.receivedDate)}${batch.expiryDate != null ? ' | HSD: ${_formatDate(batch.expiryDate!)}' : ''}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                        ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _buildSecondaryLabel(batch),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
@@ -297,7 +296,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getStockColor(batch.quantity.toDouble())
+                      color: _getStockColor(batch)
                           .withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -306,7 +305,7 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: _getStockColor(batch.quantity.toDouble()),
+                        color: _getStockColor(batch),
                       ),
                     ),
                   ),
@@ -317,6 +316,23 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
         ),
       ),
     );
+  }
+
+  bool _isLowStock(ProductBatch batch) {
+    final matchesNotification =
+        widget.lowStockBatchIds.contains(batch.id) ||
+        widget.lowStockBatchNumbers.contains(batch.batchNumber);
+
+    final quantity = batch.quantity.toDouble();
+    if (quantity <= 0) {
+      return false;
+    }
+
+    if (matchesNotification) {
+      return true;
+    }
+
+    return quantity <= widget.lowStockThreshold;
   }
 
   Widget _buildBatchIcon(ProductBatch batch, bool isExpiringSoon, bool isLowStock) {
@@ -352,44 +368,55 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
     );
   }
 
+  String _shortenBatchCode(String code) {
+    if (code.length <= 12) return code;
+    final prefix = code.substring(0, 4);
+    final suffix = code.substring(code.length - 4);
+    return '$prefix...$suffix';
+  }
+
+  Widget _buildStatusChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
   String _formatBatchCost(ProductBatch batch) {
-    final baseText =
-        AppFormatter.formatCurrencyWithSymbol(batch.costPrice, symbol: 'đ');
     final units = widget.productUnits ?? _cachedUnits;
     final fallbackBase = widget.productBaseUnit ?? _baseUnitName;
 
-    String baseLabel = '';
-    if (units.isNotEmpty) {
-      final baseUnit = UnitDisplayFormatter.baseUnit(units);
-      if (baseUnit != null) {
-        baseLabel =
-            UnitDisplayFormatter.simpleUnitName(baseUnit).toLowerCase();
-      }
-    }
-    if (baseLabel.isEmpty && fallbackBase.isNotEmpty) {
-      baseLabel = fallbackBase.toLowerCase();
+    if (units.isEmpty) {
+      final baseLabel =
+          (fallbackBase.isEmpty ? 'đơn vị' : fallbackBase).toLowerCase();
+      final baseCost =
+          AppFormatter.formatCurrencyWithSymbol(batch.costPrice, symbol: 'đ');
+      return 'Giá vốn: $baseCost/$baseLabel';
     }
 
-    final baseSuffix =
-        (baseLabel.isNotEmpty && baseLabel != 'đơn vị')
-            ? '/$baseLabel'
-            : '';
-    final buffer = StringBuffer('$baseText$baseSuffix');
+    final defaultUnit = UnitDisplayFormatter.defaultUnit(units) ?? units.first;
+    final conversion = defaultUnit.conversionFactor <= 0
+        ? 1
+        : defaultUnit.conversionFactor;
+    final costPerDefault = AppFormatter.formatCurrencyWithSymbol(
+      batch.costPrice * conversion,
+      symbol: 'đ',
+    );
+    final unitLabel =
+        UnitDisplayFormatter.simpleUnitName(defaultUnit).toLowerCase();
 
-    if (units.isNotEmpty) {
-      final defaultUnit = UnitDisplayFormatter.defaultUnit(units);
-      if (defaultUnit != null && defaultUnit.conversionFactor > 0) {
-        final containerCost = AppFormatter.formatCurrencyWithSymbol(
-          batch.costPrice * defaultUnit.conversionFactor,
-          symbol: 'đ',
-        );
-        final containerLabel =
-            UnitDisplayFormatter.simpleUnitName(defaultUnit).toLowerCase();
-        buffer.write(' • $containerCost/${containerLabel.toLowerCase()}');
-      }
-    }
-
-    return buffer.toString();
+    return 'Giá vốn: $costPerDefault/$unitLabel';
   }
 
   String _formatBatchQuantity(ProductBatch batch) {
@@ -430,10 +457,20 @@ class _InventoryBatchesWidgetState extends State<InventoryBatchesWidget> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-  Color _getStockColor(double stock) {
+  String _buildSecondaryLabel(ProductBatch batch) {
+    final received = _formatDate(batch.receivedDate);
+    final expiry = batch.expiryDate != null ? _formatDate(batch.expiryDate!) : null;
+    if (expiry == null) {
+      return 'Nhập: $received';
+    }
+    return 'Nhập: $received • HSD: $expiry';
+  }
+
+  Color _getStockColor(ProductBatch batch) {
+    final stock = batch.quantity.toDouble();
     if (stock <= 0) {
       return Colors.red[600]!;
-    } else if (stock <= 10) {
+    } else if (_isLowStock(batch)) {
       return Colors.orange[600]!;
     } else {
       return Colors.green[600]!;

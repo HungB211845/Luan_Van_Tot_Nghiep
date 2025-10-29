@@ -933,6 +933,32 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
+  /// Lấy chi tiết 1 lô hàng để phục vụ điều hướng từ thông báo
+  Future<ProductBatch?> fetchBatchById(String batchId) async {
+    try {
+      return await _productService.getProductBatchById(batchId);
+    } catch (e) {
+      debugPrint('Error fetching batch $batchId: $e');
+      return null;
+    }
+  }
+
+  /// Lấy chi tiết lô hàng theo mã lô khi thiếu batchId trong thông báo cũ
+  Future<ProductBatch?> fetchBatchByNumber(
+    String productId,
+    String batchNumber,
+  ) async {
+    try {
+      return await _productService.getProductBatchByNumber(
+        productId: productId,
+        batchNumber: batchNumber,
+      );
+    } catch (e) {
+      debugPrint('Error fetching batch $batchNumber for $productId: $e');
+      return null;
+    }
+  }
+
   Future<void> loadAlerts() async {
     try {
       _expiringBatches = await _productService.getExpiringBatches();
@@ -1926,6 +1952,16 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       }
     } catch (e) {
       _setError(e.toString());
+    }
+  }
+
+  /// Lấy chi tiết sản phẩm theo ID để phục vụ các màn hình phụ thuộc ngưỡng tồn kho
+  Future<Product?> fetchProductById(String productId) async {
+    try {
+      return await _productService.getProductById(productId);
+    } catch (e) {
+      debugPrint('Error fetching product $productId: $e');
+      return null;
     }
   }
 

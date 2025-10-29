@@ -57,17 +57,22 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/product.dart';
 import '../../models/product_batch.dart';
+import '../../models/product_unit.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../models/company.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/services/base_service.dart';
+import '../../notification/providers/notification_provider.dart';
+import '../../notification/utils/inventory_threshold_helper.dart';
 import 'batch_detail_screen.dart';
 
 class BatchHistoryScreen extends StatefulWidget {
@@ -93,14 +98,18 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
   bool _showExpired = false;
   double? _minCost;
   double? _maxCost;
+  String _selectedFilter = 'all';
+  Product? _product;
+  List<ProductUnit> _productUnits = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _reloadBatches();
+      await _initializeProductContext();
       // NCC for filter
       await context.read<CompanyProvider>().loadCompanies();
+      await _reloadBatches();
     });
 
     _searchController.addListener(_onSearchChanged);
@@ -133,6 +142,27 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
     }
   }
 
+  Future<void> _initializeProductContext() async {
+    try {
+      final productProvider = context.read<ProductProvider>();
+      final Product? product =
+          await productProvider.fetchProductById(widget.productId);
+      final List<ProductUnit> units =
+          await productProvider.getProductUnits(widget.productId);
+
+      if (!mounted) return;
+
+      _product = product;
+      _productUnits = units;
+
+      if (product != null && mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('BatchHistoryScreen: failed to init product context: $e');
+    }
+  }
+
   Future<void> _reloadBatches() async {
     final productProvider = context.read<ProductProvider>();
     await productProvider.resetBatchesPagination(
@@ -143,6 +173,10 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       productId: widget.productId,
       pageSize: 20,
     );
+    final notificationProvider = context.read<NotificationProvider>();
+    await notificationProvider.refresh();
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -153,13 +187,16 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       appBar: AppBar(
         title: Text(title),
       ),
-      body: Consumer2<ProductProvider, CompanyProvider>(
-        builder: (context, productProvider, companyProvider, child) {
+      body: Consumer3<ProductProvider, CompanyProvider, NotificationProvider>(
+        builder: (context, productProvider, companyProvider, notificationProvider, child) {
           if (productProvider.isLoading && productProvider.productBatches.isEmpty) {
             return const Center(child: LoadingWidget());
           }
 
-          final filtered = _applyFilters(productProvider.productBatches);
+          final filtered = _applyFilters(
+            productProvider.productBatches,
+            notificationProvider,
+          );
           final grouped = _groupByDateWithCount(filtered);
           final showFooter = productProvider.hasMoreBatches;
 
@@ -427,7 +464,11 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
     return result;
   }
 
-  List<ProductBatch> _applyFilters(List<ProductBatch> batches) {
+  List<ProductBatch> _applyFilters(
+    List<ProductBatch> batches,
+    NotificationProvider notificationProvider,
+  ) {
+    final notifications = notificationProvider.notifications;
     final q = _searchController.text.trim().toLowerCase();
     DateTime? dateQuery;
     if (q.isNotEmpty) {
@@ -443,14 +484,61 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       }
     }
 
-    var results = batches;
+    final relevantNotifications = notifications
+        .where((n) => n.productId == widget.productId)
+        .toList();
 
-    // Supplier filter
-    if (_supplierFilters.isNotEmpty) {
-      results = results.where((b) => b.supplierId != null && _supplierFilters.contains(b.supplierId)).toList();
+    final expiryNotifications = relevantNotifications.where((n) {
+      if (n.topic == NotificationTopic.batchExpiry) return true;
+      return n.expiryDays != null;
+    }).toList();
+
+    final lowStockNotifications = relevantNotifications.where((n) {
+      if (n.topic == NotificationTopic.batchLowStock) return true;
+      return n.topic == NotificationTopic.general &&
+          n.id.startsWith('lowstock-batch-');
+    }).toList();
+
+    final Map<String, int> expiryDaysMap = {
+      for (final n in expiryNotifications)
+        if (n.batchNumber != null && n.expiryDays != null)
+          n.batchNumber!: n.expiryDays!,
+    };
+
+    final Set<String> expiringBatchNumbers = expiryNotifications
+        .where((n) => (n.expiryDays ?? 0) >= 0 && n.batchNumber != null)
+        .map((n) => n.batchNumber!)
+        .toSet();
+    final Set<String> expiredBatchNumbers = expiryNotifications
+        .where((n) => (n.expiryDays ?? 0) < 0 && n.batchNumber != null)
+        .map((n) => n.batchNumber!)
+        .toSet();
+    final Set<String> lowStockBatchIds = {
+      for (final n in lowStockNotifications)
+        if (n.batchId != null) n.batchId!,
+    };
+    final Set<String> lowStockBatchNumbers = {
+      for (final n in lowStockNotifications)
+        if (n.batchNumber != null) n.batchNumber!,
+    };
+
+    final now = DateTime.now();
+
+    bool isExpiringSoon(ProductBatch batch) {
+      if (expiringBatchNumbers.contains(batch.batchNumber)) return true;
+      if (batch.expiryDate == null) return false;
+      final diff = batch.expiryDate!.difference(now).inDays;
+      return diff >= 0 && diff <= 90;
     }
 
-    // date exact search
+    var results = batches;
+
+    if (_supplierFilters.isNotEmpty) {
+      results = results
+          .where((b) => b.supplierId != null && _supplierFilters.contains(b.supplierId))
+          .toList();
+    }
+
     if (dateQuery != null) {
       results = results.where((b) {
         final bd = DateTime(b.receivedDate.year, b.receivedDate.month, b.receivedDate.day);
@@ -459,12 +547,12 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       }).toList();
     }
 
-    // text search by batch number
     if (q.isNotEmpty && dateQuery == null) {
-      results = results.where((b) => (b.batchNumber ?? '').toLowerCase().contains(q)).toList();
+      results = results
+          .where((b) => (b.batchNumber ?? '').toLowerCase().contains(q))
+          .toList();
     }
 
-    // local date range filter via quick chips & pickers
     if (_fromDate != null) {
       final start = DateTime(_fromDate!.year, _fromDate!.month, _fromDate!.day);
       results = results.where((b) {
@@ -480,20 +568,17 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       }).toList();
     }
 
-    // Expiry status filter
     if (_showExpired || _showNonExpired) {
-      final today = DateTime.now();
       results = results.where((b) {
-        final isExpired = (b.expiryDate != null) && !b.expiryDate!.isAfter(DateTime(today.year, today.month, today.day));
-        final isNonExpired = (b.expiryDate == null) || b.expiryDate!.isAfter(DateTime(today.year, today.month, today.day));
-        if (_showExpired && _showNonExpired) return true; // both selected => no filter
+        final isExpired = expiredBatchNumbers.contains(b.batchNumber) || b.isExpired;
+        final isNonExpired = !isExpired;
+        if (_showExpired && _showNonExpired) return true;
         if (_showExpired) return isExpired;
         if (_showNonExpired) return isNonExpired;
         return true;
       }).toList();
     }
 
-    // Cost range filters
     if (_minCost != null) {
       results = results.where((b) => (b.costPrice ?? 0) >= _minCost!).toList();
     }
@@ -501,8 +586,62 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       results = results.where((b) => (b.costPrice ?? 0) <= _maxCost!).toList();
     }
 
-    // Ensure newest first
-    results.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+    final lowStockThreshold = _product != null
+        ? notificationProvider.resolveLowStockThreshold(
+            product: _product!,
+            units: _productUnits,
+          )
+        : 10;
+
+    switch (_selectedFilter) {
+      case 'active':
+        results = results.where((b) => b.quantity > 0 && !b.isExpired).toList();
+        break;
+      case 'low_stock':
+        results = results.where((b) {
+          final quantity = b.quantity.toDouble();
+          final matchesNotification =
+              lowStockBatchIds.contains(b.id) ||
+                  lowStockBatchNumbers.contains(b.batchNumber);
+
+          if (quantity <= 0) {
+            return false;
+          }
+
+          if (matchesNotification) {
+            return true;
+          }
+
+          return quantity <= lowStockThreshold;
+        }).toList();
+        break;
+      case 'out_of_stock':
+        results = results.where((b) => b.quantity <= 0).toList();
+        break;
+      case 'expiring':
+        results = results.where((b) => isExpiringSoon(b) && !b.isExpired).toList();
+        break;
+      case 'expired':
+        results = results
+            .where((b) => b.isExpired || expiredBatchNumbers.contains(b.batchNumber))
+            .toList();
+        break;
+      default:
+        break;
+    }
+
+    if (_selectedFilter == 'expiring' || _selectedFilter == 'expired') {
+      results.sort((a, b) {
+        final da = expiryDaysMap[a.batchNumber] ??
+            (a.expiryDate != null ? a.expiryDate!.difference(now).inDays : 9999);
+        final db = expiryDaysMap[b.batchNumber] ??
+            (b.expiryDate != null ? b.expiryDate!.difference(now).inDays : 9999);
+        return da.compareTo(db);
+      });
+    } else {
+      results.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+    }
+
     return results;
   }
 
@@ -512,6 +651,11 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       (c) => c.id == batch.supplierId,
       orElse: () => Company(id: '', name: 'Không xác định', createdAt: DateTime.now(), updatedAt: DateTime.now(), storeId: BaseService.getDefaultStoreId()),
     );
+
+    final quantityLabel = _formatBatchQuantity(batch);
+    final costLabel = _formatUnitCost(batch);
+    final secondaryLabel = _formatSecondaryInfo(batch);
+    final statusColor = _getChipColor(batch);
 
     return InkWell(
       onTap: () async {
@@ -533,26 +677,71 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            GestureDetector(
-              onLongPress: () async {
-                final text = batch.batchNumber ?? '';
-                if (text.isNotEmpty) {
-                  await Clipboard.setData(ClipboardData(text: text));
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đã sao chép mã Lô: $text')),
-                    );
-                  }
-                }
-              },
-              child: Text('Lô: ${batch.batchNumber}', style: Theme.of(context).textTheme.titleMedium),
-            ),
-            const Divider(),
-            _buildInfoRow('Số lượng', AppFormatter.formatNumber(batch.quantity)),
-            _buildInfoRow('Giá nhập', AppFormatter.formatCurrency(batch.costPrice)),
-            _buildInfoRow('Ngày nhập', AppFormatter.formatDate(batch.receivedDate)),
-            if (batch.expiryDate != null) _buildInfoRow('Hạn sử dụng', AppFormatter.formatDate(batch.expiryDate!)),
-            if (batch.supplierId != null) _buildInfoRow('Nhà cung cấp', supplier.name),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onLongPress: () async {
+                        final text = batch.batchNumber ?? '';
+                        if (text.isNotEmpty) {
+                          await Clipboard.setData(ClipboardData(text: text));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Đã sao chép mã Lô: $text')),
+                            );
+                          }
+                        }
+                      },
+                      child: Text(
+                        _shortenBatchCode(batch.batchNumber),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      quantityLabel,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                costLabel,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                secondaryLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              if (batch.supplierId != null && supplier.name.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'NCC: ${supplier.name}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -560,28 +749,51 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(fontSize: 14, color: Colors.grey[800], fontWeight: FontWeight.normal),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _shortenBatchCode(String? code) {
+    if (code == null || code.isEmpty) return 'Không rõ mã';
+    if (code.length <= 12) return code;
+    final prefix = code.substring(0, 4);
+    final suffix = code.substring(code.length - 4);
+    return '$prefix...$suffix';
+  }
+
+  String _formatUnitCost(ProductBatch batch) {
+    final units = _productUnits;
+    if (units.isEmpty) {
+      return 'Giá vốn: ${AppFormatter.formatCurrencyWithSymbol(batch.costPrice, symbol: 'đ')}/${_product?.unit.toLowerCase() ?? 'đơn vị'}';
+    }
+
+    final defaultUnit = UnitDisplayFormatter.defaultUnit(units) ?? units.first;
+    final unitLabel = UnitDisplayFormatter.simpleUnitName(defaultUnit).toLowerCase();
+    final costPerDefault = batch.costPrice * (defaultUnit.conversionFactor <= 0 ? 1 : defaultUnit.conversionFactor);
+
+    return 'Giá vốn: ${AppFormatter.formatCurrencyWithSymbol(costPerDefault, symbol: 'đ')}/$unitLabel';
+  }
+
+  String _formatSecondaryInfo(ProductBatch batch) {
+    final received = AppFormatter.formatDate(batch.receivedDate);
+    final expiry = batch.expiryDate != null ? AppFormatter.formatDate(batch.expiryDate!) : null;
+    if (expiry == null || expiry.isEmpty) {
+      return 'Nhập: $received';
+    }
+    return 'Nhập: $received • HSD: $expiry';
+  }
+
+  Color _getChipColor(ProductBatch batch) {
+    if (batch.quantity <= 0) {
+      return Colors.red[600]!;
+    }
+    final notificationProvider = context.read<NotificationProvider>();
+    final threshold = (_product != null)
+        ? notificationProvider.resolveLowStockThreshold(
+            product: _product!,
+            units: _productUnits,
+          )
+        : InventoryThresholdHelper.fallbackThreshold;
+    if (batch.quantity.toDouble() <= threshold) {
+      return Colors.orange[600]!;
+    }
+    return Colors.green[600]!;
   }
 
   Widget _buildLoadingFooter() {

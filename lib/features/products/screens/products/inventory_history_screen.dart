@@ -8,6 +8,8 @@ import '../../widgets/inventory_batches_widget.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/utils/formatter.dart';
 import '../../utils/unit_display_formatter.dart';
+import '../../../notification/providers/notification_provider.dart';
+import '../../../notification/models/notification_message.dart';
 
 class InventoryHistoryScreen extends StatefulWidget {
   final Product product;
@@ -29,12 +31,30 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
   String _selectedFilter = 'all'; // all, active, expired, low_stock
   List<ProductUnit> _productUnits = [];
   String _baseUnitName = '';
+  double _currentLowStockThreshold = 10;
+  Set<String> _lowStockBatchIds = {};
+  Set<String> _lowStockBatchNumbers = {};
 
   @override
   void initState() {
     super.initState();
     _loadBatches();
     _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final notificationProvider = Provider.of<NotificationProvider>(context);
+    if (_productUnits.isNotEmpty || _allBatches.isNotEmpty) {
+      final thresholdBase = notificationProvider.resolveLowStockThreshold(
+        product: widget.product,
+        units: _productUnits,
+      );
+      if ((thresholdBase - _currentLowStockThreshold).abs() > 0.01) {
+        _applyFilters(notificationProvider);
+      }
+    }
   }
 
   @override
@@ -58,7 +78,12 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
         units: units,
         fallback: widget.product.effectiveBaseUnit,
       );
-      _applyFilters();
+      if (!mounted) return;
+      final notificationProvider = context.read<NotificationProvider>();
+      _applyFilters(notificationProvider);
+      await notificationProvider.refresh();
+      if (!mounted) return;
+      _applyFilters(notificationProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -76,11 +101,65 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
   }
 
   void _onSearchChanged() {
-    _applyFilters();
+    final notificationProvider = context.read<NotificationProvider>();
+    _applyFilters(notificationProvider);
   }
 
-  void _applyFilters() {
+  void _applyFilters(NotificationProvider notificationProvider) {
+    final thresholdBase = notificationProvider.resolveLowStockThreshold(
+      product: widget.product,
+      units: _productUnits,
+    );
+
+    final notifications = notificationProvider.notifications
+        .where((n) => n.productId == widget.product.id)
+        .toList();
+    final now = DateTime.now();
+
+    final expiryNotifications = notifications.where((n) {
+      if (n.topic == NotificationTopic.batchExpiry) return true;
+      return n.expiryDays != null;
+    }).toList();
+
+    final lowStockNotifications = notifications.where((n) {
+      if (n.topic == NotificationTopic.batchLowStock) return true;
+      return n.topic == NotificationTopic.general &&
+          n.id.startsWith('lowstock-batch-');
+    }).toList();
+
+    final Set<String> expiringBatchNumbers = expiryNotifications
+        .where((n) => (n.expiryDays ?? 0) >= 0 && n.batchNumber != null)
+        .map((n) => n.batchNumber!)
+        .toSet();
+    final Set<String> expiredBatchNumbers = expiryNotifications
+        .where((n) => (n.expiryDays ?? 0) < 0 && n.batchNumber != null)
+        .map((n) => n.batchNumber!)
+        .toSet();
+    final Set<String> lowStockBatchIds = {
+      for (final n in lowStockNotifications)
+        if (n.batchId != null) n.batchId!,
+    };
+    final Set<String> lowStockBatchNumbers = {
+      for (final n in lowStockNotifications)
+        if (n.batchNumber != null) n.batchNumber!,
+    };
+    final Map<String, int> expiryDaysMap = {
+      for (final n in expiryNotifications)
+        if (n.batchNumber != null && n.expiryDays != null)
+          n.batchNumber!: n.expiryDays!,
+    };
+
+    bool isExpiringSoon(ProductBatch batch) {
+      if (expiringBatchNumbers.contains(batch.batchNumber)) return true;
+      if (batch.expiryDate == null) return false;
+      final diff = batch.expiryDate!.difference(now).inDays;
+      return diff >= 0 && diff <= 90;
+    }
+
     setState(() {
+      _currentLowStockThreshold = thresholdBase;
+      _lowStockBatchIds = lowStockBatchIds;
+      _lowStockBatchNumbers = lowStockBatchNumbers;
       _filteredBatches = _allBatches.where((batch) {
         // Search filter
         final searchQuery = _searchController.text.toLowerCase();
@@ -95,9 +174,24 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
           case 'active':
             return batch.quantity > 0 && !batch.isExpired;
           case 'expired':
-            return batch.isExpired;
+            return batch.isExpired ||
+                expiredBatchNumbers.contains(batch.batchNumber);
           case 'low_stock':
-            return batch.quantity > 0 && batch.quantity <= 10;
+            final quantity = batch.quantity.toDouble();
+            final matchesNotification = lowStockBatchIds.contains(batch.id) ||
+                lowStockBatchNumbers.contains(batch.batchNumber);
+
+            if (quantity <= 0) {
+              return false;
+            }
+
+            if (matchesNotification) {
+              return true;
+            }
+
+            return quantity <= thresholdBase;
+          case 'expiring':
+            return isExpiringSoon(batch) && !batch.isExpired;
           case 'out_of_stock':
             return batch.quantity <= 0;
           default:
@@ -105,8 +199,21 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
         }
       }).toList();
 
-      // Sort by received date (newest first)
-      _filteredBatches.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+      if (_selectedFilter == 'expiring' || _selectedFilter == 'expired') {
+        _filteredBatches.sort((a, b) {
+          final da = expiryDaysMap[a.batchNumber] ??
+              (a.expiryDate != null
+                  ? a.expiryDate!.difference(now).inDays
+                  : 9999);
+          final db = expiryDaysMap[b.batchNumber] ??
+              (b.expiryDate != null
+                  ? b.expiryDate!.difference(now).inDays
+                  : 9999);
+          return da.compareTo(db);
+        });
+      } else {
+        _filteredBatches.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+      }
     });
   }
 
@@ -194,6 +301,8 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
                 const SizedBox(width: 8),
                 _buildFilterChip('low_stock', 'Sắp hết', Icons.warning),
                 const SizedBox(width: 8),
+                _buildFilterChip('expiring', 'Sắp hết hạn', Icons.timer_outlined),
+                const SizedBox(width: 8),
                 _buildFilterChip('out_of_stock', 'Hết hàng', Icons.error),
                 const SizedBox(width: 8),
                 _buildFilterChip('expired', 'Hết hạn', Icons.event_busy),
@@ -224,7 +333,8 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
       onSelected: (selected) {
         setState(() {
           _selectedFilter = value;
-          _applyFilters();
+          final np = context.read<NotificationProvider>();
+          _applyFilters(np);
         });
       },
       selectedColor: Colors.green,
@@ -243,7 +353,6 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
     final totalStock = _allBatches.fold<int>(0, (sum, batch) => sum + batch.quantity);
     final totalStockLabel = _formatQuantity(totalStock.toDouble());
     final filteredCount = _filteredBatches.length;
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
@@ -252,25 +361,30 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.green[200]!),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: _buildStatItem('Tổng lô', '$totalBatches', Icons.inventory_2),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatItem('Tổng lô', '$totalBatches', Icons.inventory_2),
+              ),
+              _buildStatDivider(),
+              Expanded(
+                child: _buildStatItem('Còn hàng', '$activeBatches', Icons.check_circle),
+              ),
+              _buildStatDivider(),
+              Expanded(
+                child: _buildStatItem('Tổng tồn kho', totalStockLabel, Icons.warehouse),
+              ),
+              if (filteredCount != totalBatches) ...[
+                _buildStatDivider(),
+                Expanded(
+                  child: _buildStatItem('Lọc', '$filteredCount', Icons.filter_list),
+                ),
+              ],
+            ],
           ),
-          _buildStatDivider(),
-          Expanded(
-            child: _buildStatItem('Còn hàng', '$activeBatches', Icons.check_circle),
-          ),
-          _buildStatDivider(),
-          Expanded(
-            child: _buildStatItem('Tổng tồn kho', totalStockLabel, Icons.warehouse),
-          ),
-          if (filteredCount != totalBatches) ...[
-            _buildStatDivider(),
-            Expanded(
-              child: _buildStatItem('Lọc', '$filteredCount', Icons.filter_list),
-            ),
-          ],
         ],
       ),
     );
@@ -325,6 +439,9 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
             showTitle: false, // Don't show title in full screen mode
             productUnits: _productUnits,
             productBaseUnit: widget.product.effectiveBaseUnit,
+            lowStockThreshold: _currentLowStockThreshold,
+            lowStockBatchIds: _lowStockBatchIds,
+            lowStockBatchNumbers: _lowStockBatchNumbers,
           );
         },
       ),
@@ -406,7 +523,8 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
                   _searchController.clear();
                   setState(() {
                     _selectedFilter = 'all';
-                    _applyFilters();
+                    final np = context.read<NotificationProvider>();
+                    _applyFilters(np);
                   });
                 },
                 icon: const Icon(Icons.clear),

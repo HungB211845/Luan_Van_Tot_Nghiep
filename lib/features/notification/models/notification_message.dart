@@ -3,6 +3,14 @@ import 'package:flutter/material.dart';
 /// Severity levels for notifications. Helps mapping to colors/icons.
 enum NotificationSeverity { info, warning, danger }
 
+/// Domain-specific topic to help UI decide navigation or grouping.
+enum NotificationTopic {
+  general,
+  productLowStock,
+  batchLowStock,
+  batchExpiry,
+}
+
 /// Lightweight domain model representing a notification entry.
 class NotificationMessage {
   final String id;
@@ -10,8 +18,12 @@ class NotificationMessage {
   final String body;
   final DateTime createdAt;
   final NotificationSeverity severity;
+  final NotificationTopic topic;
   final bool isRead;
   final int? expiryDays;
+  final String? batchId;
+  final String? productId;
+  final String? batchNumber;
 
   const NotificationMessage({
     required this.id,
@@ -19,8 +31,12 @@ class NotificationMessage {
     required this.body,
     required this.createdAt,
     this.severity = NotificationSeverity.info,
+    this.topic = NotificationTopic.general,
     this.isRead = false,
     this.expiryDays,
+    this.batchId,
+    this.productId,
+    this.batchNumber,
   });
 
   NotificationMessage copyWith({
@@ -29,8 +45,12 @@ class NotificationMessage {
     String? body,
     DateTime? createdAt,
     NotificationSeverity? severity,
+    NotificationTopic? topic,
     bool? isRead,
     int? expiryDays,
+    String? batchId,
+    String? productId,
+    String? batchNumber,
   }) {
     return NotificationMessage(
       id: id ?? this.id,
@@ -38,8 +58,12 @@ class NotificationMessage {
       body: body ?? this.body,
       createdAt: createdAt ?? this.createdAt,
       severity: severity ?? this.severity,
+      topic: topic ?? this.topic,
       isRead: isRead ?? this.isRead,
       expiryDays: expiryDays ?? this.expiryDays,
+      batchId: batchId ?? this.batchId,
+      productId: productId ?? this.productId,
+      batchNumber: batchNumber ?? this.batchNumber,
     );
   }
 
