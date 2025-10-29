@@ -406,6 +406,11 @@ class ProductService extends BaseService {
                 orderField,
                 ascending: paginationParams.ascending,
               )
+              .order(
+                'expiry_date',
+                ascending: true,
+                nullsFirst: false,
+              )
               .range(
                 paginationParams.offset,
                 paginationParams.offset + paginationParams.pageSize - 1,
@@ -642,7 +647,9 @@ class ProductService extends BaseService {
             .select('*')
             .eq('product_id', productId)
             .eq('is_available', true),
-      ).order('received_date', ascending: true); // FIFO order
+      )
+          .order('received_date', ascending: true)
+          .order('expiry_date', ascending: true, nullsFirst: false); // FIFO order with expiry tie-breaker
 
       return (response as List)
           .map((json) => ProductBatch.fromJson(json))

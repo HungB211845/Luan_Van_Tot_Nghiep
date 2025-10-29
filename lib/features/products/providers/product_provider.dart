@@ -178,7 +178,19 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   int _compareBatches(ProductBatch a, ProductBatch b) {
     final dateCompare = a.receivedDate.compareTo(b.receivedDate);
     if (dateCompare != 0) return dateCompare;
-    return a.createdAt.compareTo(b.createdAt);
+    final expiryA = a.expiryDate;
+    final expiryB = b.expiryDate;
+    if (expiryA != null && expiryB != null) {
+      final expiryCompare = expiryA.compareTo(expiryB);
+      if (expiryCompare != 0) return expiryCompare;
+    } else if (expiryA == null && expiryB != null) {
+      return 1; // No expiry goes after dated batches
+    } else if (expiryA != null && expiryB == null) {
+      return -1;
+    }
+    final createdCompare = a.createdAt.compareTo(b.createdAt);
+    if (createdCompare != 0) return createdCompare;
+    return a.id.compareTo(b.id);
   }
 
   List<ProductBatch> _sortBatchesFifo(Iterable<ProductBatch> batches) {
