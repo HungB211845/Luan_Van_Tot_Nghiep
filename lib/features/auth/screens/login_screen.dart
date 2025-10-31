@@ -151,10 +151,30 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     
-    // 🎯 SỬ DỤNG RESPONSIVE AUTH WRAPPER
-    return ResponsiveAuthScaffold(
-      title: 'Đăng nhập',
-      child: _buildLoginForm(auth),
+    // 🎯 SỬ DỤNG RESPONSIVE AUTH WRAPPER + chặn back
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.of(context).pushReplacementNamed(RouteNames.storeCode);
+        return false;
+      },
+      child: Stack(
+        children: [
+          ResponsiveAuthScaffold(
+            title: 'Đăng nhập',
+            child: _buildLoginForm(auth),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.green, size: 28),
+              onPressed: () {
+                Navigator.of(context).pushReplacementNamed(RouteNames.storeCode);
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -279,41 +299,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         tablet: const Spacer(flex: 3),
                         desktop: const SizedBox(height: 60),
                       ),
-                      if (!context.isDesktop) ...[
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
-                          child: Text('Quên mật khẩu?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text('Chưa có tài khoản?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pushNamed(RouteNames.signupStep1),
-                              child: Text('Tạo cửa hàng mới', style: GoogleFonts.inter(color: Colors.green.withOpacity(0.9), fontWeight: FontWeight.w600)),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: context.cardSpacing * 2),
-                      ],
-                      if (context.isDesktop) ...[
-                        const SizedBox(height: 24),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
-                              child: Text('Quên mật khẩu?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
-                            ),
-                            const Text(' • '),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pushNamed(RouteNames.signupStep1),
-                              child: Text('Tạo cửa hàng mới', style: GoogleFonts.inter(color: Colors.green.withOpacity(0.9), fontWeight: FontWeight.w600)),
-                            ),
-                          ],
-                        ),
-                      ],
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pushNamed(RouteNames.forgotPassword),
+                        child: Text('Quên mật khẩu?', style: GoogleFonts.inter(color: secondaryTextColor, fontWeight: regularWeight)),
+                      ),
                     ],
                   ),
                 ),
