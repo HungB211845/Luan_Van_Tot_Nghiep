@@ -677,6 +677,7 @@ DECLARE
   new_batch_number TEXT;
   user_store_id UUID;
   total_received_quantity INTEGER := 0;
+  new_expiry_date DATE;
 BEGIN
   -- 1. Get current user's store_id for security
   SELECT store_id INTO user_store_id
@@ -721,10 +722,13 @@ BEGIN
                        FROM public.products WHERE id = item_record.product_id) || '-' ||
                       to_char(CURRENT_DATE, 'YYMMDD');
 
+    -- Determine default expiry date (2 years from received date when not provided)
+    new_expiry_date := (COALESCE(po_record.delivery_date::date, CURRENT_DATE) + INTERVAL '2 years')::date;
+
     -- Create product batch
     INSERT INTO public.product_batches (
       product_id, batch_number, quantity, cost_price,
-      received_date, purchase_order_id, supplier_id, store_id,
+      received_date, expiry_date, purchase_order_id, supplier_id, store_id,
       notes, is_available, is_deleted
     ) VALUES (
       item_record.product_id,
@@ -732,6 +736,7 @@ BEGIN
       item_record.quantity - item_record.received_quantity,
       item_record.unit_cost,
       COALESCE(po_record.delivery_date::date, CURRENT_DATE),
+      new_expiry_date,
       po_id,
       po_record.supplier_id,
       user_store_id,
@@ -2802,5 +2807,4 @@ BEGIN
   END IF;
 END;
 $function$;
-
 

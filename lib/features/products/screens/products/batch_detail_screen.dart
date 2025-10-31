@@ -54,56 +54,62 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   Widget build(BuildContext context) {
     final batch = _batchOverride ?? widget.batch;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          batch.batchNumber,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.of(context).pop(_batchOverride);
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            batch.batchNumber,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit, size: 24),
-            onPressed: () async {
-              final updated = await Navigator.of(context).push<ProductBatch>(
-                MaterialPageRoute(
-                  builder: (context) => EditBatchScreen(batch: batch),
-                ),
-              );
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit, size: 24),
+              onPressed: () async {
+                final updated = await Navigator.of(context).push<ProductBatch>(
+                  MaterialPageRoute(
+                    builder: (context) => EditBatchScreen(batch: batch),
+                  ),
+                );
 
-              if (!mounted || updated == null) return;
+                if (!mounted || updated == null) return;
 
-              setState(() {
-                _batchOverride = updated;
-              });
+                setState(() {
+                  _batchOverride = updated;
+                });
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Cập nhật lô hàng thành công'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            tooltip: 'Chỉnh sửa lô hàng',
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildInfoSection(context, batch),
-            const SizedBox(height: 16),
-            if (_shouldShowOrigin(batch)) ...[
-              _buildOriginSection(context, batch),
-              const SizedBox(height: 16),
-            ],
-            _buildStatusSection(context, batch),
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Cập nhật lô hàng thành công'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+              tooltip: 'Chỉnh sửa lô hàng',
+            ),
           ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _buildInfoSection(context, batch),
+              const SizedBox(height: 16),
+              if (_shouldShowOrigin(batch)) ...[
+                _buildOriginSection(context, batch),
+                const SizedBox(height: 16),
+              ],
+              _buildStatusSection(context, batch),
+            ],
+          ),
         ),
       ),
     );

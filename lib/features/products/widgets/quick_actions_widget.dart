@@ -117,6 +117,7 @@ class QuickActionsWidget extends StatelessWidget {
   }
 
   void _createPurchaseOrder(BuildContext context) {
+    context.read<ProductProvider>().preparePurchaseOrderPrefill(product);
     Navigator.of(context, rootNavigator: true).pushNamed(
       RouteNames.createPurchaseOrder,
       arguments: {

@@ -727,6 +727,7 @@ class ProductService extends BaseService {
     try {
       ensureAuthenticated();
       final payload = batch.toJson();
+      debugPrint('[ProductService] updateProductBatch payload: $payload');
 
       final response = await _supabase
           .from('product_batches')
@@ -735,7 +736,12 @@ class ProductService extends BaseService {
           .eq('store_id', currentStoreId!)
           .select()
           .single();
-      return ProductBatch.fromJson(response);
+      final updated = ProductBatch.fromJson(response);
+      debugPrint(
+        '[ProductService] updateProductBatch response: '
+        'id=${updated.id}, quantity=${updated.quantity}, cost=${updated.costPrice}',
+      );
+      return updated;
     } catch (e) {
       throw Exception('Lỗi cập nhật lô hàng: $e');
     }
@@ -1027,6 +1033,10 @@ class ProductService extends BaseService {
     try {
       ensureAuthenticated();
 
+      final receivedDate = DateTime.now();
+      final computedExpiry =
+          expiryDate ?? _calculateDefaultExpiryDate(receivedDate);
+
       // Call the RPC which now also handles recalculating unit prices
       await updateCurrentSellingPrice(
         productId,
@@ -1053,8 +1063,8 @@ class ProductService extends BaseService {
         'batch_number': finalBatchNumber,
         'quantity': baseQuantity,
         'cost_price': costPrice,
-        'received_date': DateTime.now().toIso8601String(),
-        'expiry_date': expiryDate?.toIso8601String(),
+        'received_date': receivedDate.toIso8601String(),
+        'expiry_date': computedExpiry.toIso8601String().split('T')[0],
         'notes': unitId != null 
             ? 'Quick Add: $quantity units -> $baseQuantity base units' 
             : 'Quick Add: $quantity units (no conversion)',
@@ -1080,6 +1090,17 @@ class ProductService extends BaseService {
   String _generateBatchNumber() {
     final now = DateTime.now();
     return 'BATCH-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(8)}';
+  }
+
+  DateTime _calculateDefaultExpiryDate(DateTime receivedDate) {
+    final targetYear = receivedDate.year + 2;
+    final targetMonth = receivedDate.month;
+    final targetDay = receivedDate.day;
+    final lastDayOfTargetMonth =
+        DateTime(targetYear, targetMonth + 1, 0).day;
+    final safeDay =
+        targetDay > lastDayOfTargetMonth ? lastDayOfTargetMonth : targetDay;
+    return DateTime(targetYear, targetMonth, safeDay);
   }
 
   /// Update product stock from batches (fallback method)

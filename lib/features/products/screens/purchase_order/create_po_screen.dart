@@ -33,6 +33,7 @@ class CreatePurchaseOrderScreen extends StatefulWidget {
 class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   final _notesController = TextEditingController();
   bool _isCreatingPO = false; // Add this line
+  bool _prefillHandled = false;
 
   @override
   void initState() {
@@ -44,6 +45,34 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         poProvider.clearPOCart();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_prefillHandled) {
+      return;
+    }
+
+    final productProvider = context.read<ProductProvider>();
+    final prefill = productProvider.consumePurchaseOrderPrefill();
+    if (prefill != null) {
+      final poProvider = context.read<PurchaseOrderProvider>();
+      final productSnapshot = prefill.productSnapshot;
+      final supplierId = prefill.supplierId;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        poProvider.clearPOCart();
+        poProvider.setSupplierForCart(supplierId);
+        poProvider.addToPOCart(
+          productSnapshot,
+          unit: productSnapshot.unit,
+          sellingPrice: productSnapshot.currentSellingPrice,
+        );
+      });
+    }
+
+    _prefillHandled = true;
   }
 
   @override
@@ -144,6 +173,13 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           orElse: () => units.first,
         );
 
+        bool _shouldAllowPricingToggle(
+          ProductUnit chosen,
+          ProductUnit defaultUnit,
+        ) {
+          return chosen.conversionFactor > defaultUnit.conversionFactor;
+        }
+
         final bool metadataMissing =
             item.unitId == null ||
             item.defaultUnitId == null ||
@@ -163,6 +199,12 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
               newDefaultUnitName: defaultSellingUnit.unitName,
               newSelectedUnitFactor: unitToApply.conversionFactor,
               newDefaultUnitFactor: defaultSellingUnit.conversionFactor,
+              newAllowsPricingToggle:
+                  _shouldAllowPricingToggle(unitToApply, defaultSellingUnit),
+              newPricingSelection:
+                  _shouldAllowPricingToggle(unitToApply, defaultSellingUnit)
+                      ? PricingUnitSelection.container
+                      : PricingUnitSelection.base,
             );
           });
         }
@@ -200,6 +242,12 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
               newDefaultUnitName: defaultSellingUnit.unitName,
               newSelectedUnitFactor: selectedUnit.conversionFactor,
               newDefaultUnitFactor: defaultSellingUnit.conversionFactor,
+              newAllowsPricingToggle:
+                  _shouldAllowPricingToggle(selectedUnit, defaultSellingUnit),
+              newPricingSelection:
+                  _shouldAllowPricingToggle(selectedUnit, defaultSellingUnit)
+                      ? PricingUnitSelection.container
+                      : PricingUnitSelection.base,
             );
           },
         );

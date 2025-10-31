@@ -25,6 +25,18 @@ import '../models/bulk_product_entry.dart';
 
 enum ProductStatus { idle, loading, success, error }
 
+class PurchaseOrderPrefill {
+  final String productId;
+  final Product productSnapshot;
+  final String supplierId;
+
+  const PurchaseOrderPrefill({
+    required this.productId,
+    required this.productSnapshot,
+    required this.supplierId,
+  });
+}
+
 class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   final ProductService _productService = ProductService();
   final CachedProductService _cachedService = CachedProductService();
@@ -80,6 +92,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   // Shopping Cart (for POS)
   List<CartItem> _cartItems = [];
   double _cartTotal = 0.0;
+
+  PurchaseOrderPrefill? _pendingPurchaseOrderPrefill;
 
   // Status & Error
   ProductStatus _status = ProductStatus.idle;
@@ -161,6 +175,33 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   List<TransactionItemDetails> get activeTransactionItems =>
       _activeTransactionItems;
   // ============================
+
+  PurchaseOrderPrefill? get pendingPurchaseOrderPrefill =>
+      _pendingPurchaseOrderPrefill;
+
+  void preparePurchaseOrderPrefill(Product product) {
+    final supplierId = product.companyId;
+    if (supplierId == null || supplierId.isEmpty) {
+      _pendingPurchaseOrderPrefill = null;
+      return;
+    }
+
+    _pendingPurchaseOrderPrefill = PurchaseOrderPrefill(
+      productId: product.id,
+      productSnapshot: product,
+      supplierId: supplierId,
+    );
+  }
+
+  PurchaseOrderPrefill? consumePurchaseOrderPrefill() {
+    if (_pendingPurchaseOrderPrefill == null) {
+      return null;
+    }
+
+    final result = _pendingPurchaseOrderPrefill;
+    _pendingPurchaseOrderPrefill = null;
+    return result;
+  }
 
   // Pagination getters
   PaginatedResult<Product>? get paginatedProducts => _paginatedProducts;
@@ -892,9 +933,16 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   Future<ProductBatch?> updateProductBatch(ProductBatch batch) async {
     _setStatus(ProductStatus.loading);
     try {
+      debugPrint(
+        '[ProductProvider] updateProductBatch -> id=${batch.id} '
+        'quantity=${batch.quantity} cost=${batch.costPrice}',
+      );
       final updatedBatch = await _productService.updateProductBatch(batch);
+      debugPrint(
+        '[ProductProvider] updateProductBatch result -> '
+        'id=${updatedBatch.id} quantity=${updatedBatch.quantity} cost=${updatedBatch.costPrice}',
+      );
       _upsertProductBatch(updatedBatch);
-
 
       await _updateProductStock(batch.productId);
       _setStatus(ProductStatus.success);

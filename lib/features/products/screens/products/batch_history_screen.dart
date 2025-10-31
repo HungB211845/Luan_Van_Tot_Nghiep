@@ -190,7 +190,8 @@ class _BatchHistoryScreenState extends State<BatchHistoryScreen> {
       body: Consumer3<ProductProvider, CompanyProvider, NotificationProvider>(
         builder: (context, productProvider, companyProvider, notificationProvider, child) {
           final fifoBatches = productProvider.fifoBatches;
-          if (productProvider.isLoading && fifoBatches.isEmpty) {
+          final isLoading = productProvider.status == ProductStatus.loading;
+          if (isLoading && fifoBatches.isEmpty) {
             return const Center(child: LoadingWidget());
           }
 

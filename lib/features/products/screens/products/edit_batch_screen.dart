@@ -822,32 +822,16 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
     if (raw == null) return null;
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return null;
-    final sanitized =
-        trimmed.replaceAll(RegExp(r'[đ₫\s]', caseSensitive: false), '');
+    var sanitized = trimmed
+        .replaceAll('\u00A0', '') // Non-breaking space
+        .replaceAll(RegExp(r'[đ₫\s]', caseSensitive: false), '');
     if (sanitized.isEmpty) return null;
 
     if (sanitized.contains(',')) {
-      final normalized = sanitized.replaceAll('.', '').replaceAll(',', '.');
-      return double.tryParse(normalized);
+      sanitized = sanitized.replaceAll('.', '').replaceAll(',', '.');
+    } else {
+      sanitized = sanitized.replaceAll('.', '');
     }
-
-    final dotMatches = RegExp(r'\.').allMatches(sanitized).length;
-    if (dotMatches == 1) {
-      final dotIndex = sanitized.indexOf('.');
-      final decimalsCount = sanitized.length - dotIndex - 1;
-      if (decimalsCount > 0 && decimalsCount <= 2) {
-        final parsed = double.tryParse(sanitized);
-        if (parsed != null) {
-          return parsed;
-        }
-      }
-    }
-
-    if (dotMatches > 0) {
-      final normalized = sanitized.replaceAll('.', '');
-      return double.tryParse(normalized);
-    }
-
     return double.tryParse(sanitized);
   }
 
@@ -861,18 +845,13 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final quantityInput =
-          _parseDecimal(_quantityController.text.trim()) ?? 0;
-      final costInput = _parseDecimal(_costPriceController.text.trim()) ?? 0;
+      debugPrint(
+        '[EditBatchScreen] rawCost="${_costPriceController.text.trim()}" '
+        'baseCost=$_baseCostPrice baseQty=$_baseQuantity factor=$_factor mode=$_mode',
+      );
 
-      final double baseQuantity =
-          (_mode == _UnitMode.container && _hasContainerOption)
-              ? quantityInput * _factor
-              : quantityInput;
-      final double baseCost =
-          (_mode == _UnitMode.container && _hasContainerOption)
-              ? (costInput / (_factor == 0 ? 1 : _factor))
-              : costInput;
+      final double baseQuantity = _baseQuantity;
+      final double baseCost = _baseCostPrice;
 
       final provider = context.read<ProductProvider>();
       final updatedBatch = widget.batch.copyWith(
@@ -883,6 +862,11 @@ class _EditBatchScreenState extends State<EditBatchScreen> {
         expiryDate: _expiryDate,
         supplierBatchId: _supplierBatchIdController.text.trim(),
         notes: _notesController.text.trim(),
+      );
+
+      debugPrint(
+        '[EditBatchScreen] Updating batch ${updatedBatch.id} '
+        'qty=$baseQuantity baseCost=$baseCost received=$_receivedDate expiry=$_expiryDate',
       );
 
       final result = await provider.updateProductBatch(updatedBatch);
