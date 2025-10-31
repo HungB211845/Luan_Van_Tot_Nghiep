@@ -1044,8 +1044,9 @@ class ProductService extends BaseService {
         reason: 'Price updated via Quick Add Batch',
       );
 
-      // Convert quantity to base unit if unitId is provided
+      // Convert quantity and cost price to base unit if unitId is provided
       int baseQuantity = quantity;
+      double baseCostPrice = costPrice;
       if (unitId != null) {
         final unitService = ProductUnitService();
         final units = await unitService.getProductUnits(productId);
@@ -1053,7 +1054,14 @@ class ProductService extends BaseService {
           (u) => u.id == unitId,
           orElse: () => units.firstWhere((u) => u.isDefaultSellingUnit),
         );
-        baseQuantity = (quantity * selectedUnit.conversionFactor).toInt();
+        final factor = selectedUnit.conversionFactor;
+        if (factor > 0) {
+          baseQuantity = (quantity * factor).toInt();
+          baseCostPrice = costPrice / factor;
+        } else {
+          baseQuantity = quantity;
+          baseCostPrice = costPrice;
+        }
       }
 
       // Create the new batch
@@ -1062,7 +1070,7 @@ class ProductService extends BaseService {
         'product_id': productId,
         'batch_number': finalBatchNumber,
         'quantity': baseQuantity,
-        'cost_price': costPrice,
+        'cost_price': baseCostPrice,
         'received_date': receivedDate.toIso8601String(),
         'expiry_date': computedExpiry.toIso8601String().split('T')[0],
         'notes': unitId != null 
