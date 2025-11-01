@@ -9,6 +9,7 @@ import '../../models/payment_method.dart';
 import '../../models/transaction.dart';
 import '../../providers/transaction_provider.dart';
 import '../../../../shared/utils/formatter.dart';
+import '../../../../shared/utils/responsive.dart';
 import '../../../../shared/widgets/loading_widget.dart';
 import '../../../../shared/widgets/agri_bottom_nav_wrapper.dart';
 import '../../../../core/routing/route_names.dart';
@@ -83,49 +84,49 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    
-    if (isDesktop) {
-      return _buildDesktopLayout();
+    return context.adaptiveWidget(
+      mobile: _buildMobileTabletLayout(context, enableBackGesture: true),
+      tablet: _buildMobileTabletLayout(context, enableBackGesture: true),
+      desktop: _buildDesktopLayout(),
+    );
+  }
+
+  Widget _buildMobileTabletLayout(BuildContext context, {required bool enableBackGesture}) {
+    final scaffold = ResponsiveScaffold(
+      title: 'Lịch Sử Giao Dịch',
+      showBackButton: false,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.filter_list),
+          onPressed: () => _showFilterSheet(context),
+        ),
+      ],
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          _buildQuickChips(),
+          Expanded(child: _buildTransactionList(isMasterDetail: false)),
+        ],
+      ),
+    );
+
+    if (!enableBackGesture) {
+      return scaffold;
     }
-    
+
     return GestureDetector(
-      // Add swipe gesture for iOS-style back navigation
-      onHorizontalDragEnd: (DragEndDetails details) {
+      onHorizontalDragEnd: (details) {
         if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
-          // Swipe right detected, navigate back
           Navigator.of(context).pop();
         }
       },
-      // Add tap-to-scroll-to-top for status bar area (iOS behavior)
-      onTapUp: (TapUpDetails details) {
+      onTapUp: (details) {
         final statusBarHeight = MediaQuery.of(context).padding.top;
         if (details.globalPosition.dy <= statusBarHeight) {
           _scrollToTop();
         }
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Lịch Sử Giao Dịch'),
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-          centerTitle: true,
-          automaticallyImplyLeading: false,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.filter_list),
-              onPressed: () => _showFilterSheet(context),
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            _buildSearchBar(),
-            _buildQuickChips(),
-            Expanded(child: _buildTransactionList(isMasterDetail: false)),
-          ],
-        ),
-      ),
+      child: scaffold,
     );
   }
 
@@ -329,6 +330,9 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
           onRefresh: provider.refresh,
           child: ListView.builder(
             controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             padding: const EdgeInsets.all(16),
             itemCount: dateKeys.length + (provider.hasMore ? 1 : 0),
             itemBuilder: (context, index) {
