@@ -462,11 +462,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return context.adaptiveWidget(
-      mobile: _buildMobileLayout(),
-      tablet: _buildDesktopLayout(), // Tablet uses desktop layout
-      desktop: _buildDesktopLayout(),
-    );
+    final responsive = context.responsive;
+    final bool useMasterDetailLayout =
+        responsive.isDesktop || (responsive.isTablet && responsive.isLandscape);
+
+    return useMasterDetailLayout ? _buildDesktopLayout() : _buildMobileLayout();
   }
 
   Widget _buildMobileLayout() {
