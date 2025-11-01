@@ -1058,9 +1058,8 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   Future<void> loadAlerts() async {
     try {
       _expiringBatches = await _productService.getExpiringBatches();
-      // TEMPORARY FIX: Skip low stock products to avoid view error
-      // _lowStockProducts = await _productService.getLowStockProducts();
-      _lowStockProducts = []; // Empty list for now
+      _lowStockProducts = await _productService.getLowStockProducts();
+      _clearError();
       notifyListeners();
     } catch (e) {
       _setError(e.toString());

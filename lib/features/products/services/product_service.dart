@@ -859,17 +859,17 @@ class ProductService extends BaseService {
 
       // Try using view first, fallback to manual query if view doesn't exist
       try {
-        final response =
-            await addStoreFilter(
-              _supabase.from('low_stock_products').select('*'),
-            ).order(
-              'current_stock',
-              ascending: true,
-            ); // FIXED: Use current_stock instead of available_stock
-        return List<Map<String, dynamic>>.from(response);
+        final response = await addStoreFilter(
+          _supabase.from('low_stock_products').select('*'),
+        ).order(
+          'current_stock',
+          ascending: true,
+        );
+
+        return _normalizeLowStockRows(response);
       } catch (viewError) {
         // Fallback: manual query if view doesn't exist or lacks store_id
-        print(
+        debugPrint(
           'View low_stock_products not available, using fallback query: $viewError',
         );
         return await _getLowStockProductsFallback();
@@ -905,13 +905,21 @@ class ProductService extends BaseService {
             .map(
               (p) => {
                 'id': p['id'],
+                'store_id': p['store_id'] ?? currentStoreId,
                 'name': p['name'],
                 'sku': p['sku'],
                 'category': p['category'],
-                'min_stock_level': p['min_stock_level'],
-                'current_stock': p['available_stock'],
+                'min_stock_level':
+                    (p['min_stock_level'] as num?)?.toDouble() ?? 0.0,
+                'current_stock':
+                    (p['available_stock'] as num?)?.toDouble() ?? 0.0,
+                'available_stock':
+                    (p['available_stock'] as num?)?.toDouble() ?? 0.0,
                 'company_name': p['company_name'],
                 'is_active': p['is_active'],
+                'current_selling_price':
+                    (p['current_selling_price'] as num?)?.toDouble(),
+                'base_unit': p['base_unit'],
               },
             )
             .toList();
@@ -924,6 +932,46 @@ class ProductService extends BaseService {
       print('Low stock products fallback outer error: $e');
       return [];
     }
+  }
+
+  List<Map<String, dynamic>> _normalizeLowStockRows(dynamic response) {
+    if (response is! List) {
+      return const [];
+    }
+
+    return response.map<Map<String, dynamic>>((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final currentStockRaw =
+          map['current_stock'] ?? map['available_stock'] ?? 0;
+      final minStockRaw = map['min_stock_level'] ?? 0;
+
+      return {
+        'id': map['id'],
+        'store_id': map['store_id'] ?? currentStoreId,
+        'name': map['name'],
+        'sku': map['sku'],
+        'category': map['category'],
+        'min_stock_level': (minStockRaw is num)
+            ? minStockRaw.toDouble()
+            : double.tryParse(minStockRaw.toString()) ?? 0.0,
+        'current_stock': (currentStockRaw is num)
+            ? currentStockRaw.toDouble()
+            : double.tryParse(currentStockRaw.toString()) ?? 0.0,
+        'available_stock': (currentStockRaw is num)
+            ? currentStockRaw.toDouble()
+            : double.tryParse(currentStockRaw.toString()) ?? 0.0,
+        'company_name': map['company_name'],
+        'is_active': map['is_active'],
+        'current_selling_price':
+            (map['current_selling_price'] is num)
+                ? (map['current_selling_price'] as num).toDouble()
+                : double.tryParse(
+                    map['current_selling_price']?.toString() ?? '',
+                  ),
+        'base_unit': map['base_unit'],
+        'updated_at': map['updated_at'],
+      };
+    }).toList();
   }
 
   // =====================================================
