@@ -34,6 +34,7 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
 
   bool _isAutoFilled = false;
   double _defaultVatRate = 0.0; // VAT rate 0-10%
+  double _revenueTaxRate = 1.5; // Revenue tax (%) default 1.5
 
   @override
   void initState() {
@@ -84,6 +85,7 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
       _websiteController.text = info.website ?? '';
       setState(() {
         _defaultVatRate = info.defaultVatRate;
+        _revenueTaxRate = info.revenueTaxRate;
       });
     }
   }
@@ -165,6 +167,7 @@ class _EditStoreInfoScreenState extends State<EditStoreInfoScreen> {
       bankBranch: _bankBranchController.text.trim().isNotEmpty ? _bankBranchController.text.trim() : null,
       website: _websiteController.text.trim().isNotEmpty ? _websiteController.text.trim() : null,
       defaultVatRate: _defaultVatRate,
+      revenueTaxRate: _revenueTaxRate,
       logoUrl: provider.storeBusinessInfo?.logoUrl, // Preserve existing logo
     );
 

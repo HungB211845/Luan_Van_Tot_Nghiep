@@ -76,6 +76,32 @@ class StoreBusinessInfoProvider extends ChangeNotifier {
     }
   }
 
+  /// Update revenue tax rate without triggering full form save
+  Future<bool> updateRevenueTaxRate(double rate) async {
+    if (_storeBusinessInfo == null) {
+      _errorMessage = 'Vui lòng hoàn tất thông tin hộ kinh doanh trước';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      _errorMessage = null;
+      final updated = _storeBusinessInfo!.copyWith(
+        revenueTaxRate: rate,
+        updatedAt: DateTime.now(),
+      );
+
+      _storeBusinessInfo = await _service.createOrUpdateStoreBusinessInfo(updated);
+      _errorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Validate tax code format (client-side)
   ///
   /// Returns error message if invalid, null if valid

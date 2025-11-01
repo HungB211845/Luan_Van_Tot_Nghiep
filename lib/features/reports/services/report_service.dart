@@ -236,10 +236,18 @@ class ReportService {
             .gte('delivery_date', startDate.toIso8601String())
             .lte('delivery_date', endDate.toIso8601String())
             .order('delivery_date', ascending: false),
+
+        // Query 3: Store tax configuration
+        _supabase
+            .from('store_business_info')
+            .select('revenue_tax_rate')
+            .eq('store_id', storeId)
+            .maybeSingle(),
       ]);
 
       final transactionsResponse = futures[0] as List<dynamic>;
       final purchaseOrdersResponse = futures[1] as List<dynamic>;
+      final storeInfoResponse = futures[2] as Map<String, dynamic>?;
 
       // Fast aggregation using reduce
       double totalRevenue = 0;
@@ -259,13 +267,16 @@ class ReportService {
       }
 
       final transactionCount = transactionsResponse.length;
-      final estimatedTax = totalRevenue * 0.015;
+      final revenueTaxRate =
+          (storeInfoResponse?['revenue_tax_rate'] as num?)?.toDouble() ?? 1.5;
+      final estimatedTax = totalRevenue * (revenueTaxRate / 100);
 
       final result = TaxSummary(
         totalRevenue: totalRevenue,
         estimatedTax: estimatedTax,
         totalExpenses: totalExpenses,
         totalTransactions: transactionCount,
+        taxRate: revenueTaxRate,
       );
 
       // Cache the result for 30 seconds
@@ -435,3 +446,4 @@ class ReportService {
     }
   }
 }
+

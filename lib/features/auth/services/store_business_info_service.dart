@@ -63,9 +63,16 @@ class StoreBusinessInfoService extends BaseService {
         'email': info.email,
         'bank_account': info.bankAccount,
         'bank_name': info.bankName,
+        'bank_branch': info.bankBranch,
         'legal_representative': info.legalRepresentative,
         'validated_at': info.validatedAt?.toIso8601String(),
         'validation_source': info.validationSource,
+        'invoice_symbol': info.invoiceSymbol,
+        'invoice_template_code': info.invoiceTemplateCode,
+        'default_vat_rate': info.defaultVatRate,
+        'revenue_tax_rate': info.revenueTaxRate,
+        'website': info.website,
+        'logo_url': info.logoUrl,
       };
 
       final Map<String, dynamic> response;

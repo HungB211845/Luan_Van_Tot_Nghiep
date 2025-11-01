@@ -3,12 +3,14 @@ class TaxSummary {
   final double estimatedTax;
   final double totalExpenses;
   final int totalTransactions;
+  final double taxRate;
 
   TaxSummary({
     required this.totalRevenue,
     required this.estimatedTax,
     required this.totalExpenses,
     required this.totalTransactions,
+    this.taxRate = 1.5,
   });
 
   factory TaxSummary.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,7 @@ class TaxSummary {
       estimatedTax: (json['estimated_tax'] as num?)?.toDouble() ?? 0.0,
       totalExpenses: (json['total_expenses'] as num?)?.toDouble() ?? 0.0,
       totalTransactions: json['total_transactions'] as int? ?? 0,
+      taxRate: (json['tax_rate'] as num?)?.toDouble() ?? 1.5,
     );
   }
 

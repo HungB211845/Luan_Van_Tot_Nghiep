@@ -11,6 +11,7 @@ import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/providers/permission_provider.dart';
 import '../../features/auth/providers/store_provider.dart';
 import '../../features/auth/providers/session_provider.dart';
+import '../../features/auth/providers/employee_provider.dart';
 import '../../features/auth/providers/store_business_info_provider.dart';
 import '../../features/debt/providers/debt_provider.dart';
 import '../../features/invoice/providers/invoice_provider.dart';
@@ -38,6 +39,7 @@ class AppProviders {
     ChangeNotifierProvider(create: (_) => PermissionProvider()),
     ChangeNotifierProvider(create: (_) => StoreProvider()),
     ChangeNotifierProvider(create: (_) => SessionProvider()),
+    ChangeNotifierProvider(create: (_) => EmployeeProvider()),
     ChangeNotifierProvider(
       create: (context) => PurchaseOrderProvider(
         Provider.of<ProductProvider>(context, listen: false),

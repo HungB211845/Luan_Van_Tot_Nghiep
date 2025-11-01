@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../providers/report_provider.dart';
 import '../models/inventory_analytics.dart';
+import '../models/tax_summary.dart';
 import '../../../shared/utils/formatter.dart';
 import '../../../shared/widgets/loading_widget.dart';
 import '../../../shared/utils/responsive.dart';
@@ -75,6 +76,13 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     return 'Từ $start đến $end';
   }
 
+  String _formatTaxRate(double rate) {
+    if ((rate - rate.round()).abs() < 0.0001) {
+      return '${rate.toStringAsFixed(0)}%';
+    }
+    return '${rate.toStringAsFixed(2)}%';
+  }
+
   @override
   void dispose() {
     _tabController.removeListener(_onTabChanged);
@@ -101,9 +109,8 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     );
   }
 
-  // Mobile Layout: Standard TabBar
-  Widget _buildMobileLayout(ReportProvider provider) {
-    return Column(
+  Widget _buildTabbedLayout(ReportProvider provider, {EdgeInsets? padding}) {
+    final content = Column(
       children: [
         TabBar(
           controller: _tabController,
@@ -128,54 +135,27 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
         ),
       ],
     );
+
+    if (padding != null) {
+      return Padding(
+        padding: padding,
+        child: content,
+      );
+    }
+
+    return content;
+  }
+
+  // Mobile Layout: Standard TabBar
+  Widget _buildMobileLayout(ReportProvider provider) {
+    return _buildTabbedLayout(provider);
   }
 
   // Tablet Layout: Side tabs with larger content area
   Widget _buildTabletLayout(ReportProvider provider) {
-    return Row(
-      children: [
-        // Side Navigation Panel
-        Container(
-          width: context.adaptiveValue(mobile: 200.0, tablet: 250.0, desktop: 300.0),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            border: Border(right: BorderSide(color: Colors.grey.shade300)),
-          ),
-          child: Column(
-            children: [
-              _buildTabletNavigationTile(
-                index: 0,
-                icon: Icons.trending_up,
-                title: 'Doanh Thu',
-                subtitle: 'Phân tích doanh thu',
-                provider: provider,
-              ),
-              _buildTabletNavigationTile(
-                index: 1,
-                icon: Icons.inventory,
-                title: 'Tồn Kho',
-                subtitle: 'Quản lý kho hàng',
-                provider: provider,
-              ),
-              _buildTabletNavigationTile(
-                index: 2,
-                icon: Icons.receipt_long,
-                title: 'Thuế',
-                subtitle: 'Báo cáo thuế',
-                provider: provider,
-              ),
-            ],
-          ),
-        ),
-        
-        // Content Area
-        Expanded(
-          child: Container(
-            padding: EdgeInsets.all(context.sectionPadding),
-            child: _getCurrentTabContent(provider),
-          ),
-        ),
-      ],
+    return _buildTabbedLayout(
+      provider,
+      padding: EdgeInsets.all(context.sectionPadding),
     );
   }
 
@@ -1066,7 +1046,7 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   }
 
   /// Widget 2: Tax Obligation Summary Card
-  Widget _buildTaxObligationCard(taxSummary, ReportProvider provider) {
+  Widget _buildTaxObligationCard(TaxSummary taxSummary, ReportProvider provider) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1097,9 +1077,9 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'THUẾ PHẢI NỘP (1.5%)',
-                  style: TextStyle(
+                Text(
+                  'THUẾ PHẢI NỘP (${_formatTaxRate(taxSummary.taxRate)})',
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1123,6 +1103,11 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
                 fontSize: 13,
                 color: Colors.grey.shade600,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Mức thuế khoán có thể điều chỉnh tại Cài đặt hóa đơn.',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
             ),
           ],
         ),
@@ -1351,51 +1336,6 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
       default:
         return _buildRevenueTab(provider);
     }
-  }
-
-  // Tablet Navigation Tile
-  Widget _buildTabletNavigationTile({
-    required int index,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required ReportProvider provider,
-  }) {
-    final isSelected = _tabController.index == index;
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: isSelected ? Colors.green : Colors.grey.shade600,
-          size: 24,
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.green : Colors.grey.shade800,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        selected: isSelected,
-        selectedTileColor: Colors.green.withOpacity(0.1),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        onTap: () {
-          _tabController.animateTo(index);
-          _loadDataForCurrentTab();
-        },
-      ),
-    );
   }
 
   // Desktop Navigation Tile (Enhanced)

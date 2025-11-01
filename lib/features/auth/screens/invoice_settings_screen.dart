@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -32,6 +33,11 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
   ExportFormat _selectedFormat = ExportFormat.excel;
   DateTime? _startDate;
   DateTime? _endDate;
+  double? _revenueTaxRate;
+  bool _isUpdatingRevenueTax = false;
+  bool _hasInitializedRevenueTaxRate = false;
+  double? _pendingRevenueTaxRate;
+  bool _isUserAdjustingRevenueTax = false;
 
   @override
   void initState() {
@@ -214,6 +220,16 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
 
             SizedBox(height: context.sectionPadding * 2),
 
+            _buildSectionHeader('THUẾ DOANH THU'),
+            SizedBox(height: context.cardSpacing),
+            Consumer<StoreBusinessInfoProvider>(
+              builder: (context, provider, child) {
+                return _buildRevenueTaxConfigCard(provider);
+              },
+            ),
+
+            SizedBox(height: context.sectionPadding * 2),
+
             // Section 2: Export Reports
             _buildSectionHeader('XUẤT BÁO CÁO GIAO DỊCH'),
             SizedBox(height: context.cardSpacing),
@@ -355,6 +371,88 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
     );
   }
 
+  void _syncRevenueTaxRate(StoreBusinessInfoProvider provider) {
+    final info = provider.storeBusinessInfo;
+    if (info == null) return;
+
+    if (_isUserAdjustingRevenueTax) {
+      return;
+    }
+
+    final newRate = info.revenueTaxRate;
+    final current = _revenueTaxRate;
+    final shouldSync = !_hasInitializedRevenueTaxRate ||
+        current == null ||
+        (current - newRate).abs() > 0.0001;
+
+    if (shouldSync) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _revenueTaxRate = newRate;
+          _hasInitializedRevenueTaxRate = true;
+        });
+      });
+    }
+  }
+
+  void _updateRevenueTaxState(double value) {
+    setState(() {
+      _revenueTaxRate = value;
+    });
+  }
+
+  Future<void> _handleRevenueTaxRateChange(
+    StoreBusinessInfoProvider provider,
+    double value,
+  ) async {
+    if (_isUpdatingRevenueTax) {
+      _pendingRevenueTaxRate = value;
+      _isUserAdjustingRevenueTax = false;
+      return;
+    }
+
+    final current = provider.storeBusinessInfo?.revenueTaxRate ?? 1.5;
+    if ((value - current).abs() < 0.0001) {
+      _isUserAdjustingRevenueTax = false;
+      return;
+    }
+
+    _updateRevenueTaxState(value);
+    setState(() {
+      _isUpdatingRevenueTax = true;
+    });
+
+    final success = await provider.updateRevenueTaxRate(value);
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã cập nhật thuế khoán ${value.toStringAsFixed(2)}%'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (provider.errorMessage != null) {
+      _showError(provider.errorMessage!);
+    } else {
+      _showError('Không thể cập nhật thuế khoán');
+    }
+
+    setState(() {
+      _isUpdatingRevenueTax = false;
+      _revenueTaxRate = value;
+    });
+    _isUserAdjustingRevenueTax = false;
+
+    if (_pendingRevenueTaxRate != null) {
+      final pending = _pendingRevenueTaxRate!;
+      _pendingRevenueTaxRate = null;
+      await _handleRevenueTaxRateChange(provider, pending);
+    }
+  }
+
   Widget _buildCard(List<Widget> children) {
     return Container(
       padding: EdgeInsets.all(context.sectionPadding),
@@ -368,6 +466,141 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
         children: children,
       ),
     );
+  }
+
+  Widget _buildRevenueTaxConfigCard(StoreBusinessInfoProvider provider) {
+    _syncRevenueTaxRate(provider);
+
+    if (provider.isLoading && !_hasInitializedRevenueTaxRate) {
+      return _buildCard([
+        const Center(child: CircularProgressIndicator()),
+      ]);
+    }
+
+    final info = provider.storeBusinessInfo;
+    if (info == null) {
+      return _buildCard([
+        const Icon(Icons.info_outline, size: 48, color: Colors.orange),
+        SizedBox(height: context.cardSpacing),
+        const Text(
+          'Cần cấu hình thông tin hộ kinh doanh trước',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
+        SizedBox(height: context.cardSpacing),
+        const Text(
+          'Hãy nhập MST và thông tin kinh doanh để xác định thuế khoán chính xác.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey),
+        ),
+        SizedBox(height: context.cardSpacing),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.editStoreInfo),
+          icon: const Icon(Icons.edit),
+          label: const Text('Cập nhật thông tin'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.green,
+            side: const BorderSide(color: Colors.green),
+          ),
+        ),
+      ]);
+    }
+
+    final clampedRate =
+        (_revenueTaxRate ?? info.revenueTaxRate).clamp(0.0, 5.0);
+    final displayRate = (clampedRate as num).toDouble();
+
+    final bool isiOS = Theme.of(context).platform == TargetPlatform.iOS;
+
+    Widget buildSlider({required Future<void> Function(double) onChangeEnd}) {
+      if (isiOS) {
+        return CupertinoSlider(
+          value: displayRate,
+          min: 0,
+          max: 5,
+          onChangeStart: (raw) {
+            _isUserAdjustingRevenueTax = true;
+          },
+          onChanged: (raw) {
+            final quantized = ((raw * 20).round() / 20).clamp(0.0, 5.0);
+            setState(() {
+              _revenueTaxRate = quantized;
+            });
+          },
+          onChangeEnd: (raw) async {
+            final quantized = ((raw * 20).round() / 20).clamp(0.0, 5.0);
+            await onChangeEnd(quantized);
+            _isUserAdjustingRevenueTax = false;
+          },
+        );
+      }
+
+      return Slider(
+        value: displayRate,
+        min: 0,
+        max: 5,
+        divisions: 100,
+        label: '${displayRate.toStringAsFixed(2)}%',
+        activeColor: Colors.green,
+        inactiveColor: Colors.grey.shade300,
+        onChangeStart: (value) {
+          _isUserAdjustingRevenueTax = true;
+        },
+        onChanged: (value) {
+          setState(() {
+            _revenueTaxRate = value.clamp(0.0, 5.0);
+          });
+        },
+        onChangeEnd: (value) async {
+          await onChangeEnd(value.clamp(0.0, 5.0));
+          _isUserAdjustingRevenueTax = false;
+        },
+      );
+    }
+
+    return _buildCard([
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Thuế khoán trên doanh thu',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Text(
+              '${displayRate.toStringAsFixed(2)}%',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      buildSlider(
+        onChangeEnd: (value) async {
+          await _handleRevenueTaxRateChange(provider, value);
+        },
+      ),
+      if (_isUpdatingRevenueTax)
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: LinearProgressIndicator(minHeight: 2),
+        ),
+      const SizedBox(height: 8),
+      Text(
+        'Điều chỉnh tỷ lệ thuế khoán theo thông báo mới nhất từ cơ quan thuế.',
+        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+      ),
+    ]);
   }
 
 }

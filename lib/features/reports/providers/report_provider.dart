@@ -255,6 +255,7 @@ class ReportProvider with ChangeNotifier {
         estimatedTax: 0,
         totalExpenses: 0,
         totalTransactions: 0,
+        taxRate: 1.5,
       );
     } finally {
       _isLoadingTax = false;
@@ -286,6 +287,7 @@ class ReportProvider with ChangeNotifier {
         estimatedTax: 0,
         totalExpenses: 0,
         totalTransactions: 0,
+        taxRate: 1.5,
       );
       notifyListeners(); // Notify on error
     } finally {

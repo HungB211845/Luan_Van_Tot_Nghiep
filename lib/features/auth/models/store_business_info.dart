@@ -24,6 +24,7 @@ class StoreBusinessInfo {
   final String? invoiceSymbol;           // Ký hiệu HĐDT (VD: 1C25TYY)
   final String? invoiceTemplateCode;     // Mẫu số HĐDT (VD: 01GTKT3/001)
   final double defaultVatRate;           // % VAT mặc định (0-100)
+  final double revenueTaxRate;           // % thuế khoán trên doanh thu (0-100)
   final String? website;
   final String? logoUrl;
 
@@ -51,6 +52,7 @@ class StoreBusinessInfo {
     this.invoiceSymbol,
     this.invoiceTemplateCode,
     this.defaultVatRate = 0.0,
+    this.revenueTaxRate = 1.5,
     this.website,
     this.logoUrl,
     this.validatedAt,
@@ -76,6 +78,7 @@ class StoreBusinessInfo {
       invoiceSymbol: json['invoice_symbol']?.toString(),
       invoiceTemplateCode: json['invoice_template_code']?.toString(),
       defaultVatRate: (json['default_vat_rate'] as num?)?.toDouble() ?? 0.0,
+      revenueTaxRate: (json['revenue_tax_rate'] as num?)?.toDouble() ?? 1.5,
       website: json['website']?.toString(),
       logoUrl: json['logo_url']?.toString(),
       validatedAt: json['validated_at'] != null
@@ -108,6 +111,7 @@ class StoreBusinessInfo {
       'invoice_symbol': invoiceSymbol,
       'invoice_template_code': invoiceTemplateCode,
       'default_vat_rate': defaultVatRate,
+      'revenue_tax_rate': revenueTaxRate,
       'website': website,
       'logo_url': logoUrl,
       'validated_at': validatedAt?.toIso8601String(),
@@ -133,6 +137,7 @@ class StoreBusinessInfo {
     String? invoiceSymbol,
     String? invoiceTemplateCode,
     double? defaultVatRate,
+    double? revenueTaxRate,
     String? website,
     String? logoUrl,
     DateTime? validatedAt,
@@ -156,6 +161,7 @@ class StoreBusinessInfo {
       invoiceSymbol: invoiceSymbol ?? this.invoiceSymbol,
       invoiceTemplateCode: invoiceTemplateCode ?? this.invoiceTemplateCode,
       defaultVatRate: defaultVatRate ?? this.defaultVatRate,
+      revenueTaxRate: revenueTaxRate ?? this.revenueTaxRate,
       website: website ?? this.website,
       logoUrl: logoUrl ?? this.logoUrl,
       validatedAt: validatedAt ?? this.validatedAt,
