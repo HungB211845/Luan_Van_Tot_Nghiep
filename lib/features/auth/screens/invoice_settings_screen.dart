@@ -518,6 +518,7 @@ class _InvoiceSettingsScreenState extends State<InvoiceSettingsScreen> {
           value: displayRate,
           min: 0,
           max: 5,
+          activeColor: Colors.green,
           onChangeStart: (raw) {
             _isUserAdjustingRevenueTax = true;
           },
