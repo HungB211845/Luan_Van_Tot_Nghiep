@@ -783,13 +783,27 @@ class PurchaseOrderProvider extends ChangeNotifier {
   // PO Cart Management
   void setSupplierForCart(String supplierId) {
     if (_selectedSupplierId != supplierId) {
-      _poCartItems.clear(); // Clear cart if supplier changes
+      // Store references to dispose later (after UI rebuild)
+      final itemsToDispose = List<POCartItem>.from(_poCartItems);
+      
+      // Clear cart immediately for UI
+      _poCartItems.clear();
       _selectedSupplierId = supplierId;
       _loadProductsForSupplier(); // Auto-load filtered products
+      
+      // Notify listeners first so UI rebuilds with empty cart
+      notifyListeners();
+      
+      // THEN dispose controllers after a short delay to allow UI to rebuild
+      Future.delayed(Duration.zero, () {
+        for (var item in itemsToDispose) {
+          item.dispose();
+        }
+      });
     } else {
       _selectedSupplierId = supplierId;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   // Load products filtered by selected supplier
@@ -848,6 +862,8 @@ class PurchaseOrderProvider extends ChangeNotifier {
       (cartItem) => cartItem.product.id == item.product.id,
     );
     if (existingIndex != -1) {
+      // Dispose old item's controllers before replacing
+      _poCartItems[existingIndex].dispose();
       _poCartItems[existingIndex] = item;
     } else {
       _poCartItems.add(item);
@@ -1075,6 +1091,84 @@ class PurchaseOrderProvider extends ChangeNotifier {
     }
     _poCartItems.clear();
     _filteredProducts.clear();
+    notifyListeners();
+  }
+
+  void syncPOCartItems(List<POCartItem> newItems) {
+    // Efficiently sync cart without disposing existing controllers unnecessarily
+    final Map<String, POCartItem> existingItemsMap = {
+      for (var item in _poCartItems) item.product.id: item
+    };
+    final Map<String, POCartItem> newItemsMap = {
+      for (var item in newItems) item.product.id: item
+    };
+
+    // Items to remove (exist in current but not in new)
+    final itemsToRemove = <POCartItem>[];
+    for (var existingItem in _poCartItems) {
+      if (!newItemsMap.containsKey(existingItem.product.id)) {
+        itemsToRemove.add(existingItem);
+      }
+    }
+
+    // Remove items no longer needed
+    for (var item in itemsToRemove) {
+      item.dispose();
+      _poCartItems.removeWhere((cartItem) => cartItem.product.id == item.product.id);
+    }
+
+    // Build new list maintaining order from newItems
+    final List<POCartItem> updatedCartItems = [];
+    
+    // Update or add items in the order provided by newItems
+    for (var newItem in newItems) {
+      final existingItem = existingItemsMap[newItem.product.id];
+      if (existingItem != null) {
+        // Update existing item properties without recreating controllers
+        existingItem.quantity = newItem.quantity;
+        existingItem.unitCost = newItem.unitCost;
+        existingItem.sellingPrice = newItem.sellingPrice;
+        existingItem.unit = newItem.unit;
+        existingItem.unitId = newItem.unitId;
+        existingItem.defaultUnitId = newItem.defaultUnitId;
+        existingItem.defaultUnitName = newItem.defaultUnitName;
+        existingItem.selectedUnitFactor = newItem.selectedUnitFactor;
+        existingItem.defaultUnitFactor = newItem.defaultUnitFactor;
+        existingItem.defaultUnitCost = newItem.defaultUnitCost;
+        existingItem.displaySellingPrice = newItem.displaySellingPrice;
+        existingItem.baseSellingPrice = newItem.baseSellingPrice;
+        existingItem.pricingSelection = newItem.pricingSelection;
+        existingItem.allowsPricingToggle = newItem.allowsPricingToggle;
+        
+        // Update controller text values
+        existingItem.quantityController.text = newItem.quantity.toString();
+        existingItem.unitCostController.text = newItem.unitCost > 0 
+            ? AppFormatter.formatNumber(newItem.unitCost) 
+            : '';
+        existingItem.sellingPriceController.text = newItem.sellingPrice != null && newItem.sellingPrice! > 0
+            ? AppFormatter.formatNumber(newItem.sellingPrice!)
+            : '';
+        existingItem.defaultUnitCostController.text = newItem.defaultUnitCost != null && newItem.defaultUnitCost! > 0
+            ? AppFormatter.formatNumber(newItem.defaultUnitCost!)
+            : '';
+        existingItem.displaySellingPriceController.text = newItem.displaySellingPrice != null && newItem.displaySellingPrice! > 0
+            ? AppFormatter.formatNumber(newItem.displaySellingPrice!)
+            : '';
+            
+        // Dispose the newItem controllers since we're not using them
+        newItem.dispose();
+        
+        // Add the updated existing item to the new list
+        updatedCartItems.add(existingItem);
+      } else {
+        // Add completely new item
+        updatedCartItems.add(newItem);
+      }
+    }
+    
+    // Replace the entire cart list to maintain order
+    _poCartItems = updatedCartItems;
+    
     notifyListeners();
   }
 

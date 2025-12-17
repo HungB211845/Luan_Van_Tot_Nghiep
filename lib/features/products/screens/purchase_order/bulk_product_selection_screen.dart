@@ -45,8 +45,9 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
   @override
   void initState() {
     super.initState();
+    // Create copies of existing cart items to avoid sharing references
     for (var item in widget.existingCartItems) {
-      _localCartItems[item.product.id] = item;
+      _localCartItems[item.product.id] = item.copyWith();
     }
     _fetchProductsForSupplier();
     _searchController.addListener(() {
@@ -59,6 +60,8 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
   @override
   void dispose() {
     _searchController.dispose();
+    // Note: We don't dispose _localCartItems here because they may be passed
+    // to syncPOCartItems. The disposal will be handled by syncPOCartItems method.
     super.dispose();
   }
 
@@ -200,11 +203,9 @@ class _BulkProductSelectionScreenState extends State<BulkProductSelectionScreen>
   }
 
   void _finishSelection() {
+    // Sync cart items efficiently without disposing existing controllers
     final poProvider = context.read<PurchaseOrderProvider>();
-    poProvider.clearPOCart();
-    for (var item in _localCartItems.values) {
-      poProvider.addPOCartItem(item);
-    }
+    poProvider.syncPOCartItems(_localCartItems.values.toList());
     Navigator.pop(context);
   }
 
