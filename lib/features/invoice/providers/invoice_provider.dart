@@ -30,8 +30,8 @@ class InvoiceProvider extends ChangeNotifier {
   /// Generate invoice for a transaction (with auto-share)
   ///
   /// Format: 'pdf' or 'excel'
-  /// Returns File if successful, null otherwise
-  /// Automatically shares file via system share sheet after generation
+  /// Returns File if successful on mobile/desktop, null on web (download triggered)
+  /// Automatically shares file via system share sheet after generation (mobile/desktop only)
   Future<File?> generateTransactionInvoice(
     String transactionId,
     String format,
@@ -53,7 +53,7 @@ class InvoiceProvider extends ChangeNotifier {
       _progress = 0.7;
       notifyListeners();
 
-      final File file;
+      final File? file;
       if (format == 'pdf') {
         file = await _exportService.generateTransactionPDF(invoiceData);
       } else if (format == 'excel') {
@@ -68,8 +68,10 @@ class InvoiceProvider extends ChangeNotifier {
       _isGenerating = false;
       notifyListeners();
 
-      // Step 4: Auto-share (non-blocking)
-      await shareInvoice(file);
+      // Step 4: Auto-share (non-blocking, mobile/desktop only)
+      if (!kIsWeb && file != null) {
+        await shareInvoice(file);
+      }
 
       return file;
     } catch (e) {
@@ -84,8 +86,8 @@ class InvoiceProvider extends ChangeNotifier {
   /// Generate invoice for a purchase order (with auto-share)
   ///
   /// Format: 'pdf' or 'excel'
-  /// Returns File if successful, null otherwise
-  /// Automatically shares file via system share sheet after generation
+  /// Returns File if successful on mobile/desktop, null on web (download triggered)
+  /// Automatically shares file via system share sheet after generation (mobile/desktop only)
   Future<File?> generatePOInvoice(
     String poId,
     String format,
@@ -107,7 +109,7 @@ class InvoiceProvider extends ChangeNotifier {
       _progress = 0.7;
       notifyListeners();
 
-      final File file;
+      final File? file;
       if (format == 'pdf') {
         file = await _exportService.generatePOPDF(invoiceData);
       } else if (format == 'excel') {
@@ -122,8 +124,10 @@ class InvoiceProvider extends ChangeNotifier {
       _isGenerating = false;
       notifyListeners();
 
-      // Step 4: Auto-share (non-blocking)
-      await shareInvoice(file);
+      // Step 4: Auto-share (non-blocking, mobile/desktop only)
+      if (!kIsWeb && file != null) {
+        await shareInvoice(file);
+      }
 
       return file;
     } catch (e) {
@@ -234,7 +238,7 @@ class InvoiceProvider extends ChangeNotifier {
       _progress = 0.8;
       notifyListeners();
 
-      final File file;
+      final File? file;
       if (format == 'pdf') {
         file = await _exportService.exportTransactionsReportPDF(
           transactions: transactions,
@@ -261,8 +265,10 @@ class InvoiceProvider extends ChangeNotifier {
       _isGenerating = false;
       notifyListeners();
 
-      // Step 5: Auto-share (non-blocking)
-      await shareInvoice(file);
+      // Step 5: Auto-share (non-blocking, mobile/desktop only)
+      if (!kIsWeb && file != null) {
+        await shareInvoice(file);
+      }
 
       return file;
     } catch (e) {
@@ -274,8 +280,8 @@ class InvoiceProvider extends ChangeNotifier {
     }
   }
 
-  /// Share invoice file via system share sheet
-  Future<void> shareInvoice(File file) async {
+  /// Share invoice file via system share sheet (Mobile/Desktop only)
+  Future<void> shareInvoice(File? file) async {
     try {
       await _exportService.shareFile(file);
     } catch (e) {
@@ -284,12 +290,12 @@ class InvoiceProvider extends ChangeNotifier {
     }
   }
 
-  /// Print PDF invoice
+  /// Print PDF invoice (Mobile/Desktop only)
   ///
   /// Only works for PDF files
-  Future<void> printInvoice(File pdfFile) async {
+  Future<void> printInvoice(File? pdfFile) async {
     try {
-      if (!pdfFile.path.endsWith('.pdf')) {
+      if (pdfFile != null && !pdfFile.path.endsWith('.pdf')) {
         throw Exception('Chỉ có thể in file PDF');
       }
 

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -104,19 +105,39 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
 
     if (mounted) {
-      // Only show error snackbar if generation failed
-      if (file == null && invoiceProvider.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(invoiceProvider.errorMessage!),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (kIsWeb) {
+        // On web, download is triggered automatically
+        if (invoiceProvider.errorMessage == null) {
+          final extension = format == 'pdf' ? 'PDF' : 'Excel';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✓ Đã tạo và tải xuống hóa đơn $extension'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(invoiceProvider.errorMessage!),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        // On mobile/desktop, file is created locally
+        if (file == null && invoiceProvider.errorMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(invoiceProvider.errorMessage!),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
 
-      // For PDF, show print option after share (if successful)
-      if (file != null && format == 'pdf') {
-        _showPrintOption(file);
+        // For PDF, show print option after share (if successful)
+        if (file != null && format == 'pdf') {
+          _showPrintOption(file);
+        }
       }
     }
   }

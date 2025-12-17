@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/formatter.dart';
@@ -83,31 +84,52 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     );
 
     if (mounted) {
-      if (file != null) {
-        final extension = format == 'pdf' ? 'PDF' : 'Excel';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✓ Đã tạo hóa đơn $extension'),
-            backgroundColor: Colors.green,
-            action: SnackBarAction(
-              label: 'Chia sẻ',
-              textColor: Colors.white,
-              onPressed: () => invoiceProvider.shareInvoice(file),
+      if (kIsWeb) {
+        // On web, download is triggered automatically
+        if (invoiceProvider.errorMessage == null) {
+          final extension = format == 'pdf' ? 'PDF' : 'Excel';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✓ Đã tạo và tải xuống hóa đơn $extension'),
+              backgroundColor: Colors.green,
             ),
-          ),
-        );
-
-        // For PDF, also show print option
-        if (format == 'pdf') {
-          _showPrintOption(file);
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(invoiceProvider.errorMessage!),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
-      } else if (invoiceProvider.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(invoiceProvider.errorMessage!),
-            backgroundColor: Colors.red,
-          ),
-        );
+      } else {
+        // On mobile/desktop, file is created locally
+        if (file != null) {
+          final extension = format == 'pdf' ? 'PDF' : 'Excel';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✓ Đã tạo hóa đơn $extension'),
+              backgroundColor: Colors.green,
+              action: SnackBarAction(
+                label: 'Chia sẻ',
+                textColor: Colors.white,
+                onPressed: () => invoiceProvider.shareInvoice(file),
+              ),
+            ),
+          );
+
+          // For PDF, also show print option
+          if (format == 'pdf') {
+            _showPrintOption(file);
+          }
+        } else if (invoiceProvider.errorMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(invoiceProvider.errorMessage!),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

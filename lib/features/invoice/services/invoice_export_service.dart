@@ -1,5 +1,8 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart' as excel_pkg;
+import 'package:file_saver/file_saver.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
@@ -14,10 +17,11 @@ import 'invoice_template_builder.dart';
 class InvoiceExportService {
   /// Generate PDF invoice for transaction (VAT-compliant)
   ///
-  /// Returns File object that can be shared or printed
-  Future<File> generateTransactionPDF(InvoiceData data) async {
+  /// Returns File object on mobile/desktop or triggers download on web
+  Future<File?> generateTransactionPDF(InvoiceData data) async {
     // Use new template builder for VAT-compliant invoice
     final pdf = await InvoiceTemplateBuilder.buildVATInvoicePDF(data);
+    final pdfBytes = await pdf.save();
 
     // Generate accounting-compliant filename
     final businessName = data.storeInfo?.businessName ?? FileNamingHelper.getFallbackBusinessName();
@@ -28,16 +32,25 @@ class InvoiceExportService {
       format: 'pdf',
     );
 
-    // Save to temp directory
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/$filename');
-    await file.writeAsBytes(await pdf.save());
-
-    return file;
+    if (kIsWeb) {
+      // Web: Trigger browser download
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: pdfBytes,
+        mimeType: MimeType.pdf,
+      );
+      return null; // Web doesn't return file object
+    } else {
+      // Mobile/Desktop: Save to temp directory
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(pdfBytes);
+      return file;
+    }
   }
 
   /// Generate Excel invoice for transaction
-  Future<File> generateTransactionExcel(InvoiceData data) async {
+  Future<File?> generateTransactionExcel(InvoiceData data) async {
     final excel = excel_pkg.Excel.createExcel();
     final sheet = excel['Hóa đơn'];
 
@@ -52,21 +65,31 @@ class InvoiceExportService {
       format: 'xlsx',
     );
 
-    // Save to temp directory
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/$filename');
     final bytes = excel.encode();
-    if (bytes != null) {
-      await file.writeAsBytes(bytes);
-    }
+    if (bytes == null) return null;
 
-    return file;
+    if (kIsWeb) {
+      // Web: Trigger browser download
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: Uint8List.fromList(bytes),
+        mimeType: MimeType.other,
+      );
+      return null;
+    } else {
+      // Mobile/Desktop: Save to temp directory
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(bytes);
+      return file;
+    }
   }
 
   /// Generate PDF invoice for Purchase Order (VAT-compliant)
-  Future<File> generatePOPDF(InvoiceData data) async {
+  Future<File?> generatePOPDF(InvoiceData data) async {
     // Use new template builder for PO invoice
     final pdf = await InvoiceTemplateBuilder.buildPOInvoicePDF(data);
+    final pdfBytes = await pdf.save();
 
     // Generate accounting-compliant filename
     final businessName = data.storeInfo?.businessName ?? FileNamingHelper.getFallbackBusinessName();
@@ -77,15 +100,25 @@ class InvoiceExportService {
       format: 'pdf',
     );
 
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/$filename');
-    await file.writeAsBytes(await pdf.save());
-
-    return file;
+    if (kIsWeb) {
+      // Web: Trigger browser download
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: pdfBytes,
+        mimeType: MimeType.pdf,
+      );
+      return null;
+    } else {
+      // Mobile/Desktop: Save to temp directory
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(pdfBytes);
+      return file;
+    }
   }
 
   /// Generate Excel invoice for Purchase Order
-  Future<File> generatePOExcel(InvoiceData data) async {
+  Future<File?> generatePOExcel(InvoiceData data) async {
     final excel = excel_pkg.Excel.createExcel();
     final sheet = excel['Đơn nhập hàng'];
 
@@ -100,21 +133,31 @@ class InvoiceExportService {
       format: 'xlsx',
     );
 
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/$filename');
     final bytes = excel.encode();
-    if (bytes != null) {
-      await file.writeAsBytes(bytes);
-    }
+    if (bytes == null) return null;
 
-    return file;
+    if (kIsWeb) {
+      // Web: Trigger browser download
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: Uint8List.fromList(bytes),
+        mimeType: MimeType.other,
+      );
+      return null;
+    } else {
+      // Mobile/Desktop: Save to temp directory
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(bytes);
+      return file;
+    }
   }
 
   /// Export multiple transactions to Excel report (2 sheets: Summary + Detail)
   ///
   /// Sheet 1: "Tổng hợp theo ngày" - Grouped by date + product
   /// Sheet 2: "Chi tiết hóa đơn" - All transaction details
-  Future<File> exportTransactionsReport({
+  Future<File?> exportTransactionsReport({
     required List<Map<String, dynamic>> transactions,
     required DateTime startDate,
     required DateTime endDate,
@@ -144,21 +187,31 @@ class InvoiceExportService {
       preset: preset,
     );
 
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/$filename');
     final bytes = excel.encode();
-    if (bytes != null) {
-      await file.writeAsBytes(bytes);
-    }
+    if (bytes == null) return null;
 
-    return file;
+    if (kIsWeb) {
+      // Web: Trigger browser download
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: Uint8List.fromList(bytes),
+        mimeType: MimeType.other,
+      );
+      return null;
+    } else {
+      // Mobile/Desktop: Save to temp directory
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(bytes);
+      return file;
+    }
   }
 
   /// Export multiple transactions to PDF report (2 pages: Summary + Detail)
   ///
   /// Page 1: "Tổng hợp theo ngày" - Grouped by date + product
   /// Page 2: "Chi tiết hóa đơn" - All transaction details
-  Future<File> exportTransactionsReportPDF({
+  Future<File?> exportTransactionsReportPDF({
     required List<Map<String, dynamic>> transactions,
     required DateTime startDate,
     required DateTime endDate,
@@ -173,6 +226,7 @@ class InvoiceExportService {
       startDate: startDate,
       endDate: endDate,
     );
+    final pdfBytes = await pdf.save();
 
     // Generate accounting-compliant filename
     final name = businessName ?? FileNamingHelper.getFallbackBusinessName();
@@ -184,20 +238,32 @@ class InvoiceExportService {
       preset: preset,
     );
 
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/$filename');
-    await file.writeAsBytes(await pdf.save());
-
-    return file;
+    if (kIsWeb) {
+      // Web: Trigger browser download
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: pdfBytes,
+        mimeType: MimeType.pdf,
+      );
+      return null;
+    } else {
+      // Mobile/Desktop: Save to temp directory
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(pdfBytes);
+      return file;
+    }
   }
 
-  /// Share file via system share sheet
-  Future<void> shareFile(File file) async {
+  /// Share file via system share sheet (Mobile/Desktop only)
+  Future<void> shareFile(File? file) async {
+    if (kIsWeb || file == null) return; // Web handles downloads directly
     await Share.shareXFiles([XFile(file.path)]);
   }
 
-  /// Print PDF file
-  Future<void> printPDF(File pdfFile) async {
+  /// Print PDF file (Mobile/Desktop only)
+  Future<void> printPDF(File? pdfFile) async {
+    if (kIsWeb || pdfFile == null) return; // Web uses browser print
     final bytes = await pdfFile.readAsBytes();
     await Printing.layoutPdf(onLayout: (format) async => bytes);
   }
