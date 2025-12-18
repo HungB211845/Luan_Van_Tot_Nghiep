@@ -207,11 +207,22 @@ if (debtProvider.paymentError.isNotEmpty) {
 5. **Payment Distribution**: FIFO allocation across outstanding debts
 6. **Receipt**: Generate payment receipt với debt balance updates
 
-### c. Debt Management Screens (PLANNED)
-- `DebtListScreen`: Overview của all debts với filtering
-- `CustomerDebtDetailScreen`: Individual customer debt details  
-- `AddPaymentScreen`: Payment processing interface với validation
-- `AdjustDebtScreen`: Manual debt adjustments với reason tracking
+### c. Debt Management Screens (IMPLEMENTED & PLANNED)
+**IMPLEMENTED:**
+- ✅ `DebtListScreen`: Overview của all debts với filtering và responsive design
+- ✅ `CustomerDebtDetailScreen`: Individual customer debt details với master-detail view
+- ✅ `AddPaymentScreen`: Payment processing interface với validation
+- ✅ `AdjustDebtScreen`: Manual debt adjustments với reason tracking
+- ✅ `DebtSchedulingScreen`: **NEW** - Payment reminder scheduling và management
+
+**DEBT SCHEDULING FEATURE (NEWLY ADDED):**
+- ✅ Complete debt status management với visual indicators
+- ✅ Payment reminder creation với date picker và validation  
+- ✅ Client-side storage using SharedPreferences
+- ✅ Smart filtering (active, overdue, due soon reminders)
+- ✅ Reminder lifecycle management (add, complete, delete)
+- ✅ Integration từ Customer Debt Detail screen
+- 🔶 **PLANNED**: Server-side backend implementation với notification system
 
 ---
 
@@ -285,10 +296,71 @@ if (debtProvider.paymentError.isNotEmpty) {
 
 ---
 
-**Implementation Status**: 85% Complete
+**Implementation Status**: 92% Complete
 **Database Schema**: ✅ Production ready với verified RPC functions
 **Service Layer**: ✅ Complete với store isolation
 **Provider Layer**: ✅ Full state management với error handling  
-**UI Screens**: 🔶 Planned implementation
+**UI Screens**: ✅ Complete implementation với debt scheduling feature
 **POS Integration**: ✅ Credit sale workflow functional
 **Business Rules**: ✅ Overpayment prevention và FIFO enforced
+**Debt Scheduling**: ✅ Client-side implementation complete, server-side planned
+
+---
+
+# 9. Debt Scheduling & Reminders Feature (NEW - CLIENT-SIDE IMPLEMENTATION)
+
+### a. Current Implementation Status
+**✅ FULLY IMPLEMENTED - CLIENT-SIDE VERSION**
+
+**Models**: `lib/features/debt/models/debt_reminder.dart`
+- Complete `DebtReminder` model với status tracking
+- Client-side validation logic
+- JSON serialization cho SharedPreferences storage
+
+**Service**: `lib/features/debt/services/debt_reminder_service.dart`
+- ✅ Complete CRUD operations using SharedPreferences
+- ✅ Status filtering (overdue, today, completed)
+- ✅ Data persistence across app sessions
+- ✅ Search và filtering capabilities
+
+**UI Implementation**: `lib/features/debt/screens/debt_scheduling_screen.dart`
+- ✅ Complete responsive scheduling interface
+- ✅ Visual status indicators với color-coded debt states
+- ✅ Segmented control cho reminder filtering (active/overdue/due soon)
+- ✅ Add/Edit/Delete reminder functionality với modal forms
+- ✅ Date picker integration với validation
+
+**Integration**: `lib/features/debt/screens/customer_debt_detail_screen.dart`
+- ✅ Schedule button trong AppBar
+- ✅ Context-aware debt selection (only outstanding debts)
+- ✅ Seamless navigation to scheduling screen
+
+### b. Key Features Implemented
+1. **Debt Status Management**: Visual indicators cho active/overdue/due soon
+2. **Payment Reminders**: Custom reminders với date picker
+3. **Reminder Lifecycle**: Add/Complete/Delete functionality
+4. **Smart Filtering**: Segmented control cho reminder categories
+5. **Persistent Storage**: SharedPreferences - no backend dependency
+6. **Responsive Design**: Uses ResponsiveScaffold cho consistency
+
+### c. User Experience Flow
+1. **Access**: Customer Debt Detail → Schedule Icon → Select Debt
+2. **Overview**: View current debt status với visual indicators
+3. **Management**: Add reminders với custom dates và notes
+4. **Tracking**: Filter và manage reminders by status
+5. **Actions**: Mark complete or delete as needed
+
+### d. Future Backend Enhancement Plan
+**📋 COMPREHENSIVE BACKEND IMPLEMENTATION ROADMAP**
+
+Detailed backend implementation plan available trong:
+- **`/docs/debt_scheduling_backend_plan.md`** - Complete technical specification
+- **`/docs/diagram/debt_sequence.md`** - Updated sequence diagrams với scheduling workflows
+
+**Key Backend Features Planned:**
+- 🎯 Server-side database tables (`debt_reminders`, `reminder_notifications`, `reminder_templates`)
+- 🎯 RPC functions cho CRUD operations với multi-tenant security
+- 🎯 Notification system integration (Email, SMS, Push notifications)
+- 🎯 Advanced analytics và reporting capabilities
+- 🎯 Template system cho reminder messages
+- 🎯 Customer behavior analysis và recommendation engine

@@ -645,15 +645,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
           Consumer<DebtProvider>(
             builder: (context, provider, child) {
-              final overdueCount = provider.overdueDebts.length;
-              if (overdueCount == 0) return const SizedBox.shrink();
+              // Count customers with outstanding debts, not individual debt records
+              final customersWithDebts = <String>{};
+              for (final debt in provider.debts) {
+                if (debt.remainingAmount > 0) {
+                  customersWithDebts.add(debt.customerId);
+                }
+              }
+              final customersWithDebtsCount = customersWithDebts.length;
+              
+              if (customersWithDebtsCount == 0) return const SizedBox.shrink();
               return Column(
                 children: [
                   _buildActionableInsight(
-                    icon: CupertinoIcons.xmark_octagon_fill,
+                    icon: CupertinoIcons.person_2_fill,
                     iconColor: Colors.red,
-                    title: 'Nợ quá hạn',
-                    subtitle: '$overdueCount khoản cần thu hồi',
+                    title: 'Khách còn nợ',
+                    subtitle: '$customersWithDebtsCount khách hàng cần theo dõi',
                     onTap: () {
                       // Navigate to Debt Management screen
                       Navigator.of(context, rootNavigator: true)

@@ -16,6 +16,7 @@ import '../../pos/models/transaction.dart';
 import '../../pos/providers/transaction_provider.dart';
 import '../../pos/screens/transaction/transaction_detail_screen.dart';
 import 'add_payment_screen.dart';
+import 'debt_scheduling_screen.dart';
 
 // Data classes for the new grouped structure
 enum LedgerEntryType { debt, payment, paymentGroup }
@@ -348,6 +349,49 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
     if (result != null) setState(() => _filter = result);
   }
 
+  void _showDebtSchedulingOptions() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Quản lý lịch trả nợ'),
+        message: const Text('Chọn khoản nợ để thiết lập lịch nhắc thanh toán'),
+        actions: context.read<DebtProvider>().debts
+            .where((debt) => debt.customerId == widget.customerId && debt.remainingAmount > 0)
+            .map((debt) => CupertinoActionSheetAction(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DebtSchedulingScreen(debt: debt),
+                      ),
+                    );
+                  },
+                  child: Column(
+                    children: [
+                      Text(
+                        'Nợ ${AppFormatter.formatCurrency(debt.remainingAmount)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        debt.dueDate != null 
+                            ? 'Hạn: ${AppFormatter.formatDate(debt.dueDate!)}'
+                            : 'Không có hạn',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ))
+            .toList(),
+        cancelButton: CupertinoActionSheetAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Hủy'),
+        ),
+      ),
+    );
+  }
+
   void _showAddTransactionSheet() {
     showModalBottomSheet(
       context: context,
@@ -376,6 +420,11 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       title: _buildAppBarTitle(),
       showBackButton: true,
       actions: [
+        IconButton(
+          icon: const Icon(Icons.schedule),
+          onPressed: _showDebtSchedulingOptions,
+          tooltip: 'Quản lý lịch trả nợ',
+        ),
         IconButton(
           icon: const Icon(Icons.add_circle_outline),
           onPressed: _showAddTransactionSheet,
