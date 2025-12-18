@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
+import '../../../../shared/utils/responsive.dart';
 import 'add_product_step3_screen.dart';
 
 class AddProductStep2Screen extends StatefulWidget {
@@ -23,49 +24,51 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Thêm Sản Phẩm Mới',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        actions: [
-          // "Lưu" button - Always present escape hatch
-          TextButton(
-            onPressed: _canSaveMinimal() ? _saveMinimal : null,
-            child: Text(
-              'Lưu',
-              style: TextStyle(
-                color: _canSaveMinimal() ? Colors.white : Colors.white54,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+    return ResponsiveScaffold(
+      title: 'Thêm Sản Phẩm Mới',
+      appBarColor: Colors.green,
+      appBarForegroundColor: Colors.white,
+      actions: [
+        // "Lưu" button - Always present escape hatch
+        TextButton(
+          onPressed: _canSaveMinimal() ? _saveMinimal : null,
+          child: Text(
+            'Lưu',
+            style: TextStyle(
+              color: _canSaveMinimal() ? Colors.white : Colors.white54,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
+        ),
+      ],
+      body: Container(
+        width: context.contentWidth,
+        padding: EdgeInsets.all(context.sectionPadding),
+        margin: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: context.formAlignment,
           children: [
             // Step indicator
-            Row(
+            Container(
+              constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+              child: Row(
               children: [
                 _buildStepIndicator(1, true),
                 _buildStepLine(true),
                 _buildStepIndicator(2, true),
                 _buildStepLine(false),
                 _buildStepIndicator(3, false),
-              ],
+                ],
+              ),
             ),
 
             const SizedBox(height: 32),
 
             // Product name context
             Container(
+              constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+              child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.green[50],
@@ -87,6 +90,7 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
                     ),
                   ),
                 ],
+              ),
               ),
             ),
 
@@ -113,7 +117,9 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
 
             // Category options - Large cards (scrollable)
             Expanded(
-              child: ListView(
+              child: Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: ListView(
                 children: [
                   _buildCategoryCard(
                     ProductCategory.FERTILIZER,
@@ -143,15 +149,18 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
                     Colors.brown,
                   ),
                 ],
+                ),
               ),
             ),
 
             const SizedBox(height: 24),
 
             // Continue button
-            SizedBox(
-              width: double.infinity,
-              height: 56,
+            Container(
+              constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+              child: SizedBox(
+                width: double.infinity,
+                height: 56,
               child: ElevatedButton(
                 onPressed: _selectedCategory != null ? _continue : null,
                 style: ElevatedButton.styleFrom(
@@ -169,6 +178,7 @@ class _AddProductStep2ScreenState extends State<AddProductStep2Screen> {
                 child: const Text(
                   'Tiếp tục',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
                 ),
               ),
             ),

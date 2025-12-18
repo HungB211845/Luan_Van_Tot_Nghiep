@@ -6,6 +6,7 @@ import '../../providers/company_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../../../shared/services/base_service.dart';
 import '../../../../shared/services/image_service.dart';
+import '../../../../shared/utils/responsive.dart';
 import '../../widgets/product_image_widget.dart';
 import 'add_product_step2_screen.dart';
 import '../company/company_picker_screen.dart';
@@ -45,37 +46,36 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Thông tin cơ bản',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        actions: [
-          TextButton(
-            onPressed: (_canSaveMinimal() && !_isLoading) ? _saveMinimal : null,
-            child: Text(
-              'Lưu',
-              style: TextStyle(
-                color: _canSaveMinimal() ? Colors.white : Colors.white54,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+    return ResponsiveScaffold(
+      title: 'Thông tin cơ bản',
+      appBarColor: Colors.green,
+      appBarForegroundColor: Colors.white,
+      actions: [
+        TextButton(
+          onPressed: (_canSaveMinimal() && !_isLoading) ? _saveMinimal : null,
+          child: Text(
+            'Lưu',
+            style: TextStyle(
+              color: _canSaveMinimal() ? Colors.white : Colors.white54,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
       body: Form(
         key: _formKey,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: Container(
+          width: context.contentWidth,
+          padding: EdgeInsets.all(context.sectionPadding),
+          margin: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: context.formAlignment,
             children: [
               // Product name
-              TextFormField(
+              Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: TextFormField(
                 controller: _nameController,
                 style: const TextStyle(fontSize: 18),
                 decoration: InputDecoration(
@@ -109,12 +109,15 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
                   return null;
                 },
                 onChanged: (_) => setState(() {}),
+                ),
               ),
 
               const SizedBox(height: 24),
 
               // Image upload section
-              InkWell(
+              Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: InkWell(
                 onTap: _isUploadingImage ? null : _showImagePickerSheet,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
@@ -193,12 +196,15 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
                     ],
                   ),
                 ),
+                ),
               ),
 
               const SizedBox(height: 24),
 
               // Company selector - Navigation row (Apple style)
-              InkWell(
+              Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: InkWell(
                 onTap: () async {
                   final selectedId = await Navigator.of(context).push<String>(
                     MaterialPageRoute(
@@ -281,15 +287,18 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
                     ],
                   ),
                 ),
+                ),
               ),
 
               const Spacer(),
 
               // Continue button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
+              Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
                   onPressed: _canContinue() ? _continue : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _canContinue()
@@ -306,6 +315,7 @@ class _AddProductStep1ScreenState extends State<AddProductStep1Screen> {
                   child: const Text(
                     'Tiếp tục',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
                   ),
                 ),
               ),

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -12,9 +11,6 @@ import '../../../../shared/utils/formatter.dart';
 import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/responsive.dart';
 import '../../utils/unit_display_formatter.dart';
-import '../../../../core/config/cache_config.dart';
-import '../../../../core/tools/performance_benchmark.dart';
-import 'add_product_dialog.dart';
 import 'product_detail_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
@@ -692,22 +688,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   void _showAddProductDialog() {
-    if (context.isDesktop) {
-      showDialog(
-        context: context,
-        builder: (context) => const AddProductDialog(),
-      ).then((success) {
-        if (success == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Thêm sản phẩm thành công!'), backgroundColor: Colors.green),
-          );
-          // Force refresh with fresh data after product creation
-          context.read<ProductProvider>().refreshAllCache();
-        }
-      });
-    } else {
-      Navigator.of(context, rootNavigator: true).pushNamed('/add-product-step1');
-    }
+    // All platforms now use the 3-step wizard for consistency
+    Navigator.of(context, rootNavigator: true).pushNamed('/add-product-step1').then((result) {
+      if (result == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Thêm sản phẩm thành công!'), backgroundColor: Colors.green),
+        );
+        // Force refresh with fresh data after product creation
+        context.read<ProductProvider>().refreshAllCache();
+      }
+    });
   }
 
   List<Product> _filterAndSortProducts(List<Product> products, ProductProvider provider) {

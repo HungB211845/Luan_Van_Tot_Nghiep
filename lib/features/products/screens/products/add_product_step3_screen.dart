@@ -8,6 +8,7 @@ import '../../providers/product_provider.dart';
 import '../../models/product_unit.dart';
 import '../../services/product_unit_service.dart';
 import '../../../../shared/services/base_service.dart';
+import '../../../../shared/utils/responsive.dart';
 
 enum PesticidePackagingType { bottle, pack, jar }
 
@@ -132,38 +133,37 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Thêm Sản Phẩm Mới',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        actions: [
-          // "Lưu" button - Always present escape hatch
-          TextButton(
-            onPressed: _saveWithCurrentInfo,
-            child: const Text(
-              'Lưu',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+    return ResponsiveScaffold(
+      title: 'Thêm Sản Phẩm Mới',
+      appBarColor: Colors.green,
+      appBarForegroundColor: Colors.white,
+      actions: [
+        // "Lưu" button - Always present escape hatch
+        TextButton(
+          onPressed: _saveWithCurrentInfo,
+          child: const Text(
+            'Lưu',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
       body: Form(
         key: _formKey,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: Container(
+          width: context.contentWidth,
+          padding: EdgeInsets.all(context.sectionPadding),
+          margin: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: context.formAlignment,
             children: [
               // Step indicator
-              Row(
+              Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: Row(
                 children: [
                   _buildStepIndicator(1, true),
                   _buildStepLine(true),
@@ -171,12 +171,15 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
                   _buildStepLine(true),
                   _buildStepIndicator(3, true),
                 ],
+                ),
               ),
 
               const SizedBox(height: 32),
 
               // Product context
               Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: _getCategoryColor().withOpacity(0.1),
@@ -216,6 +219,7 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
 
@@ -281,9 +285,11 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
               const SizedBox(height: 24),
 
               // Finish button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
+              Container(
+                constraints: BoxConstraints(maxWidth: context.maxFormWidth),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
                 child: ElevatedButton(
                   onPressed: (_isLoading || _productCreated) ? null : _saveComplete,
                   style: ElevatedButton.styleFrom(
@@ -312,6 +318,7 @@ class _AddProductStep3ScreenState extends State<AddProductStep3Screen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                ),
                 ),
               ),
             ],
