@@ -21,6 +21,8 @@ import '../../features/pos/screens/cart/cart_screen.dart';
 import '../../features/pos/screens/transaction/transaction_success_screen.dart';
 import '../../features/pos/screens/transaction/transaction_list_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
+import '../../features/products/screens/reports/low_stock_report_screen.dart';
+import '../../features/products/screens/reports/expiry_report_screen.dart';
 // Auth screens
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
@@ -234,6 +236,12 @@ class AppRouter {
 
       case RouteNames.reports:
         return IOSPageRoute(child: const ReportsScreen(), settings: settings);
+
+      case RouteNames.lowStockReport:
+        return IOSPageRoute(child: const LowStockReportScreen(), settings: settings);
+
+      case RouteNames.expiryReport:
+        return IOSPageRoute(child: const ExpiryReportScreen(), settings: settings);
 
       case RouteNames.debts:
         return IOSPageRoute(child: const DebtListScreen(), settings: settings);

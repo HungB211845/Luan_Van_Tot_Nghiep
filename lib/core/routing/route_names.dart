@@ -37,6 +37,8 @@ class RouteNames {
   static const String transactionDetail = '/transaction-detail';
   static const String customerDetail = '/customer-detail';
   static const String reports = '/reports';
+  static const String lowStockReport = '/reports/low-stock';
+  static const String expiryReport = '/reports/expiry';
   static const String debts = '/debts'; // Debt management screen
   static const String profile = '/profile';
   static const String editProfile = '/edit-profile';

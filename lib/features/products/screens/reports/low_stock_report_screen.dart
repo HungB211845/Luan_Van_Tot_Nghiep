@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../../features/reports/services/report_service.dart';
+import 'package:provider/provider.dart';
+import '../../services/product_service.dart';
+import '../../providers/product_provider.dart';
+import '../../../../core/routing/route_names.dart';
 import '../../../../shared/utils/formatter.dart';
 
 class LowStockReportScreen extends StatefulWidget {
@@ -10,10 +13,9 @@ class LowStockReportScreen extends StatefulWidget {
 }
 
 class _LowStockReportScreenState extends State<LowStockReportScreen> {
-  final ReportService _reportService = ReportService();
+  final ProductService _productService = ProductService();
   List<Map<String, dynamic>> _products = [];
   bool _isLoading = false;
-  int _selectedThreshold = 10;
 
   @override
   void initState() {
@@ -24,7 +26,8 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final products = await _reportService.getLowStockProducts(threshold: _selectedThreshold);
+      // Use same data source as ProductProvider for consistency
+      final products = await _productService.getLowStockProducts();
       if (mounted) {
         setState(() {
           _products = products;
@@ -51,7 +54,31 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
       ),
       body: Column(
         children: [
-          _buildFilter(),
+          // Info header explaining the logic
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              border: Border(bottom: BorderSide(color: Colors.orange.withOpacity(0.3))),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Hiển thị sản phẩm có tồn kho hiện tại ≤ mức tồn kho tối thiểu',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           if (_isLoading)
             const Expanded(
               child: Center(child: CircularProgressIndicator()),
@@ -91,41 +118,9 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
     );
   }
 
-  Widget _buildFilter() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('Ngưỡng cảnh báo:', style: TextStyle(fontWeight: FontWeight.w500)),
-          const SizedBox(width: 16),
-          DropdownButton<int>(
-            value: _selectedThreshold,
-            items: [5, 10, 20, 50].map((int value) {
-              return DropdownMenuItem<int>(
-                value: value,
-                child: Text('≤ $value sản phẩm'),
-              );
-            }).toList(),
-            onChanged: (int? newValue) {
-              if (newValue != null) {
-                setState(() => _selectedThreshold = newValue);
-                _loadData();
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildProductCard(Map<String, dynamic> product) {
-    final currentStock = product['current_stock'] as int? ?? 0;
-    final minStockLevel = product['min_stock_level'] as int? ?? 0;
+    final currentStock = (product['current_stock'] as num?)?.toDouble() ?? 0.0;
+    final minStockLevel = (product['min_stock_level'] as num?)?.toDouble() ?? 0.0;
 
     // Calculate severity: critical (<50%), warning (<100%), info (>=100%)
     final percentage = minStockLevel > 0 ? (currentStock / minStockLevel) * 100 : 100;
@@ -133,7 +128,7 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
     IconData severityIcon;
     String severityLabel;
 
-    if (currentStock == 0) {
+    if (currentStock <= 0) {
       severityColor = Colors.red;
       severityIcon = Icons.error;
       severityLabel = 'HẾT HÀNG';
@@ -164,7 +159,7 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
           child: Icon(severityIcon, color: severityColor),
         ),
         title: Text(
-          product['product_name'] ?? 'Không rõ',
+          product['name'] ?? 'Không rõ',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Column(
@@ -180,14 +175,14 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
                 Text(
-                  '$currentStock',
+                  _formatStockValue(currentStock),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: severityColor,
                   ),
                 ),
                 Text(
-                  ' / Tối thiểu: $minStockLevel',
+                  ' / Tối thiểu: ${_formatStockValue(minStockLevel)}',
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
               ],
@@ -212,7 +207,76 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
           ],
         ),
         isThreeLine: true,
+        onTap: () => _navigateToProductDetail(product),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: Colors.grey,
+        ),
       ),
     );
+  }
+
+  Future<void> _navigateToProductDetail(Map<String, dynamic> productData) async {
+    if (productData['id'] == null) return;
+    
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      final productProvider = context.read<ProductProvider>();
+      
+      // Fetch full product by ID
+      final product = await productProvider.fetchProductById(productData['id']);
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (product != null) {
+        // Select the product in provider
+        productProvider.selectProduct(product);
+        
+        // Navigate to product detail screen
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pushNamed(RouteNames.productDetail);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Không tìm thấy thông tin sản phẩm'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi tải chi tiết sản phẩm: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _formatStockValue(double value) {
+    // Format as integer if it's a whole number, otherwise show 1 decimal place
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
+    } else {
+      return value.toStringAsFixed(1);
+    }
   }
 }

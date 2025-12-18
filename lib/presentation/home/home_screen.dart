@@ -8,12 +8,12 @@ import '../../core/providers/navigation_provider.dart';
 import '../../features/products/providers/product_provider.dart';
 import '../../features/debt/providers/debt_provider.dart';
 import '../../features/pos/providers/transaction_provider.dart';
+import '../../features/pos/screens/transaction/transaction_detail_screen.dart';
 import '../../shared/utils/formatter.dart';
 import '../../shared/utils/datetime_helpers.dart';
 import 'providers/quick_access_provider.dart';
 import '../../features/reports/providers/report_provider.dart';
 import 'package:intl/intl.dart';
-import '../../features/reports/models/daily_revenue.dart';
 import '../../features/notification/providers/notification_provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -608,7 +608,33 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: 'Sắp hết hàng',
                     subtitle: '$lowStockCount sản phẩm cần nhập thêm',
                     onTap: () {
-                      // TODO: Navigate to low stock products
+                      // Navigate to Low Stock Report screen
+                      Navigator.of(context, rootNavigator: true)
+                          .pushNamed(RouteNames.lowStockReport);
+                    },
+                  ),
+                  const Divider(height: 1, indent: 56),
+                ],
+              );
+            },
+          ),
+
+          // Expiring batches alert
+          Consumer<ProductProvider>(
+            builder: (context, provider, child) {
+              final expiringCount = provider.expiringBatches.length;
+              if (expiringCount == 0) return const SizedBox.shrink();
+              return Column(
+                children: [
+                  _buildActionableInsight(
+                    icon: CupertinoIcons.clock_fill,
+                    iconColor: Colors.amber,
+                    title: 'Sắp hết hạn',
+                    subtitle: '$expiringCount lô hàng cần kiểm tra',
+                    onTap: () {
+                      // Navigate to Expiry Report screen
+                      Navigator.of(context, rootNavigator: true)
+                          .pushNamed(RouteNames.expiryReport);
                     },
                   ),
                   const Divider(height: 1, indent: 56),
@@ -629,7 +655,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: 'Nợ quá hạn',
                     subtitle: '$overdueCount khoản cần thu hồi',
                     onTap: () {
-                      // TODO: Navigate to overdue debts
+                      // Navigate to Debt Management screen
+                      Navigator.of(context, rootNavigator: true)
+                          .pushNamed(RouteNames.debts);
                     },
                   ),
                   const Divider(height: 1, indent: 56),
@@ -666,7 +694,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: 'Giao dịch gần nhất',
                     subtitle: AppFormatter.formatCurrency(recentTx.totalAmount),
                     onTap: () {
-                      // TODO: Navigate to transaction detail
+                      // Navigate directly to transaction detail screen of the recent transaction
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => TransactionDetailScreen(
+                            transaction: recentTx,
+                          ),
+                        ),
+                      );
                     },
                   );
                 },
