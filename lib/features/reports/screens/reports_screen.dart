@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/physics.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
@@ -36,7 +35,7 @@ class IOSSpringScrollPhysics extends ScrollPhysics {
 }
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({Key? key}) : super(key: key);
+  const ReportsScreen({super.key});
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -56,10 +55,28 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     // Add listener to load data lazily when tab changes
     _tabController.addListener(_onTabChanged);
 
-    // Load initial tab data (Tab 0: Revenue)
+    // Load initial tab data
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDataForCurrentTab();
+      _loadDataBasedOnPlatform();
     });
+  }
+
+  void _loadDataBasedOnPlatform() {
+    final provider = context.read<ReportProvider>();
+    
+    // Get screen size để determine platform
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 1200 || kIsWeb;
+    
+    if (isDesktop) {
+      // Desktop: Load all 3 tabs data simultaneously for triple-column layout
+      print('🖥️ Desktop detected - loading all dashboard data simultaneously');
+      provider.loadDashboardData(forceRefresh: false);
+    } else {
+      // Mobile/Tablet: Load only current tab data (lazy loading)
+      print('📱 Mobile/Tablet detected - loading current tab only');
+      _loadDataForCurrentTab();
+    }
   }
 
   void _onTabChanged() {
@@ -95,6 +112,16 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   Widget build(BuildContext context) {
     return Consumer<ReportProvider>(
       builder: (context, provider, child) {
+        // Debug logging for desktop data loading
+        if (kDebugMode && kIsWeb) {
+          print('🔍 DEBUG Reports Build:');
+          print('  - Screen width: ${MediaQuery.of(context).size.width}');
+          print('  - Revenue loaded: ${provider.revenueLoaded}');
+          print('  - Inventory loaded: ${provider.inventoryLoaded}');
+          print('  - Tax loaded: ${provider.taxLoaded}');
+          print('  - Is loading: ${provider.isLoading}');
+        }
+        
         return ResponsiveScaffold(
           title: 'Báo Cáo Kinh Doanh',
           body: provider.isLoading
@@ -159,94 +186,77 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     );
   }
 
-  // Desktop Layout: Master-Detail with enhanced navigation
+  // Desktop Layout: Triple-column dashboard - ALL TABS VISIBLE SIMULTANEOUSLY
   Widget _buildDesktopLayout(ReportProvider provider) {
-    return Row(
-      children: [
-        // Enhanced Side Navigation
-        Container(
-          width: 320,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(right: BorderSide(color: Colors.grey.shade200)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(2, 0),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Navigation Header
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.green.shade600, Colors.green.shade500],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+    // Force load all data on first build if not loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!provider.inventoryLoaded) {
+        print('🔧 FORCE: Desktop layout triggering inventory load');
+        provider.loadInventoryData(forceRefresh: false);
+      }
+      if (!provider.taxLoaded) {
+        print('🔧 FORCE: Desktop layout triggering tax load');
+        provider.loadTaxData(forceRefresh: false);
+      }
+      if (!provider.revenueLoaded) {
+        print('🔧 FORCE: Desktop layout triggering revenue load');
+        provider.loadRevenueData(forceRefresh: false);
+      }
+    });
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Desktop Header
+          Container(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Row(
+              children: [
+                Icon(Icons.analytics, color: Colors.green, size: 32),
+                const SizedBox(width: 16),
+                const Text(
+                  'Business Analytics Dashboard',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.analytics, color: Colors.white, size: 28),
-                    SizedBox(width: 12),
-                    Text(
-                      'Business Analytics',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Navigation Items
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  children: [
-                    _buildDesktopNavigationTile(
-                      index: 0,
-                      icon: Icons.trending_up,
-                      title: 'Revenue Analytics',
-                      subtitle: 'Track revenue trends and performance',
-                      provider: provider,
-                    ),
-                    _buildDesktopNavigationTile(
-                      index: 1,
-                      icon: Icons.inventory_2,
-                      title: 'Inventory Management', 
-                      subtitle: 'Monitor stock levels and alerts',
-                      provider: provider,
-                    ),
-                    _buildDesktopNavigationTile(
-                      index: 2,
-                      icon: Icons.receipt_long,
-                      title: 'Tax Reporting',
-                      subtitle: 'Calculate tax obligations',
-                      provider: provider,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        
-        // Main Content Area
-        Expanded(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            padding: const EdgeInsets.all(32),
-            child: _getCurrentTabContent(provider),
+          
+          // Triple-column content (1/3 - 1/3 - 1/3)
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Column 1: Revenue Analytics (1/3)
+                Expanded(
+                  flex: 1,
+                  child: _buildCompactRevenueTab(provider),
+                ),
+                const SizedBox(width: 24),
+                
+                // Column 2: Inventory Management (1/3)
+                Expanded(
+                  flex: 1,
+                  child: _buildCompactInventoryTab(provider),
+                ),
+                const SizedBox(width: 24),
+                
+                // Column 3: Tax Reporting (1/3)
+                Expanded(
+                  flex: 1,
+                  child: _buildCompactTaxTab(provider),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -479,7 +489,6 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   bool _isActuallyViewingPast(ReportProvider provider) {
     // Check if the selected date range is actually in the PAST
     // by comparing range end with current period end based on preset type
-    final now = DateTime.now();
     final selectedEnd = provider.selectedDateRange.end;
 
     // Get current period end based on selected preset type
@@ -488,19 +497,22 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
       case DateRangePreset.thisWeek:
       case DateRangePreset.custom:
         // Current week end (Sunday)
+        final now = DateTime.now();
         final firstDayOfWeek = now.subtract(Duration(days: now.weekday - 1));
         currentPeriodEnd = firstDayOfWeek.add(const Duration(days: 6));
         break;
       case DateRangePreset.thisMonth:
         // Current month end
+        final now = DateTime.now();
         currentPeriodEnd = DateTime(now.year, now.month + 1, 0);
         break;
       case DateRangePreset.thisYear:
         // Current year end
+        final now = DateTime.now();
         currentPeriodEnd = DateTime(now.year, 12, 31);
         break;
       default:
-        currentPeriodEnd = now;
+        currentPeriodEnd = DateTime.now();
     }
 
     // Viewing past if selected range ends BEFORE current period end (with 1 day tolerance)
@@ -1324,101 +1336,7 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
     }
   }
 
-  // Helper: Get current tab content based on selected index
-  Widget _getCurrentTabContent(ReportProvider provider) {
-    switch (_tabController.index) {
-      case 0:
-        return _buildRevenueTab(provider);
-      case 1:
-        return _buildInventoryTab(provider);
-      case 2:
-        return _buildTaxTab(provider);
-      default:
-        return _buildRevenueTab(provider);
-    }
-  }
-
-  // Desktop Navigation Tile (Enhanced)
-  Widget _buildDesktopNavigationTile({
-    required int index,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required ReportProvider provider,
-  }) {
-    final isSelected = _tabController.index == index;
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Material(
-        color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            _tabController.animateTo(index);
-            _loadDataForCurrentTab();
-          },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isSelected 
-                        ? Colors.green.withOpacity(0.2)
-                        : Colors.grey.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: isSelected ? Colors.green : Colors.grey.shade600,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.green.shade700 : Colors.grey.shade800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isSelected)
-                  Container(
-                    width: 4,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Helper to calculate tax deadline based on period
+  // Helper: Get tax deadline based on period
   String _getTaxDeadline(DateTimeRange range) {
     // Tax deadline is typically the 20th of the month following the tax period
     final lastDayOfPeriod = range.end;
@@ -1429,52 +1347,1032 @@ class _ReportsScreenState extends State<ReportsScreen> with TickerProviderStateM
   }
 
   // ===========================================================================
-  // SHARED WIDGETS (Could be moved to shared/widgets)
+  // COMPACT DESKTOP LAYOUTS - TRIPLE COLUMN DESIGN
   // ===========================================================================
 
-  Widget _buildTopProductsCard(ReportProvider provider) {
-    final topProducts = provider.topProducts;
-    if (topProducts.isEmpty) {
-      return const Card(child: ListTile(title: Text('Không có dữ liệu sản phẩm bán chạy')));
-    }
-
-    return Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text('Top 5 Sản Phẩm Bán Chạy', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+  /// Compact Revenue Tab for Desktop Triple-Column Layout
+  Widget _buildCompactRevenueTab(ReportProvider provider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
           ),
-          ...topProducts.map((product) {
-            return ListTile(
-              title: Text(product.productName),
-              subtitle: Text('Số lượng: ${product.totalQuantity.toStringAsFixed(0)}'),
-              trailing: Text(AppFormatter.formatCurrency(product.totalRevenue)),
-            );
-          }).toList(),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Column Header
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.green.shade600, Colors.green.shade500],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.trending_up, color: Colors.white, size: 28),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Revenue Analytics',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Track revenue trends',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Content Area
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => provider.loadRevenueData(forceRefresh: true),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildCompactMetrics(provider),
+                    const SizedBox(height: 24),
+                    _buildCompactChart(provider),
+                    const SizedBox(height: 20),
+                    _buildCompactTimeSelector(provider),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
-}
 
-// Extension to give readable names to presets
-extension on DateRangePreset {
-  String get name {
-    switch (this) {
-      case DateRangePreset.today:
-        return 'Hôm nay';
-      case DateRangePreset.thisWeek:
-        return 'Tuần này';
-      case DateRangePreset.thisMonth:
-        return 'Tháng này';
-      case DateRangePreset.thisQuarter:
-        return 'Quý này';
-      case DateRangePreset.thisYear:
-        return 'Năm nay';
-      case DateRangePreset.custom:
-        return 'Tùy chỉnh';
+  /// Compact Inventory Tab for Desktop Triple-Column Layout
+  Widget _buildCompactInventoryTab(ReportProvider provider) {
+    final analytics = provider.inventoryAnalytics;
+    final isLoading = provider.isLoading;
+    
+    if (kDebugMode) {
+      print('🔍 DEBUG Compact Inventory Tab:');
+      print('  - analytics: ${analytics != null ? "loaded" : "null"}');
+      print('  - isLoading: $isLoading');
+      print('  - inventoryLoaded: ${provider.inventoryLoaded}');
     }
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Column Header
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade600, Colors.blue.shade500],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.inventory_2, color: Colors.white, size: 28),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Inventory Management',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Monitor stock levels',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Content Area
+          Expanded(
+            child: analytics == null && !provider.inventoryLoaded
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Đang tải dữ liệu tồn kho...'),
+                      ],
+                    ),
+                  )
+                : analytics == null
+                  ? const Center(child: Text('Không có dữ liệu tồn kho'))
+                  : RefreshIndicator(
+                      onRefresh: () => provider.loadInventoryData(forceRefresh: true),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Section 1: Giá trị Tồn kho
+                            const Text(
+                              'GIÁ TRỊ TỒN KHO',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildCompactValueMetrics(analytics),
+                            const SizedBox(height: 24),
+                            _buildCompactAlerts(analytics),
+                            const SizedBox(height: 24),
+                            _buildCompactAnalytics(provider),
+                          ],
+                        ),
+                      ),
+                    ),
+          ),
+        ],
+      ),
+    );
   }
+
+  /// Compact Tax Tab for Desktop Triple-Column Layout
+  Widget _buildCompactTaxTab(ReportProvider provider) {
+    final taxSummary = provider.taxSummary;
+    final isLoading = provider.isLoading;
+    
+    if (kDebugMode) {
+      print('🔍 DEBUG Compact Tax Tab:');
+      print('  - taxSummary: ${taxSummary != null ? "loaded" : "null"}');
+      print('  - isLoading: $isLoading');
+      print('  - taxLoaded: ${provider.taxLoaded}');
+    }
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Column Header
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.orange.shade600, Colors.orange.shade500],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.receipt_long, color: Colors.white, size: 28),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tax Reporting',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Calculate tax obligations',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Content Area
+          Expanded(
+            child: taxSummary == null && !provider.taxLoaded
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Đang tải dữ liệu thuế...'),
+                      ],
+                    ),
+                  )
+                : taxSummary == null
+                  ? const Center(child: Text('Không có dữ liệu thuế'))
+                  : RefreshIndicator(
+                      onRefresh: () => provider.loadTaxData(forceRefresh: true),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildCompactTaxObligation(taxSummary, provider),
+                            const SizedBox(height: 20),
+                            _buildCompactTaxBreakdown(taxSummary),
+                            const SizedBox(height: 20),
+                            _buildCompactTaxTimeSelector(provider),
+                          ],
+                        ),
+                      ),
+                    ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // COMPACT WIDGET HELPERS FOR DESKTOP COLUMNS
+  // ===========================================================================
+
+  Widget _buildCompactMetrics(ReportProvider provider) {
+    final summary = provider.revenueSummary;
+    final percentageChange = summary?['revenue_change_percentage'] as num?;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'TỔNG DOANH THU',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.green.shade700,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  AppFormatter.formatCompactCurrency(summary?['current_total_revenue'] ?? 0),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (percentageChange != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: percentageChange >= 0 ? Colors.green : Colors.red,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        percentageChange >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                        color: Colors.white,
+                        size: 12,
+                      ),
+                      Text(
+                        '${percentageChange.abs().toStringAsFixed(1)}%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${summary?['current_total_transactions'] ?? 0} giao dịch',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactChart(ReportProvider provider) {
+    if (provider.revenueTrend.isEmpty) {
+      return Container(
+        height: 120,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Center(
+          child: Text(
+            "Không có dữ liệu xu hướng",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    final currentSpots = provider.revenueTrend.asMap().entries.map((e) {
+      return FlSpot(e.key.toDouble(), e.value.currentPeriodRevenue);
+    }).toList();
+
+    return SizedBox(
+      height: 120,
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(show: false),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(show: false),
+          lineTouchData: LineTouchData(enabled: false),
+          lineBarsData: [
+            LineChartBarData(
+              spots: currentSpots,
+              isCurved: true,
+              color: Colors.green,
+              barWidth: 3,
+              isStrokeCapRound: true,
+              dotData: FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                color: Colors.green.withOpacity(0.2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTimeSelector(ReportProvider provider) {
+    return SegmentedButton<DateRangePreset>(
+      segments: const [
+        ButtonSegment(value: DateRangePreset.thisWeek, label: Text('Tuần')),
+        ButtonSegment(value: DateRangePreset.thisMonth, label: Text('Tháng')),
+        ButtonSegment(value: DateRangePreset.thisYear, label: Text('Năm')),
+      ],
+      selected: {provider.selectedPreset},
+      onSelectionChanged: (newSelection) {
+        provider.setDateRange(newSelection.first);
+      },
+      style: SegmentedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        textStyle: const TextStyle(fontSize: 11),
+        selectedBackgroundColor: Colors.green,
+        selectedForegroundColor: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildCompactValueMetrics(InventoryAnalytics analytics) {
+    return Column(
+      children: [
+        _buildCompactValueRow(
+          'Giá Trị Kho (Giá vốn)',
+          AppFormatter.formatCompactCurrency(analytics.totalInventoryValue),
+          Colors.blue,
+        ),
+        const SizedBox(height: 8),
+        _buildCompactValueRow(
+          'Giá Trị Hàng Hóa (Giá bán)',
+          AppFormatter.formatCompactCurrency(analytics.totalSellingValue),
+          Colors.indigo,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Lợi Nhuận Tiềm Năng',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    AppFormatter.formatCompactCurrency(analytics.potentialProfit),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    '${analytics.profitMargin.toStringAsFixed(1)}% biên lợi nhuận',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactValueRow(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactAlerts(InventoryAnalytics analytics) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'CẢNH BÁO',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildCompactAlertRow(
+          'Sắp hết hàng',
+          analytics.lowStockItems,
+          Colors.orange,
+          Icons.inventory_2_outlined,
+          onTap: analytics.lowStockItems > 0
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LowStockReportScreen()),
+                  );
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        _buildCompactAlertRow(
+          'Sắp hết hạn',
+          analytics.expiringSoonItems,
+          Colors.red,
+          Icons.schedule,
+          onTap: analytics.expiringSoonItems > 0
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ExpiryReportScreen()),
+                  );
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        _buildCompactAlertRow(
+          'Hàng ế',
+          analytics.slowMovingItems,
+          Colors.grey.shade700,
+          Icons.pause_circle_outline,
+          onTap: analytics.slowMovingItems > 0
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SlowMovingReportScreen()),
+                  );
+                }
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactAlertRow(String label, int count, Color color, IconData icon, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: count > 0 ? color.withOpacity(0.1) : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: count > 0 ? color.withOpacity(0.3) : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: count > 0 ? color : Colors.grey, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: count > 0 ? null : Colors.grey.shade600,
+                ),
+              ),
+            ),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: count > 0 ? FontWeight.bold : FontWeight.w400,
+                color: count > 0 ? color : Colors.grey,
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.grey.shade400,
+                size: 16,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactAnalytics(ReportProvider provider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'PHÂN TÍCH',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildCompactAnalyticsRow(
+          'Top Sản phẩm Giá trị cao',
+          provider.topValueProducts.length,
+          Icons.inventory,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const TopValueProductsScreen()),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        _buildCompactAnalyticsRow(
+          'Top Hàng bán nhanh',
+          provider.fastTurnoverProducts.length,
+          Icons.speed,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FastTurnoverProductsScreen()),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        _buildCompactAnalyticsRow(
+          'Top Hàng bán chậm',
+          provider.slowTurnoverProducts.length,
+          Icons.slow_motion_video,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SlowTurnoverProductsScreen()),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactAnalyticsRow(String label, int count, IconData icon, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.blue.shade700, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue.shade700,
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.grey.shade400,
+                size: 16,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTaxObligation(TaxSummary taxSummary, ReportProvider provider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Tax Obligation Summary
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'NGHĨA VỤ THUẾ',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Tổng Doanh thu Kê khai',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    AppFormatter.formatCompactCurrency(taxSummary.totalRevenue),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'THUẾ PHẢI NỘP (${_formatTaxRate(taxSummary.taxRate)})',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Hạn nộp: ${_getTaxDeadline(provider.selectedDateRange)}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    AppFormatter.formatCompactCurrency(taxSummary.estimatedTax),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactTaxBreakdown(TaxSummary taxSummary) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'DIỄN GIẢI',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        
+        // Revenue Breakdown
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Doanh thu Bán hàng (POS)',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    AppFormatter.formatCompactCurrency(taxSummary.totalRevenue),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    '${taxSummary.totalTransactions} giao dịch',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Expense Breakdown
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Chi phí Nhập hàng (PO)',
+                style: TextStyle(fontSize: 12),
+              ),
+              Text(
+                AppFormatter.formatCompactCurrency(taxSummary.totalExpenses),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Net Profit
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.green.shade100,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green.shade300),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Lợi nhuận thực (sau thuế)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    AppFormatter.formatCompactCurrency(taxSummary.netProfit),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    '${taxSummary.profitMargin.toStringAsFixed(1)}% biên lợi nhuận',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactTaxTimeSelector(ReportProvider provider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'KHOẢNG THỜI GIAN KÊ KHAI',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SegmentedButton<DateRangePreset>(
+          segments: const [
+            ButtonSegment(value: DateRangePreset.thisMonth, label: Text('Tháng')),
+            ButtonSegment(value: DateRangePreset.thisQuarter, label: Text('Quý')),
+            ButtonSegment(value: DateRangePreset.thisYear, label: Text('Năm')),
+          ],
+          selected: {provider.selectedPreset},
+          onSelectionChanged: (newSelection) {
+            provider.setDateRangeForTaxSilent(newSelection.first);
+          },
+          style: SegmentedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            textStyle: const TextStyle(fontSize: 10),
+            selectedBackgroundColor: Colors.orange,
+            selectedForegroundColor: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _getTaxPeriodDescription(provider.selectedDateRange),
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ===========================================================================
+  // SHARED WIDGETS (Could be moved to shared/widgets)
+  // ===========================================================================
+
 }
