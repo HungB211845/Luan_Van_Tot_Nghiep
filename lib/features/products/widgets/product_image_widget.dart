@@ -40,6 +40,24 @@ class ProductImageWidget extends StatelessWidget {
       return _buildPlaceholder();
     }
 
+    // 🔥 FIX: Use flexible layout for POS grid cards
+    // If width is specified but we're in a flexible context, use Expanded
+    if (width == double.infinity) {
+      return AspectRatio(
+        aspectRatio: 1.0, // Maintain square aspect ratio
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: CachedNetworkImage(
+            imageUrl: imageUrl!,
+            fit: fit,
+            placeholder: (context, url) => _buildPlaceholder(isLoading: true),
+            errorWidget: (context, url, error) => _buildPlaceholder(isError: true),
+          ),
+        ),
+      );
+    }
+
+    // Original fixed-size layout for list items
     return SizedBox(
       width: width,
       height: size.height,
@@ -60,6 +78,34 @@ class ProductImageWidget extends StatelessWidget {
 
   /// Build placeholder widget for empty, loading, or error states
   Widget _buildPlaceholder({bool isLoading = false, bool isError = false}) {
+    // 🔥 FIX: Handle flexible layout for POS grid cards
+    if (width == double.infinity) {
+      return AspectRatio(
+        aspectRatio: 1.0,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!, width: 1),
+          ),
+          child: Center(
+            child: isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    isError ? Icons.broken_image : Icons.inventory_2_outlined,
+                    color: Colors.grey[400],
+                    size: 32,
+                  ),
+          ),
+        ),
+      );
+    }
+
+    // Original fixed-size placeholder for list items
     return Container(
       width: width,
       height: size.height,
