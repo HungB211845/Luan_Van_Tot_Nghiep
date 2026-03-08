@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../../../../shared/utils/input_formatters.dart';
 import '../../../../shared/utils/formatter.dart';
@@ -118,7 +119,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   Widget _buildUnitDropdown(POCartItem item, PurchaseOrderProvider poProvider) {
     final unitProvider = context.watch<ProductUnitProvider>();
     return FutureBuilder<List<ProductUnit>>(
-      future: unitProvider.getUnitsForProduct(item.product.id),
+      future: unitProvider.getUnitsForProduct(item.product.id, forceRefresh: true),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -126,8 +127,32 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         }
 
         final units = snapshot.data ?? [];
+        
+        // 🔥 FIX: Show fallback UI for products without units
         if (units.isEmpty) {
-          return const SizedBox.shrink();
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.orange),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.orange.shade50,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange.shade700, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Sản phẩm chưa có cấu hình đơn vị. Vui lòng vào chỉnh sửa sản phẩm để thêm đơn vị.',
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
         }
 
         List<ProductUnit> displayUnits = units;
@@ -743,10 +768,17 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             CurrencyInputFormatter(maxValue: 999999999),
           ],
           onTap: () {
-            controller.selection = TextSelection(
-              baseOffset: 0,
-              extentOffset: controller.text.length,
-            );
+            // 🔥 WEB FIX: Safe text selection - prevent web TextInput assertions
+            if (!kIsWeb) {
+              final text = controller.text;
+              if (text.isNotEmpty) {
+                controller.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: text.length,
+                );
+              }
+            }
+            // On web: let browser handle selection naturally
           },
           onChanged: (value) {
             final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
@@ -825,32 +857,37 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       ),
       keyboardType: TextInputType.number,
       inputFormatters: [
-        FilteringTextInputFormatter.digitsOnly, // Only allow digits
+        kIsWeb 
+          ? WebSafeDigitsFormatter() // 🔥 WEB FIX: Use web-safe formatter
+          : FilteringTextInputFormatter.digitsOnly, // Mobile: Standard formatter
       ],
       onTap: () {
-        // Select all text on tap for easy editing
-        item.quantityController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: item.quantityController.text.length,
-        );
+        // 🔥 WEB FIX: Safe text selection - prevent web TextInput assertions
+        if (!kIsWeb) {
+          final text = item.quantityController.text;
+          if (text.isNotEmpty) {
+            item.quantityController.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: text.length,
+            );
+          }
+        }
+        // On web: let browser handle selection naturally
       },
       onChanged: (value) {
-        // Handle empty string or invalid input gracefully
+        // 🔥 WEB FIX: Simplified logic like mobile screens - no text reversion
         if (value.isEmpty) {
           poProvider.updatePOCartItem(item.product.id, newQuantity: 0);
           return;
         }
 
+        // Since we use WebSafeDigitsFormatter/FilteringTextInputFormatter.digitsOnly,
+        // the value should already be clean digits only
         final qty = int.tryParse(value);
         if (qty != null && qty >= 0 && qty <= 999999) {
           poProvider.updatePOCartItem(item.product.id, newQuantity: qty);
-        } else if (qty == null) {
-          // If input is invalid, revert controller text to previous valid value
-          item.quantityController.text = item.quantity.toString();
-          item.quantityController.selection = TextSelection.fromPosition(
-            TextPosition(offset: item.quantityController.text.length),
-          );
         }
+        // 🔥 REMOVED: No text reversion logic - let formatter handle validation
       },
       validator: (value) {
         // Allow empty (will be treated as 0)
@@ -916,10 +953,17 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             CurrencyInputFormatter(maxValue: 999999999),
           ],
           onTap: () {
-            controller.selection = TextSelection(
-              baseOffset: 0,
-              extentOffset: controller.text.length,
-            );
+            // 🔥 WEB FIX: Safe text selection - prevent web TextInput assertions  
+            if (!kIsWeb) {
+              final text = controller.text;
+              if (text.isNotEmpty) {
+                controller.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: text.length,
+                );
+              }
+            }
+            // On web: let browser handle selection naturally
           },
           onChanged: (value) {
             final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');

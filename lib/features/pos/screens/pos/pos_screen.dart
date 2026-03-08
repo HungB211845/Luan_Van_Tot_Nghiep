@@ -934,7 +934,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
     );
     if (mounted) {
       _resetForNextCustomer();
-      context.read<ProductProvider>().loadProductsPaginated(useCache: true);
+      context.read<ProductProvider>().loadProductsPaginated(useCache: false);
       context.read<TransactionProvider>().loadTransactions();
     }
   }

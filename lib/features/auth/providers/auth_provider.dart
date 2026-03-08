@@ -10,6 +10,7 @@ import '../services/session_service.dart';
 import '../services/biometric_service.dart';
 import '../services/store_service.dart';
 import '../../../shared/services/base_service.dart';
+import '../../../services/cache_manager.dart'; // 🔥 ADD: Import for cache clearing
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -26,6 +27,9 @@ class AuthProvider extends ChangeNotifier {
   Future<void> initialize() async {
     _setState(_state.copyWith(isLoading: true));
     try {
+      // 🔥 FIX: Clear potentially stale cache on app initialization
+      await _clearAllCaches();
+      
       // Listen for auth state changes (OAuth callbacks, sign-in/sign-out from deep links)
       _authSub ??= Supabase.instance.client.auth.onAuthStateChange.listen(_handleAuthChange);
 
@@ -184,6 +188,10 @@ class AuthProvider extends ChangeNotifier {
     required String storeCode
   }) async {
     _setState(_state.copyWith(isLoading: true, errorMessage: null));
+    
+    // 🔥 FIX: Clear stale cache before login to prevent store mixing
+    await _clearAllCaches();
+    
     final result = await _authService.signInWithEmailAndStore(
       email: email, 
       password: password, 
@@ -202,6 +210,9 @@ class AuthProvider extends ChangeNotifier {
   /// NEW: Store-aware biometric authentication
   Future<bool> signInWithBiometric() async {
     _setState(_state.copyWith(isLoading: true, errorMessage: null));
+
+    // 🔥 FIX: Clear stale cache before biometric login
+    await _clearAllCaches();
 
     final result = await _authService.signInWithBiometric();
     if (result.isSuccess && result.profile != null) {
@@ -290,13 +301,36 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    // 🔥 FIX: Clear all caches before signing out to prevent stale data
+    await _clearAllCaches();
+    
     await _authService.signOut();
     // The auth state will be updated by the _handleAuthChange listener.
   }
 
   Future<void> switchStore() async {
+    // 🔥 FIX: Clear all caches before switching stores
+    await _clearAllCaches();
+    
     await _authService.clearLastStoreCode();
     await signOut();
+  }
+
+  /// 🔥 NEW: Clear all caches on auth state changes
+  Future<void> _clearAllCaches() async {
+    try {
+      // Import cache manager and clear everything
+      final cacheManager = CacheManager();
+      await cacheManager.clearAll();
+      
+      // Also notify ProductProvider to clear its internal caches
+      // This will be handled via Provider dependencies
+      
+      print('✅ Cleared all caches on auth state change');
+    } catch (e) {
+      print('⚠️ Failed to clear caches: $e');
+      // Don't block auth flow if cache clearing fails
+    }
   }
 
   Future<bool> signUp({

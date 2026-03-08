@@ -141,6 +141,30 @@ class Product {
     };
   }
 
+  // Used exclusively for storing products in the local cache
+  Map<String, dynamic> toCacheJson() {
+    return {
+      'id': id,
+      'sku': sku,
+      'name': name,
+      'category': category.name,
+      'company_id': companyId,
+      'is_active': isActive,
+      'is_banned': isBanned,
+      'image_url': imageUrl,
+      'description': description,
+      'min_stock_level': minStockLevel,
+      'available_stock': availableStock,
+      'current_price': currentPrice,
+      'current_selling_price': currentSellingPrice,
+      'base_unit': baseUnit,
+      'store_id': storeId,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'attributes': attributes,
+    };
+  }
+
   // Category display name
   String get categoryDisplayName => category.displayName;
 

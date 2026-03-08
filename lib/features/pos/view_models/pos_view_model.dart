@@ -1,4 +1,6 @@
 // lib/features/pos/view_models/pos_view_model.dart
+import 'package:flutter/widgets.dart';
+
 import '../../customers/models/customer.dart';
 import '../../products/models/product.dart';
 import '../../products/providers/product_provider.dart';
@@ -31,7 +33,7 @@ class POSViewModel {
         // Clear cache first if force refresh is requested
         await productProvider.invalidateCache();
       }
-      await productProvider.loadProductsPaginated(category: null, useCache: !forceRefresh);
+      await productProvider.loadProductsPaginated(category: null, useCache: false);
       productProvider.resetSelectedCategory();
     }
     if (customerProvider.customers.isEmpty) {
@@ -202,7 +204,11 @@ class POSViewModel {
 
   // Refresh chỉ sản phẩm
   Future<void> refreshProducts() async {
-    await productProvider.loadProductsPaginated(useCache: true); // 🔥 FIX: Use cache to prevent infinite loops
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // 🔥 FIX: Prevent infinite loops but load directly from server
+        await productProvider.loadProductsPaginated(useCache: false); 
+        await customerProvider.loadCustomers();
+      });
   }
 
   // Refresh chỉ khách hàng

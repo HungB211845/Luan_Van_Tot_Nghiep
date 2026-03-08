@@ -85,7 +85,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       final provider = context.read<ProductProvider>();
       if (provider.status == ProductStatus.idle) {
         // 🎯 FIXED: Use cached paginated version for faster initial load
-        provider.loadProductsPaginated(useCache: true);
+        provider.loadProductsPaginated(useCache: false);
       }
     });
     _searchController.addListener(_onSearchChanged);
@@ -365,7 +365,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       } else if (query.length >= 2) {
         // 🔥 UX FIX: Only search when query has at least 2 characters
         // This prevents "không có sản phẩm" flash when typing first character
-        provider.searchProductsPaginated(query: query, useCache: true);
+        provider.searchProductsPaginated(query: query, useCache: false);
         setState(() {
           // Update UI to show search state
         });

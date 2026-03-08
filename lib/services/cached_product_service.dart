@@ -143,7 +143,7 @@ class CachedProductService extends BaseService {
 
       // Cache kết quả cho lần sau (với store_id trong key)
       final cacheData = {
-        'items': result.items.map((item) => item.toJson()).toList(),
+        'items': result.items.map((item) => item.toCacheJson()).toList(),
         'totalCount': result.totalCount,
         'offset': offset,
         'limit': limit,
@@ -210,7 +210,7 @@ class CachedProductService extends BaseService {
       await _cache.set(
         cacheKey,
         products,
-        (data) => {'items': data.map((item) => item.toJson()).toList()},
+        (data) => {'items': data.map((item) => item.toCacheJson()).toList()},
         expiry: Duration(minutes: 15), // Cache lâu hơn vì category ít thay đổi
         persistent: true, // Persistent vì data stable
       );
@@ -278,7 +278,7 @@ class CachedProductService extends BaseService {
       await _cache.set(
         cacheKey,
         results,
-        (data) => {'items': data.map((item) => item.toJson()).toList()},
+        (data) => {'items': data.map((item) => item.toCacheJson()).toList()},
         expiry: Duration(minutes: 2), // Cache ngắn cho search
         persistent: false,
       );
@@ -420,7 +420,15 @@ class CachedProductService extends BaseService {
     String? sort,
   }) {
     final parts = [prefix];
-    if (store != null) parts.add('store_$store');  // 🎯 CRITICAL: Include store in cache key
+    
+    // 🔥 FIX: Handle missing store ID gracefully
+    if (store != null && store.isNotEmpty) {
+      parts.add('store_$store');  // 🎯 CRITICAL: Include store in cache key
+    } else {
+      parts.add('store_unknown'); // 🚨 Fallback to prevent cache collision
+      _debugLog('⚠️ WARNING: Building cache key without valid store ID');
+    }
+    
     if (category != null && category != 'null') parts.add('cat_$category');
     if (search != null && search.isNotEmpty) parts.add('search_$search');
     if (page != null) parts.add('p$page');
@@ -430,5 +438,12 @@ class CachedProductService extends BaseService {
     final cacheKey = 'cache_${parts.join('_')}';
     _debugLog('🔍 CACHE KEY BUILT: $cacheKey');
     return cacheKey;
+  }
+
+  /// 🔥 NEW: Clear all cache entries for store isolation
+  Future<void> clearAllStoreCache() async {
+    final cacheManager = CacheManager();
+    await cacheManager.clearAll();
+    _debugLog('✅ Cleared all store cache entries');
   }
 }

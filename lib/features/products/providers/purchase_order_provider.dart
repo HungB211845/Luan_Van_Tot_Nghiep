@@ -443,6 +443,9 @@ class PurchaseOrderProvider extends ChangeNotifier {
       }
       if (productIds.isNotEmpty) {
         await _productProvider.refreshInventoryAfterGoodsReceipt(productIds);
+        
+        // 🔥 FIX: Force refresh stock for affected products to prevent 0 stock display
+        await _forceRefreshStockForProducts(productIds);
       }
 
       await loadPODetails(poId);
@@ -451,6 +454,23 @@ class PurchaseOrderProvider extends ChangeNotifier {
     } catch (e) {
       _setError(e.toString());
       return false;
+    }
+  }
+
+  /// 🔥 NEW: Force refresh stock cache for specific products
+  Future<void> _forceRefreshStockForProducts(List<String> productIds) async {
+    try {
+      for (final productId in productIds) {
+        // Force reload stock from database
+        final updatedStock = await _productService.getAvailableStock(productId);
+        
+        // Update ProductProvider stock cache directly
+        _productProvider.updateStockCache(productId, updatedStock);
+        
+        debugPrint('🔄 Force refreshed stock for $productId: $updatedStock');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to force refresh stock: $e');
     }
   }
 
@@ -982,7 +1002,26 @@ class PurchaseOrderProvider extends ChangeNotifier {
 
     if (newQuantity != null) {
       item.quantity = newQuantity.clamp(0, 999999);
-      item.quantityController.text = item.quantity.toString();
+      // 🔥 WEB FIX: Only update controller text if it's significantly different
+      // to avoid interfering with user typing
+      final expectedText = item.quantity.toString();
+      if (item.quantityController.text != expectedText) {
+        // Only update if controller text doesn't match expected value
+        // This prevents overriding user input during typing
+        final currentValue = int.tryParse(item.quantityController.text) ?? 0;
+        if (currentValue != item.quantity) {
+          if (kIsWeb) {
+            // Web: Use safe TextEditingValue to prevent assertions
+            item.quantityController.value = TextEditingValue(
+              text: expectedText,
+              selection: TextSelection.collapsed(offset: expectedText.length),
+              composing: TextRange.empty,
+            );
+          } else {
+            item.quantityController.text = expectedText;
+          }
+        }
+      }
     }
     if (newUnit != null) {
       item.unit = newUnit;
@@ -1140,8 +1179,22 @@ class PurchaseOrderProvider extends ChangeNotifier {
         existingItem.pricingSelection = newItem.pricingSelection;
         existingItem.allowsPricingToggle = newItem.allowsPricingToggle;
         
-        // Update controller text values
-        existingItem.quantityController.text = newItem.quantity.toString();
+        // Update controller text values (avoid overriding user input during typing)
+        final expectedQuantityText = newItem.quantity.toString();
+        if (existingItem.quantityController.text != expectedQuantityText) {
+          final currentQty = int.tryParse(existingItem.quantityController.text) ?? 0;
+          if (currentQty != newItem.quantity) {
+            if (kIsWeb) {
+              existingItem.quantityController.value = TextEditingValue(
+                text: expectedQuantityText,
+                selection: TextSelection.collapsed(offset: expectedQuantityText.length),
+                composing: TextRange.empty,
+              );
+            } else {
+              existingItem.quantityController.text = expectedQuantityText;
+            }
+          }
+        }
         existingItem.unitCostController.text = newItem.unitCost > 0 
             ? AppFormatter.formatNumber(newItem.unitCost) 
             : '';

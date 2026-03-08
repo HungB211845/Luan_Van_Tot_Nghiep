@@ -4,8 +4,8 @@
 
 class CacheConfig {
   // Feature Flags - Easy to disable if issues arise
-  static const bool enableProductCache = true;
-  static const bool enableSearchCache = true;
+  static const bool enableProductCache = false;
+  static const bool enableSearchCache = false;
   static const bool enableStatsCache = false; // DISABLED - table doesn't exist
   static const bool enablePaginationCache = false; // Start conservative
   

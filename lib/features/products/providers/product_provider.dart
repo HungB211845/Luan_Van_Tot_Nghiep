@@ -302,7 +302,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     int pageSize = 20,
     String? sortBy,
     bool ascending = true,
-    bool useCache = true, // 🔥 CRITICAL FIX: Default to true to prevent infinite loops
+    bool useCache = false, // 🔥 CRITICAL FIX: Default to false to bypass cache and fetch directly from server
   }) async {
     // 🔥 CRITICAL: Prevent overlapping calls
     if (_status == ProductStatus.loading) {
@@ -369,7 +369,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         limit: nextParams.pageSize,
         sortBy: nextParams.sortBy ?? 'name',
         ascending: nextParams.ascending,
-        useCache: true,
+        useCache: false,
       );
 
       // Merge results
@@ -404,7 +404,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     int pageSize = 20,
     String? sortBy,
     bool ascending = true,
-    bool useCache = true,
+    bool useCache = false,
   }) async {
     _searchQuery = query.trim();
 
@@ -496,7 +496,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   }
 
   /// Search products with cache support (used by ProductListScreen)
-  Future<void> searchProducts(String query, {bool useCache = true}) async {
+  Future<void> searchProducts(String query, {bool useCache = false}) async {
     _searchQuery = query.trim();
 
     if (_searchQuery.isEmpty) {
@@ -512,7 +512,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       if (useCache && CacheConfig.enableSearchCache) {
         _filteredProducts = await _cachedService.searchProducts(
           _searchQuery,
-          useCache: true,
+          useCache: false,
         );
         if (CacheConfig.enablePerformanceLogging) {
           stopwatch.stop();
@@ -558,7 +558,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
   bool get hasPosSearchResults => _posSearchResults.isNotEmpty;
 
   /// Quick search for POS with cache support (HIGH PERFORMANCE IMPACT)
-  Future<void> quickSearchForPOS(String query, {bool useCache = true}) async {
+  Future<void> quickSearchForPOS(String query, {bool useCache = false}) async {
     if (query.trim().isEmpty) {
       _posSearchResults = [];
       notifyListeners();
@@ -580,7 +580,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         // 🎯 FIXED: Use cached service with proper cache invalidation
         final results = await _cachedService.searchProducts(
           query.trim(),
-          useCache: true,
+          useCache: false,
         );
         
         // 🚨 CRITICAL: Filter out inactive products and products with 0 stock for POS
@@ -668,12 +668,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       final newProduct = await _productService.createProduct(product);
       _products.add(newProduct);
 
+      // 🔥 FIX: Auto-create default units for new products
+      await _createDefaultUnitsForProduct(newProduct);
+
       // Invalidate cache after product creation
-      await invalidateSearchCache();
-      await invalidateDashboardCache();
+      await invalidateCache();
 
       // Reload all products to get updated data
-      await loadProducts();
+      await loadProductsPaginated();
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -681,6 +683,88 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     } catch (e) {
       _setError(e.toString());
       return null;
+    }
+  }
+
+  /// 🔥 NEW: Auto-create default units for new products
+  Future<void> _createDefaultUnitsForProduct(Product product) async {
+    try {
+      final storeId = BaseService.getDefaultStoreId();
+      final now = DateTime.now();
+
+      switch (product.category) {
+        case ProductCategory.FERTILIZER:
+        case ProductCategory.SEED:
+          // Create kg (base) + Bao (50kg default)
+          await _unitService.createProductUnit(ProductUnit(
+            id: '',
+            productId: product.id,
+            unitName: 'kg',
+            conversionFactor: 1.0,
+            unitPrice: 0, // Will be calculated when price is set
+            isDefaultSellingUnit: false,
+            isActive: true,
+            storeId: storeId,
+            createdAt: now,
+            updatedAt: now,
+          ));
+          
+          await _unitService.createProductUnit(ProductUnit(
+            id: '',
+            productId: product.id,
+            unitName: 'Bao',
+            conversionFactor: 50.0, // Default 50kg per bag
+            unitPrice: 0, // Will be calculated when price is set
+            isDefaultSellingUnit: true,
+            isActive: true,
+            storeId: storeId,
+            createdAt: now,
+            updatedAt: now,
+          ));
+          break;
+
+        case ProductCategory.PESTICIDE:
+          // Create ml/g (base) + default packaging
+          final baseUnit = product.baseUnit ?? 'ml';
+          await _unitService.createProductUnit(ProductUnit(
+            id: '',
+            productId: product.id,
+            unitName: baseUnit,
+            conversionFactor: 1.0,
+            unitPrice: 0,
+            isDefaultSellingUnit: false,
+            isActive: true,
+            storeId: storeId,
+            createdAt: now,
+            updatedAt: now,
+          ));
+
+          // Create default retail unit (500ml bottle)
+          final retailUnitName = baseUnit == 'ml' ? 'Chai 500ml' : 'Gói 50g';
+          final retailFactor = baseUnit == 'ml' ? 500.0 : 50.0;
+          
+          await _unitService.createProductUnit(ProductUnit(
+            id: '',
+            productId: product.id,
+            unitName: retailUnitName,
+            conversionFactor: retailFactor,
+            unitPrice: 0,
+            isDefaultSellingUnit: true,
+            isActive: true,
+            storeId: storeId,
+            createdAt: now,
+            updatedAt: now,
+          ));
+          break;
+      }
+
+      // Clear unit cache to force reload
+      _unitCache.remove(product.id);
+      
+      debugPrint('✅ Auto-created default units for product: ${product.name}');
+    } catch (e) {
+      debugPrint('⚠️ Failed to create default units for ${product.name}: $e');
+      // Don't fail product creation if unit creation fails
     }
   }
 
@@ -772,8 +856,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       final updatedProduct = await _productService.updateProduct(product);
 
       // Invalidate cache to force reload of fresh data on next access
-      await invalidateSearchCache();
-      await invalidateDashboardCache();
+      await invalidateCache();
 
       // Update product in the main list
       final index = _products.indexWhere((p) => p.id == product.id);
@@ -806,6 +889,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         _selectedProduct = null;
       }
 
+      // Invalidate cache to force reload of fresh data on next access
+      await invalidateCache();
+
       _setStatus(ProductStatus.success);
       _clearError();
       return true;
@@ -825,7 +911,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     bool persistSelection = true,
   }) async {
     final previousCategory = _selectedCategory;
-    await loadProductsPaginated(category: category, useCache: true);
+    await loadProductsPaginated(category: category, useCache: false);
     if (!persistSelection) {
       _selectedCategory = previousCategory;
       notifyListeners();
@@ -922,6 +1008,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       // Update stock for this product
       await _updateProductStock(batch.productId);
 
+      // Invalidate cache to reflect new stock
+      await invalidateCache();
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -945,6 +1034,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       _upsertProductBatch(updatedBatch);
 
       await _updateProductStock(batch.productId);
+      
+      // Invalidate cache to reflect new stock
+      await invalidateCache();
+      
       _setStatus(ProductStatus.success);
       notifyListeners();
       return updatedBatch;
@@ -1021,6 +1114,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       await _productService.deleteProductBatch(batchId);
       _removeProductBatchById(batchId);
       await _updateProductStock(productId); // Cập nhật lại tồn kho
+      
+      // Invalidate cache to reflect new stock
+      await invalidateCache();
+      
       _setStatus(ProductStatus.success);
       return true;
     } catch (e) {
@@ -1508,6 +1605,9 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         }
       }
       
+      // 🔥 FIX: Invalidate cache to reflect new stock in product list after a transaction
+      await invalidateCache();
+      
       print('✅ Stock cache refreshed for ${soldProductIds.length} sold products');
       notifyListeners(); // Update UI with new stock values
     } catch (e) {
@@ -1818,6 +1918,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     await _cachedService.invalidateProductCache();
     await _cachedService.invalidateSearchCache();
     await _cachedService.invalidateDashboardCache();
+    
+    // 🔥 NEW: Also clear store-specific cache
+    await _cachedService.clearAllStoreCache();
+    
     _productsByCategory.clear();
     _unitCache.clear();
   }
@@ -2017,7 +2121,7 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     try {
       _setStatus(ProductStatus.loading);
       
-      // Clear cache to force fresh data load
+      // 🔥 FIX: Clear cache to force fresh data load
       await _cachedService.invalidateProductCache();
       await _cachedService.invalidateSearchCache();
       
@@ -2026,6 +2130,19 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
         await resetProductsPagination(category: _selectedCategory);
       } else {
         await loadProducts(category: _selectedCategory);
+      }
+      
+      // 🔥 FIX: Force refresh stock from batches instead of preserving stale cache
+      print('🔄 Forcing stock refresh from batches for all products...');
+      for (int i = 0; i < _products.length; i++) {
+        try {
+          await _updateProductStock(_products[i].id);
+          // Update product object with fresh stock data
+          final freshStock = _stockMap[_products[i].id] ?? 0;
+          _products[i] = _products[i].copyWith(availableStock: freshStock);
+        } catch (e) {
+          print('Warning: Failed to refresh stock for ${_products[i].name}: $e');
+        }
       }
       
       // Load dashboard stats without price sync
@@ -2575,6 +2692,28 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     }
   }
 
+  /// Update stock cache for a specific product (used by external providers)
+  void updateStockCache(String productId, int newStock) {
+    _stockMap[productId] = newStock;
+    
+    // Also update the product in the main list if it exists
+    final productIndex = _products.indexWhere((p) => p.id == productId);
+    if (productIndex != -1) {
+      _products[productIndex] = _products[productIndex].copyWith(
+        availableStock: newStock,
+      );
+    }
+    
+    // Update selected product if it matches
+    if (_selectedProduct?.id == productId) {
+      _selectedProduct = _selectedProduct!.copyWith(
+        availableStock: newStock,
+      );
+    }
+    
+    notifyListeners();
+  }
+
   /// Get cache performance metrics
   Map<String, dynamic> getCacheStats() {
     final cacheStats = CacheMetrics.getStats();
@@ -2770,7 +2909,7 @@ class ProductListViewModel {
 
   Future<void> initialize() async {
     if (productProvider.products.isEmpty) {
-      await productProvider.loadProductsPaginated(useCache: true);
+      await productProvider.loadProductsPaginated(useCache: false);
     }
     await productProvider.loadAlerts();
   }
