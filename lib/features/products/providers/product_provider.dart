@@ -637,6 +637,18 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
             .toList();
       }
 
+      // 🔥 FIX 3: Initialize _stockMap and _currentPrices
+      // If we don't do this, navigating to ProductDetailScreen from CompanyListScreen
+      // will show 0 stock and 0 price because the maps are empty.
+      for (final product in _products) {
+        if (product.availableStock != null) {
+          _stockMap[product.id] = product.availableStock!;
+        }
+        if (product.currentSellingPrice > 0) {
+          _currentPrices[product.id] = product.currentSellingPrice;
+        }
+      }
+
       // ONE-TIME price sync for products by company
       await _performOneTimePriceSyncIfNeeded();
 
@@ -666,7 +678,10 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
     try {
       final newProduct = await _productService.createProduct(product);
-      _products.add(newProduct);
+      
+      // 🔥 FIX 1: Insert at top instead of adding to end so it's immediately visible
+      // without being pushed to page 2+
+      _products.insert(0, newProduct);
 
       // 🔥 FIX: Auto-create default units for new products
       await _createDefaultUnitsForProduct(newProduct);
@@ -674,8 +689,11 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       // Invalidate cache after product creation
       await invalidateCache();
 
-      // Reload all products to get updated data
-      await loadProductsPaginated();
+      // 🔥 FIX 2: Do NOT call loadProductsPaginated() here!
+      // It fetches Page 1 from DB (which is alphabetically sorted) and WIPES 
+      // the entire `_products` array, causing the newly created product to disappear
+      // from the UI if its name doesn't belong on Page 1.
+      // await loadProductsPaginated();
 
       _setStatus(ProductStatus.success);
       _clearError();
@@ -903,6 +921,18 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
 
   void selectProduct(Product? product) {
     _selectedProduct = product;
+    
+    // 🔥 FIX: Ensure stock and price are available in maps when navigating from
+    // other providers (like CompanyProvider) which don't populate these maps globally.
+    if (product != null) {
+      if (product.availableStock != null) {
+        _stockMap[product.id] = product.availableStock!;
+      }
+      if (product.currentSellingPrice > 0) {
+        _currentPrices[product.id] = product.currentSellingPrice;
+      }
+    }
+    
     notifyListeners();
   }
 
