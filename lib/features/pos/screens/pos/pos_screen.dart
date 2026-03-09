@@ -286,6 +286,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
             selected: _selectedCategory == null,
             onSelected: (selected) {
               setState(() => _selectedCategory = null);
+              context.read<ProductProvider>().loadProductsPaginated(category: null, useCache: false);
             },
             selectedColor: Colors.green.withOpacity(0.2),
             checkmarkColor: Colors.green,
@@ -299,6 +300,7 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
                 selected: _selectedCategory == category,
                 onSelected: (selected) {
                   setState(() => _selectedCategory = selected ? category : null);
+                  context.read<ProductProvider>().loadProductsPaginated(category: _selectedCategory, useCache: false);
                 },
                 selectedColor: Colors.green.withOpacity(0.2),
                 checkmarkColor: Colors.green,
@@ -371,20 +373,56 @@ class _POSScreenState extends State<POSScreen> with SingleTickerProviderStateMix
           );
         }
         
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3, // 3 columns
-            childAspectRatio: 0.8, // Make cards more square
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
-          itemCount: productsToShow.length,
-          itemBuilder: (context, index) {
-            final product = productsToShow[index];
-            final quantityInCart = _viewModel!.getProductQuantityInCart(product.id);
-            return _buildProductCard(product, quantityInCart);
+        return NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification scrollInfo) {
+            if (!productProvider.isLoadingMore &&
+                productProvider.hasMoreProducts &&
+                scrollInfo.metrics.pixels >=
+                    scrollInfo.metrics.maxScrollExtent - 200) {
+              if (!isSearching) {
+                productProvider.loadMoreProducts();
+              }
+            }
+            return false;
           },
+          child: CustomScrollView(
+            slivers: [
+              CupertinoSliverRefreshControl(
+                onRefresh: () async {
+                  await productProvider.loadProductsPaginated(useCache: false);
+                  return Future.value();
+                },
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.all(12),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 0.8,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final product = productsToShow[index];
+                      final quantityInCart = _viewModel!.getProductQuantityInCart(product.id);
+                      return _buildProductCard(product, quantityInCart);
+                    },
+                    childCount: productsToShow.length,
+                  ),
+                ),
+              ),
+              if (productProvider.isLoadingMore)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Center(
+                      child: CupertinoActivityIndicator(),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
