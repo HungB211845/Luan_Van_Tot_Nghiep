@@ -827,6 +827,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
     if (category == null) {
       provider.resetSelectedCategory();
     }
+    
+    // 🔥 CRITICAL FIX: Actually fetch the products for this category from the backend
+    // Otherwise it only filters the existing 20 items from 'All' and shows empty
+    provider.loadProductsPaginated(category: category, useCache: false);
   }
 
   Widget _buildProductList({required bool isMasterDetail}) {
@@ -883,35 +887,65 @@ class _ProductListScreenState extends State<ProductListScreen> {
           );
         }
 
-        return CustomScrollView(
-          slivers: [
-            CupertinoSliverRefreshControl(
-              onRefresh: () async {
-                // Force refresh bypasses cache for fresh data
-                final provider = context.read<ProductProvider>();
-                await provider.refreshAllCache();
-                return Future.value();
-              },
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(context.sectionPadding, 8, context.sectionPadding, 8),
-                child: CupertinoSearchTextField(
-                  controller: _searchController,
-                  placeholder: 'Tìm theo tên, SKU, nhà cung cấp...',
+        return NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification scrollInfo) {
+            // Load more when reaching bottom (with 200px threshold)
+            if (!provider.isLoadingMore &&
+                provider.hasMoreProducts &&
+                scrollInfo.metrics.pixels >=
+                    scrollInfo.metrics.maxScrollExtent - 200) {
+              
+              // Only load more if not currently searching
+              final isSearching = _searchController.text.trim().isNotEmpty && 
+                                _searchController.text.trim().length >= 2;
+                                
+              if (!isSearching) {
+                provider.loadMoreProducts();
+              }
+            }
+            return false;
+          },
+          child: CustomScrollView(
+            slivers: [
+              CupertinoSliverRefreshControl(
+                onRefresh: () async {
+                  // Force refresh bypasses cache for fresh data
+                  final provider = context.read<ProductProvider>();
+                  // Changed from deprecated refreshAllCache to loadProductsPaginated
+                  await provider.loadProductsPaginated(useCache: false);
+                  return Future.value();
+                },
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(context.sectionPadding, 8, context.sectionPadding, 8),
+                  child: CupertinoSearchTextField(
+                    controller: _searchController,
+                    placeholder: 'Tìm theo tên, SKU, nhà cung cấp...',
+                  ),
                 ),
               ),
-            ),
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final product = filteredAndSortedProducts[index];
-                  return _buildProductListItem(product, provider, isMasterDetail);
-                },
-                childCount: filteredAndSortedProducts.length,
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final product = filteredAndSortedProducts[index];
+                    return _buildProductListItem(product, provider, isMasterDetail);
+                  },
+                  childCount: filteredAndSortedProducts.length,
+                ),
               ),
-            ),
-          ],
+              // Loading indicator at bottom
+              if (provider.isLoadingMore)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Center(
+                      child: CupertinoActivityIndicator(),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );

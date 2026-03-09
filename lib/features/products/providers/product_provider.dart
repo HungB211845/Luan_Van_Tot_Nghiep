@@ -376,8 +376,14 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
       _paginatedProducts = _paginatedProducts!.merge(nextPage);
       _currentPaginationParams = nextParams;
 
-      // Update legacy _products list
-      _products = _paginatedProducts!.items;
+      final mergedItems = List<Product>.from(_paginatedProducts!.items);
+      
+      // 🔥 CRITICAL FIX: Must update _productsByCategory otherwise UI misses the new page
+      _productsByCategory[_selectedCategory] = mergedItems;
+
+      if (_selectedCategory == null) {
+        _products = mergedItems;
+      }
 
       // 🔥 NO AUTO PRICE SYNC - use existing prices from database
       for (final product in nextPage.items) {
@@ -679,9 +685,40 @@ class ProductProvider extends ChangeNotifier with MemoryManagedProvider {
     try {
       final newProduct = await _productService.createProduct(product);
       
-      // 🔥 FIX 1: Insert at top instead of adding to end so it's immediately visible
+      // 🔥 FIX 1: Insert at top strictly into all relevant data structures so it's immediately visible
       // without being pushed to page 2+
       _products.insert(0, newProduct);
+      
+      // Update _productsByCategory so getProductsForCategory() picks it up
+      if (_productsByCategory.containsKey(null)) {
+        final list = List<Product>.from(_productsByCategory[null]!);
+        list.insert(0, newProduct);
+        _productsByCategory[null] = list;
+      }
+      if (_productsByCategory.containsKey(newProduct.category)) {
+        final list = List<Product>.from(_productsByCategory[newProduct.category]!);
+        list.insert(0, newProduct);
+        _productsByCategory[newProduct.category] = list;
+      }
+
+      // Update _paginatedProducts to maintain state integrity
+      if (_paginatedProducts != null) {
+        final items = List<Product>.from(_paginatedProducts!.items);
+        items.insert(0, newProduct);
+        _paginatedProducts = PaginatedResult<Product>(
+          items: items,
+          totalCount: _paginatedProducts!.totalCount + 1,
+          currentPage: _paginatedProducts!.currentPage,
+          pageSize: _paginatedProducts!.pageSize,
+          hasNextPage: _paginatedProducts!.hasNextPage,
+          hasPreviousPage: _paginatedProducts!.hasPreviousPage,
+          totalPages: _paginatedProducts!.totalPages,
+        );
+      }
+
+      // Initialize stock and price maps
+      _stockMap[newProduct.id] = newProduct.availableStock ?? 0;
+      _currentPrices[newProduct.id] = newProduct.currentSellingPrice;
 
       // 🔥 FIX: Auto-create default units for new products
       await _createDefaultUnitsForProduct(newProduct);
